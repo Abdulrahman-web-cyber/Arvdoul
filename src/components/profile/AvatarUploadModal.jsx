@@ -38,6 +38,18 @@ const AvatarUploadModal = memo(({
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
 
+  const handleClose = useCallback(() => {
+    setImageSrc(null);
+    setZoom(1);
+    setCrop({ x: 0, y: 0 });
+    setCroppedAreaPixels(null);
+    setIsProcessing(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    onClose?.();
+  }, [onClose]);
+
   const handleFileSelect = useCallback((e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -53,6 +65,9 @@ const AvatarUploadModal = memo(({
     }
 
     const reader = new FileReader();
+    reader.onerror = () => {
+      toast.error('Could not read the selected image file. Please try another photo.');
+    };
     reader.onload = () => {
       setImageSrc(reader.result);
       setZoom(1);
@@ -93,14 +108,6 @@ const AvatarUploadModal = memo(({
       setIsProcessing(false);
     }
   }, [onRemoveAvatar, handleClose]);
-
-  const handleClose = useCallback(() => {
-    setImageSrc(null);
-    setZoom(1);
-    setCrop({ x: 0, y: 0 });
-    setIsProcessing(false);
-    onClose();
-  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;

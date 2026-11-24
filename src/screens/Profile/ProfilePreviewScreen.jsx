@@ -338,24 +338,43 @@ export default function ProfilePreviewScreen({
             isOwner={isOwnerMode}
             theme={theme}
             counts={(() => {
-              const list = storePosts || [];
-              const vibePosts = list.filter((p) => p.type === 'story' || p.type === 'vibe' || p.isStory || p.isVibe);
+              const list = (storePosts || []).filter(
+                (p) => p && typeof p === 'object' && p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled'
+              );
+              const typeOf = (p) => String(p.type || '').toLowerCase();
+              const vibePosts = list.filter((p) => {
+                const t = typeOf(p);
+                return t === 'story' || t === 'vibe' || p.isStory === true || p.isVibe === true;
+              });
               const mergedVibeIds = new Set([
                 ...((storeStories || []).map((s) => s?.id).filter(Boolean)),
                 ...vibePosts.map((p) => p?.id).filter(Boolean),
               ]);
               return {
-                posts: list.filter(p => p.type !== 'audio' && p.type !== 'track' && p.type !== 'story' && p.type !== 'vibe').length,
-                videos: list.filter(p => p.type === 'video' || p.type === 'reel' || p.type === 'spark' || Boolean(p.videoURL || p.videoUrl || p.mediaType === 'video')).length,
-                reels: list.filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
-                photos: list.filter(p => {
-                  const isVidOrAudio = p.type === 'video' || p.type === 'reel' || p.type === 'spark' || p.type === 'audio' || p.type === 'track' || Boolean(p.videoURL || p.videoUrl || p.audioURL || p.audioUrl);
-                  return !isVidOrAudio && (p.type === 'image' || p.type === 'photo' || p.type === 'gallery' || Boolean(p.mediaURL || p.imageUrl || (Array.isArray(p.media) && p.media.length > 0)));
+                posts: list.filter((p) => {
+                  const t = typeOf(p);
+                  return t !== 'audio' && t !== 'track' && t !== 'story' && t !== 'vibe' && p.isStory !== true && p.isVibe !== true;
+                }).length,
+                videos: list.filter((p) => {
+                  const t = typeOf(p);
+                  return t === 'video' || t === 'reel' || t === 'spark' || Boolean(p.videoURL || p.videoUrl || p.mediaType === 'video');
+                }).length,
+                reels: list.filter((p) => {
+                  const t = typeOf(p);
+                  return t === 'reel' || t === 'spark' || p.isReel === true || p.isSpark === true;
+                }).length,
+                photos: list.filter((p) => {
+                  const t = typeOf(p);
+                  const isVidOrAudio = t === 'video' || t === 'reel' || t === 'spark' || t === 'audio' || t === 'track' || Boolean(p.videoURL || p.videoUrl || p.audioURL || p.audioUrl);
+                  return !isVidOrAudio && (t === 'image' || t === 'photo' || t === 'gallery' || Boolean(p.mediaURL || p.imageUrl || (Array.isArray(p.media) && p.media.length > 0)));
                 }).length,
                 stories: Math.max(mergedVibeIds.size, (storeStories || []).length),
-                audio: list.filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
+                audio: list.filter((p) => {
+                  const t = typeOf(p);
+                  return t === 'audio' || t === 'track' || t === 'music' || Boolean(p.audioURL || p.audioUrl);
+                }).length,
                 saved: 0,
-                tagged: list.filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
+                tagged: list.filter((p) => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
               };
             })()}
           />

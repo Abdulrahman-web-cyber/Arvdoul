@@ -4,7 +4,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import { useTheme } from "@context/ThemeContext";
 import { useAuth } from "@context/AuthContext";
-import { useSound } from "../../hooks/useSound";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { useAppStore } from "../../store/appStore";
 import { useNavBadges } from "../../hooks/useNavBadges";
@@ -12,6 +11,7 @@ import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import QuickAccessPanel from "./QuickAccessPanel";
 import { BRAND_GRADIENT, brandRgba, tokens } from "../../design-system/tokens.js";
 import { LazyImage } from '../../components/Shared/LazyImage';
+import GoldCoinsIcon from '../UI/GoldCoinsIcon.jsx';
 
 /* ==========================================================================
    ARVDOUL BOTTOM NAVIGATION
@@ -416,48 +416,7 @@ VibesIcon.propTypes = {
    ========================================================================== */
 
 const CoinsIcon = memo(function CoinsIcon() {
-  const id = useId().replace(/:/g, "");
-  const goldGradient = `arvdoul-gold-${id}`;
-  const darkGoldGradient = `arvdoul-dark-gold-${id}`;
-
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      className="w-[27px] h-[27px]"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id={goldGradient} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#FFF9C4" />
-          <stop offset="30%" stopColor="#FFD700" />
-          <stop offset="70%" stopColor="#F5A623" />
-          <stop offset="100%" stopColor="#D4AF37" />
-        </linearGradient>
-        <linearGradient id={darkGoldGradient} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#B8860B" />
-          <stop offset="50%" stopColor="#DAA520" />
-          <stop offset="100%" stopColor="#8B6914" />
-        </linearGradient>
-      </defs>
-      <path
-        fill={`url(#${goldGradient})`}
-        d="M21 6.375c0 2.692-4.03 4.875-9 4.875S3 9.067 3 6.375 7.03 1.5 12 1.5s9 2.183 9 4.875Z"
-      />
-      <path
-        fill={`url(#${goldGradient})`}
-        d="M12 12.75c2.685 0 5.19-.586 7.078-1.609a8.283 8.283 0 0 0 1.897-1.384c.016.121.025.244.025.368C21 12.817 16.97 15 12 15s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.285 8.285 0 0 0 1.897 1.384C6.809 12.164 9.315 12.75 12 12.75Z"
-      />
-      <path
-        fill={`url(#${darkGoldGradient})`}
-        d="M12 16.5c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 0 0 1.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 0 0 1.897 1.384C6.809 15.914 9.315 16.5 12 16.5Z"
-      />
-      <path
-        fill={`url(#${goldGradient})`}
-        d="M12 20.25c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 0 0 1.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 0 0 1.897 1.384C6.809 19.664 9.315 20.25 12 20.25Z"
-      />
-    </svg>
-  );
+  return <GoldCoinsIcon className="w-[27px] h-[27px]" />;
 });
 
 const NavigationIcon = memo(function NavigationIcon({ type, active, dark }) {
@@ -875,7 +834,6 @@ function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme: themeMode } = useTheme();
-  const { playSound } = useSound();
   const { trackEvent } = useAnalytics();
 
   const { user: authUser, userProfile } = useAuth();
@@ -1001,13 +959,10 @@ function BottomNav() {
   const openQuickAccess = useCallback(() => {
     setQuickAccessOpen(true);
     // Nav will hide automatically due to effect
-    try { playSound?.("navigation"); } catch {
-      /* sound is optional */
-    }
     try { trackEvent?.("quick_access_open", { source: "bottom_navigation_handle", interaction: "long_press" }); } catch {
       /* telemetry is best-effort */
     }
-  }, [playSound, trackEvent]);
+  }, [trackEvent]);
 
   /* ------------------------------------------------------------------------
      Navigation handlers
@@ -1020,16 +975,13 @@ function BottomNav() {
       navigationLockRef.current = false;
     }, NAVIGATION_LOCK_MS);
 
-    try { playSound?.("create"); } catch {
-      /* sound is optional */
-    }
     try { trackEvent?.("bottom_nav_create_open", { destination: NAVIGATION_PATHS.createPost, source: "bottom_navigation" }); } catch {
       /* telemetry is best-effort */
     }
 
     closeQuickAccess();
     navigate(NAVIGATION_PATHS.createPost);
-  }, [closeQuickAccess, navigate, playSound, trackEvent]);
+  }, [closeQuickAccess, navigate, trackEvent]);
 
   const navigateTo = useCallback(
     (path, destination) => {
@@ -1039,9 +991,6 @@ function BottomNav() {
         navigationLockRef.current = false;
       }, NAVIGATION_LOCK_MS);
 
-      try { playSound?.("navigation"); } catch {
-        /* sound is optional */
-      }
       try { trackEvent?.("bottom_nav_navigation", { destination, path, source: "bottom_navigation" }); } catch {
         /* telemetry is best-effort */
       }
@@ -1054,14 +1003,11 @@ function BottomNav() {
       }
       navigate(path);
     },
-    [closeQuickAccess, location.pathname, navigate, playSound, reducedMotion, trackEvent]
+    [closeQuickAccess, location.pathname, navigate, reducedMotion, trackEvent]
   );
 
   const navigateToWithLoading = useCallback(
     (path) => {
-      try { playSound?.("navigation"); } catch {
-        /* sound is optional */
-      }
       try { trackEvent?.("Navigation_With_Loading", { path, source: "bottom_navigation_quick_access" }); } catch {
         /* telemetry is best-effort */
       }
@@ -1069,7 +1015,7 @@ function BottomNav() {
       closeQuickAccess();
       navigate(path);
     },
-    [closeQuickAccess, navigate, playSound, trackEvent]
+    [closeQuickAccess, navigate, trackEvent]
   );
 
   /* ------------------------------------------------------------------------

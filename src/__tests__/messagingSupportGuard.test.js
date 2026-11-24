@@ -95,4 +95,18 @@ describe('getMessagingInstance when FCM is unsupported', () => {
     await expect(getMessagingInstance()).rejects.toThrow(/FCM|Messaging/);
     expect(sdkGetMessaging).not.toHaveBeenCalled();
   });
+
+  test('notificationsService gates FCM getToken calls on granted Notification.permission', () => {
+    const src = read('src/services/notificationsService.js');
+    const getFreshStart = src.indexOf('async _getFreshPushToken()');
+    expect(getFreshStart).toBeGreaterThan(-1);
+    const getFreshBody = src.slice(getFreshStart, getFreshStart + 500);
+    expect(getFreshBody).toContain("Notification.permission !== 'granted'");
+    expect(getFreshBody).toContain("messaging/permission-blocked");
+  });
+
+  test('HomeScreen openDB upgrade accepts (db, oldVersion, _newVersion, transaction) with transaction as 4th arg', () => {
+    const src = read('src/screens/HomeScreen.jsx');
+    expect(src).toMatch(/upgrade\s*\(\s*db\s*,\s*oldVersion\s*,\s*_?newVersion\s*,\s*transaction\s*\)/);
+  });
 });

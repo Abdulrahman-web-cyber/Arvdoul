@@ -1063,15 +1063,25 @@ export default function ProfileMyScreen() {
     };
   });
   useEffect(() => {
-    const bindings = [
-      ['arvdoul:open_qr_code', 'qr'],
-      ['arvdoul:open_perspective_modal', 'perspective'],
-      ['arvdoul:share_profile', 'share'],
-      ['arvdoul:open_profile_options', 'options'],
-      ['arvdoul:open_location_setup', 'location'],
-    ].map(([eventName, handlerName]) => [eventName, () => eventHandlersRef.current[handlerName]?.()]);
-    bindings.forEach(([eventName, handler]) => window.addEventListener(eventName, handler));
-    return () => bindings.forEach(([eventName, handler]) => window.removeEventListener(eventName, handler));
+    const onOpenQrCode = () => eventHandlersRef.current.qr?.();
+    const onOpenPerspective = () => eventHandlersRef.current.perspective?.();
+    const onShareProfile = () => eventHandlersRef.current.share?.();
+    const onOpenOptions = () => eventHandlersRef.current.options?.();
+    const onOpenLocation = () => eventHandlersRef.current.location?.();
+
+    window.addEventListener('arvdoul:open_qr_code', onOpenQrCode);
+    window.addEventListener('arvdoul:open_perspective_modal', onOpenPerspective);
+    window.addEventListener('arvdoul:share_profile', onShareProfile);
+    window.addEventListener('arvdoul:open_profile_options', onOpenOptions);
+    window.addEventListener('arvdoul:open_location_setup', onOpenLocation);
+
+    return () => {
+      window.removeEventListener('arvdoul:open_qr_code', onOpenQrCode);
+      window.removeEventListener('arvdoul:open_perspective_modal', onOpenPerspective);
+      window.removeEventListener('arvdoul:share_profile', onShareProfile);
+      window.removeEventListener('arvdoul:open_profile_options', onOpenOptions);
+      window.removeEventListener('arvdoul:open_location_setup', onOpenLocation);
+    };
   }, []);
 
   // --- Avatar handlers --------------------------------------------------

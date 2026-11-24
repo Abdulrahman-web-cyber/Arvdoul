@@ -32,7 +32,7 @@ export const VISIBILITY_SCOPES = {
  * first"), and consumed by the profile screens — a tab id added here must render
  * in ProfileTabsBar/ProfileFeedGrid.
  */
-export const PROFILE_TABS = Object.freeze(['posts', 'reels', 'audio', 'citizenship', 'about']);
+export const PROFILE_TABS = Object.freeze(['posts', 'videos', 'reels', 'photos', 'stories', 'audio', 'saved', 'tagged']);
 
 /**
  * Private profile fields.

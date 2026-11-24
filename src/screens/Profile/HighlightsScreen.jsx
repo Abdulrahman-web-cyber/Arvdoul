@@ -209,7 +209,7 @@ export default function HighlightsScreen() {
         ) : highlights.length === 0 ? (
           <div className={cn(
             'text-center py-16 px-6 rounded-3xl border',
-            theme === 'dark' ? 'bg-[#080F2E] border-white/[0.08]' : 'bg-white border-slate-200/90 shadow-sm'
+            theme === 'dark' ? 'bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]' : 'bg-white border-slate-200/90 shadow-sm'
           )}>
             <div className={cn(
               'w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center',
@@ -250,7 +250,7 @@ export default function HighlightsScreen() {
                   )}>
                     <div className={cn(
                       'w-full h-full rounded-xl overflow-hidden',
-                      'bg-white dark:bg-[#080F2E]'
+                      'bg-white dark:bg-[#0B1234]'
                     )}>
                       {(() => {
                         const coverSrc = highlight.coverUrl || highlight.cover || highlight.thumbnailUrl || highlight.mediaURL;
@@ -304,7 +304,7 @@ export default function HighlightsScreen() {
                   <div className={cn(
                     'absolute top-10 right-2 z-10',
                     'w-36 py-1 rounded-xl',
-                    'bg-white/95 dark:bg-[#080F2E]/95 backdrop-blur-xl',
+                    'bg-white/95 dark:bg-[#0B1234]/78 backdrop-blur-xl',
                     'shadow-lg border border-slate-200 dark:border-white/10'
                   )}>
                     <button
@@ -349,7 +349,7 @@ export default function HighlightsScreen() {
             aria-modal="true"
             aria-label="New Highlight"
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm p-6 rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#080F2E] shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200"
+            className="w-full max-w-sm p-6 rounded-3xl border border-slate-200 dark:border-white/[0.09] bg-white dark:bg-[#0B1234]/72 dark:backdrop-blur-2xl shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -552,7 +552,7 @@ export default function HighlightsScreen() {
             aria-modal="true"
             aria-label="Edit Highlight Title"
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm p-5 rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#080F2E] shadow-2xl space-y-4"
+            className="w-full max-w-sm p-5 rounded-3xl border border-slate-200 dark:border-white/[0.09] bg-white dark:bg-[#0B1234]/72 dark:backdrop-blur-2xl shadow-2xl space-y-4"
           >
             <h3 className="font-bold text-base text-slate-900 dark:text-white">Edit Highlight Title</h3>
             <input

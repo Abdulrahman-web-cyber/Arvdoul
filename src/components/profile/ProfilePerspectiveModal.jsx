@@ -67,7 +67,7 @@ export const ProfilePerspectiveModal = memo(({
         aria-label="View Profile As"
         className={cn(
           "relative w-full max-w-md rounded-3xl overflow-hidden shadow-2xl border transition-all",
-          isDark ? "bg-[#080F2E] border-white/10 text-white" : "bg-white border-slate-200 text-slate-900"
+          isDark ? "bg-[#0B1234]/72 backdrop-blur-2xl border-white/[0.09] text-white shadow-[0_14px_40px_rgba(3,7,27,0.45)]" : "bg-white border-slate-200 text-slate-900"
         )}
         onClick={(e) => e.stopPropagation()}
       >

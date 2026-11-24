@@ -1589,10 +1589,12 @@ export default function EditProfileScreen() {
                 )}
               >
                 <option value="posts">Posts &amp; Sparks</option>
+                <option value="videos">Videos</option>
                 <option value="reels">Reels &amp; Clips</option>
+                <option value="photos">Photos</option>
+                <option value="stories">Vibes</option>
                 <option value="audio">Audio Tracks</option>
-                <option value="citizenship">Citizenship &amp; Provenance</option>
-                <option value="about">About &amp; Manifesto</option>
+                <option value="tagged">Tagged</option>
               </select>
             </div>
 

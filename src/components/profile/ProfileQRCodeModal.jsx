@@ -204,7 +204,7 @@ const ProfileQRCodeModal = memo(({
                   {/* Embedded Center Logo Badge */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-10 h-10 rounded-full bg-white p-0.5 shadow-md flex items-center justify-center">
-                      <div className="w-full h-full rounded-full overflow-hidden bg-gradient-to-tr from-purple-600 to-cyan-500 p-[1.5px]">
+                      <div className="w-full h-full rounded-full overflow-hidden p-[1.5px]" style={{ background: BRAND_GRADIENT }}>
                         <LazyImage src={avatarUrl} alt="" className="w-full h-full object-cover rounded-full bg-slate-900" />
                       </div>
                     </div>

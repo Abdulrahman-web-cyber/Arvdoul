@@ -212,7 +212,9 @@ class CountersManager {
       chunk.forEach((item, localIdx) => {
         fields.forEach((field) => {
           const key = `${localIdx}\u0000${field}`;
-          const rawLegacy = scope === 'stats' ? (item.stats && item.stats[field]) : item[field];
+          const rawLegacy = scope === 'stats'
+            ? (item.stats && item.stats[field])
+            : (item[field] ?? (item.stats && item.stats[field]));
           // Coerce: a non-numeric legacy (e.g. `replies` after a nested build
           // turned it into an array) is not a count and falls back to 0.
           const legacy = Number.isFinite(Number(rawLegacy)) ? Number(rawLegacy) : 0;

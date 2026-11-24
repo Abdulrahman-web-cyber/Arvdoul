@@ -88,6 +88,7 @@ export default function NotificationsScreen() {
   const [following, setFollowing] = useState([]);
   const [followStates, setFollowStates] = useState({});
   const [requests, setRequests] = useState([]);
+  const [requestsLoaded, setRequestsLoaded] = useState(false);
   const [followRequests, setFollowRequests] = useState([]);
   const [pendingFollowRequestAction, setPendingFollowRequestAction] = useState(null);
   const [recommended, setRecommended] = useState([]);
@@ -138,6 +139,7 @@ export default function NotificationsScreen() {
       ]);
       if (r.status === 'fulfilled') {
         setRequests(Array.isArray(r.value) ? r.value : r.value?.requests || []);
+        setRequestsLoaded(true);
       }
       if (fr.status === 'fulfilled') {
         setFollowRequests(fr.value?.requests || []);
@@ -149,7 +151,27 @@ export default function NotificationsScreen() {
 
   useEffect(() => {
     loadPendingRequestsOnly();
-    const onReqChange = () => loadPendingRequestsOnly();
+    const onReqChange = (event) => {
+      const detail = event?.detail;
+      if (detail?.requestId && detail?.action) {
+        setNotifications((prev) => {
+          const matchedIds = prev
+            .filter((n) => n.type === 'friend_request' && (n.requestId === detail.requestId || n.id === detail.requestId))
+            .map((n) => n.id);
+          if (matchedIds.length) {
+            setFriendActions((fa) => {
+              const next = { ...fa };
+              matchedIds.forEach((id) => { next[id] = detail.action; });
+              return next;
+            });
+          }
+          return prev.map((n) => (
+            n.requestId === detail.requestId || n.id === detail.requestId ? { ...n, unread: false } : n
+          ));
+        });
+      }
+      loadPendingRequestsOnly();
+    };
     window.addEventListener('arvdoul:friend-request-changed', onReqChange);
     window.addEventListener('arvdoul:follow-request-changed', onReqChange);
     return () => {
@@ -201,7 +223,12 @@ export default function NotificationsScreen() {
       } else {
         setFollowStates({});
       }
-      setRequests(r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.requests || []) : []);
+      if (r.status === 'fulfilled') {
+        setRequests(Array.isArray(r.value) ? r.value : r.value.requests || []);
+        setRequestsLoaded(true);
+      } else {
+        setRequests([]);
+      }
 
       const rawFollowRequests = fr.status === 'fulfilled' ? (fr.value?.requests || []) : [];
       setFollowRequests(rawFollowRequests);
@@ -249,12 +276,34 @@ export default function NotificationsScreen() {
         await svc.declineFriendRequest(requestId, user.uid);
         toast.success('Friend request declined');
       }
+      const actionLabel = accept ? 'accepted' : 'declined';
       setRequests((prev) => prev.filter((r) => (r.id || r.requestId) !== requestId));
-      setNotifications((prev) =>
-        prev.map((n) => (n.requestId === requestId || n.id === requestId ? { ...n, unread: false } : n))
-      );
+      const matchedUnreadIds = [];
+      setNotifications((prev) => {
+        const matchedIds = [];
+        const next = prev.map((n) => {
+          const altRid = n.user?.id && user?.uid ? `${n.user.id}_${user.uid}` : null;
+          if (n.requestId === requestId || n.id === requestId || altRid === requestId) {
+            matchedIds.push(n.id);
+            if (n.unread) matchedUnreadIds.push(n.id);
+            return { ...n, unread: false };
+          }
+          return n;
+        });
+        if (matchedIds.length) {
+          setFriendActions((fa) => {
+            const updated = { ...fa };
+            matchedIds.forEach((id) => { updated[id] = actionLabel; });
+            return updated;
+          });
+        }
+        return next;
+      });
+      matchedUnreadIds.forEach((nid) => {
+        notificationsService.markNotificationAsRead(nid, user.uid).catch(() => {});
+      });
       window.dispatchEvent(new CustomEvent('arvdoul:friend-request-changed', {
-        detail: { requestId, action: accept ? 'accepted' : 'declined' },
+        detail: { requestId, action: actionLabel },
       }));
       await loadNetwork();
     } catch (err) {
@@ -600,6 +649,11 @@ export default function NotificationsScreen() {
     }
   };
 
+  const pendingRequestIds = useMemo(
+    () => new Set((requests || []).map((r) => r.id || r.requestId).filter(Boolean)),
+    [requests]
+  );
+
   const filteredNotifications = useMemo(() => {
     return notifications.filter((notif) => {
       if (unreadOnly && !notif.unread) return false;
@@ -814,7 +868,7 @@ export default function NotificationsScreen() {
               >
                 <div className={cn(
                   "p-2 rounded-2xl border flex items-center justify-between gap-2 text-xs",
-                  isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
+                  isDark ? "bg-[#0B1234]/55 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
                 )}>
                   <div className="flex items-center gap-1.5">
                     <button
@@ -869,7 +923,7 @@ export default function NotificationsScreen() {
             aria-label="Notification sections"
             className={cn(
               "p-1 rounded-2xl border flex items-center gap-1",
-              isDark ? "bg-[#080F2E]/85 border-white/[0.08]" : "bg-slate-200/60 border-slate-200/80"
+              isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-slate-200/60 border-slate-200/80"
             )}
           >
             <button
@@ -943,7 +997,7 @@ export default function NotificationsScreen() {
                 >
                   <div className={cn(
                     "flex items-center gap-2 px-3.5 min-h-[44px] rounded-xl border",
-                    isDark ? "bg-[#080F2E] border-white/[0.08]" : "bg-white border-slate-200"
+                    isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200"
                   )}>
                     <Search className="w-4 h-4 text-slate-400 shrink-0" />
                     <input
@@ -1114,7 +1168,7 @@ export default function NotificationsScreen() {
                         key={reqId}
                         className={cn(
                           "p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-colors",
-                          isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80"
+                          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
@@ -1188,7 +1242,7 @@ export default function NotificationsScreen() {
                         key={req.id}
                         className={cn(
                           "p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-colors",
-                          isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80"
+                          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
@@ -1263,7 +1317,7 @@ export default function NotificationsScreen() {
                         key={fId}
                         className={cn(
                           "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
-                          isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80"
+                          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
@@ -1350,7 +1404,7 @@ export default function NotificationsScreen() {
                         key={gId}
                         className={cn(
                           "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
-                          isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80"
+                          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
@@ -1422,7 +1476,7 @@ export default function NotificationsScreen() {
                       key={rId}
                       className={cn(
                         "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
-                        isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80"
+                        isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200/80"
                       )}
                     >
                       <div
@@ -1499,7 +1553,7 @@ export default function NotificationsScreen() {
             {pushStatus === 'default' && !dismissPushBanner && (
               <div className={cn(
                 "p-4 rounded-2xl border flex items-center justify-between gap-3",
-                isDark ? "bg-[#080F2E]/90 border-purple-500/25" : "bg-white border-purple-200"
+                isDark ? "bg-[#0B1234]/48 backdrop-blur-xl border-purple-500/25" : "bg-white border-purple-200"
               )}>
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={cn(
@@ -1579,10 +1633,10 @@ export default function NotificationsScreen() {
                               "relative group rounded-2xl p-3.5 transition-colors border flex items-center justify-between gap-3 cursor-pointer",
                               item.unread
                                 ? isDark
-                                  ? "bg-[#080F2E] border-purple-500/30 hover:border-purple-400/50"
+                                  ? "bg-[#0B1234]/55 backdrop-blur-xl border-purple-500/30 hover:border-purple-400/50"
                                   : "bg-white border-purple-200"
                                 : isDark
-                                  ? "bg-[#080F2E]/60 border-white/[0.08] hover:border-white/15"
+                                  ? "bg-[#0B1234]/34 backdrop-blur-xl border-white/[0.08] hover:border-white/15"
                                   : "bg-white/80 border-slate-200/80 hover:border-slate-300"
                             )}
                           >
@@ -1662,6 +1716,10 @@ export default function NotificationsScreen() {
                                   ) : friendActions[item.id] === 'declined' ? (
                                     <span className={cn("px-2.5 py-1.5 rounded-xl text-xs font-semibold", isDark ? "text-slate-400 bg-white/5" : "text-slate-600 bg-slate-100")}>
                                       Declined
+                                    </span>
+                                  ) : (requestsLoaded && item.requestId && !pendingRequestIds.has(item.requestId)) ? (
+                                    <span className={cn("px-2.5 py-1.5 rounded-xl text-xs font-semibold", isDark ? "text-slate-400 bg-white/5" : "text-slate-600 bg-slate-100")}>
+                                      Processed
                                     </span>
                                   ) : (
                                     <>

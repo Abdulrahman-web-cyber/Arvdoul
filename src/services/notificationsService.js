@@ -426,8 +426,10 @@ class UltimateNotificationsService {
         // Auth listener
         this.authMethods.onAuthStateChanged(this.auth, async (user) => {
           if (user && hasWindow) {
-            await this._refreshPushToken(user.uid);
-            this._startPeriodicTokenRefresh(user.uid);
+            if (this.messaging && hasNotification && Notification.permission === 'granted') {
+              await this._refreshPushToken(user.uid);
+              this._startPeriodicTokenRefresh(user.uid);
+            }
           } else if (!user && this.tokenRefreshInterval) {
             clearInterval(this.tokenRefreshInterval);
             this.tokenRefreshInterval = null;
@@ -622,17 +624,27 @@ class UltimateNotificationsService {
   }
 
   async _getFreshPushToken() {
+    if (!this.messaging || !this.messagingMethods) return null;
+    if (!hasNotification || Notification.permission !== 'granted') return null;
     try {
       const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
       const token = await this.messagingMethods.getToken(this.messaging, { vapidKey });
       return token;
     } catch (err) {
-      logger.error('[Notifications] Failed to get token', err);
+      if (
+        err?.code === 'messaging/permission-blocked' ||
+        err?.code === 'messaging/unsupported-browser'
+      ) {
+        logger.warn('[Notifications] Push token unavailable', { code: err.code });
+      } else {
+        logger.error('[Notifications] Failed to get token', err);
+      }
       return null;
     }
   }
 
   async _refreshPushToken(userId) {
+    if (!this.messaging || !hasNotification || Notification.permission !== 'granted') return;
     const newToken = await this._getFreshPushToken();
     if (!newToken) return;
     const oldToken = await this._getCurrentDeviceToken(userId);
@@ -654,7 +666,7 @@ class UltimateNotificationsService {
     if (this.tokenRefreshInterval) clearInterval(this.tokenRefreshInterval);
     this.tokenRefreshInterval = setInterval(async () => {
       const currentUser = this.authMethods.getCurrentUser();
-      if (currentUser?.uid === userId) {
+      if (currentUser?.uid === userId && hasNotification && Notification.permission === 'granted') {
         await this._refreshPushToken(userId);
       }
     }, NOTIFICATIONS_CONFIG.TOKEN.REFRESH_INTERVAL_MS);

@@ -7,13 +7,15 @@ import { useSound } from "../../hooks/useSound.js";
 import { useAnalytics } from "../../hooks/useAnalytics.js";
 import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
-import { Search, Menu, X, ChevronLeft, SlidersHorizontal, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2, Camera, Calendar, Settings } from "lucide-react";
+import { Search, Menu, X, ChevronLeft, SlidersHorizontal, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2, Camera, Calendar, Settings, WifiOff } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
 import { resolveActorName } from "../../services/profileReadModel.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
 import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
+import { backgroundSyncService } from '../../services/BackgroundSyncService.js';
+import { subscribeSyncStatus } from '../../offline/syncEngine.js';
 
 /* ========================================================================== */
 /* Animation & Tokens                                                         */
@@ -244,7 +246,7 @@ export const TopAppBar = ({
   onAction, // generic action for contextual More / Publish / etc.
   onSearch,
   onOpenMenu, // better than hardcoded /menu
-  showOfflineBanner: _showOfflineBanner = true,
+  showOfflineBanner = true,
   scrollContainerRef,
 }) => {
   const navigate = useNavigate();
@@ -260,6 +262,13 @@ export const TopAppBar = ({
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
+  const [syncPendingCount, setSyncPendingCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showReconnectedBanner, setShowReconnectedBanner] = useState(false);
+  const prevOnlineBannerRef = useRef(
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
+  const reconnectedTimerRef = useRef(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [inboxHeaderState, setInboxHeaderState] = useState({ totalUnread: 0, activeCount: 0 });
   const [inboxSearchOpen, setInboxSearchOpen] = useState(false);
@@ -358,17 +367,70 @@ export const TopAppBar = ({
     };
   }, [location.search]);
 
-  // Online indicator dot on brand emblem (event-driven; OfflineIndicator owns the global banner)
+  // Unified responsive offline / sync / reconnected state inside TopAppBar
   useEffect(() => {
-    const updateConn = () => setIsOnline(navigator.onLine);
-    updateConn();
-    window.addEventListener("online", updateConn);
-    window.addEventListener("offline", updateConn);
+    const applySyncStatus = (status) => {
+      if (!status) return;
+      const nextOnline = status.isOnline !== false;
+      setIsOnline(nextOnline);
+      setSyncPendingCount(status.pendingCount || 0);
+      setIsSyncing(Boolean(status.isSyncing));
+      if (!prevOnlineBannerRef.current && nextOnline) {
+        setShowReconnectedBanner(true);
+        if (reconnectedTimerRef.current) clearTimeout(reconnectedTimerRef.current);
+        reconnectedTimerRef.current = setTimeout(() => setShowReconnectedBanner(false), 3600);
+      }
+      prevOnlineBannerRef.current = nextOnline;
+    };
+
+    const unsubscribeSync = subscribeSyncStatus(applySyncStatus);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (!prevOnlineBannerRef.current) {
+        setShowReconnectedBanner(true);
+        if (reconnectedTimerRef.current) clearTimeout(reconnectedTimerRef.current);
+        reconnectedTimerRef.current = setTimeout(() => setShowReconnectedBanner(false), 3600);
+      }
+      prevOnlineBannerRef.current = true;
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setShowReconnectedBanner(false);
+      if (reconnectedTimerRef.current) {
+        clearTimeout(reconnectedTimerRef.current);
+        reconnectedTimerRef.current = null;
+      }
+      prevOnlineBannerRef.current = false;
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
     return () => {
-      window.removeEventListener("online", updateConn);
-      window.removeEventListener("offline", updateConn);
+      unsubscribeSync?.();
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      if (reconnectedTimerRef.current) {
+        clearTimeout(reconnectedTimerRef.current);
+        reconnectedTimerRef.current = null;
+      }
     };
   }, []);
+
+  const handleTopBarSync = useCallback(async () => {
+    if (!isOnline || isSyncing) return;
+    setIsSyncing(true);
+    try {
+      await backgroundSyncService.triggerSync?.();
+      setShowReconnectedBanner(true);
+      if (reconnectedTimerRef.current) clearTimeout(reconnectedTimerRef.current);
+      reconnectedTimerRef.current = setTimeout(() => setShowReconnectedBanner(false), 3600);
+    } catch {
+      /* backgroundSyncService handles logging */
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isOnline, isSyncing]);
 
   useAuth();
   useAppStore((state) => state.currentUser);
@@ -1613,6 +1675,64 @@ export const TopAppBar = ({
               )}
             </div>
           </div>
+
+          <AnimatePresence>
+            {showOfflineBanner && (!isOnline || syncPendingCount > 0 || showReconnectedBanner || isSyncing) && (
+              <motion.div
+                id="arvdoul-topbar-offline-banner"
+                initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                transition={{ duration: 0.2 }}
+                className={cn(
+                  "flex flex-wrap sm:flex-nowrap items-center justify-center gap-x-2 gap-y-1 px-3 sm:px-4 py-1.5 rounded-2xl sm:rounded-full text-[11px] sm:text-xs font-semibold backdrop-blur-2xl shadow-lg border w-max max-w-full",
+                  !isOnline
+                    ? (isDark ? "bg-rose-950/80 border-rose-500/35 text-rose-200" : "bg-rose-50/95 border-rose-200 text-rose-800")
+                    : showReconnectedBanner
+                      ? (isDark ? "bg-emerald-950/80 border-emerald-500/35 text-emerald-200" : "bg-emerald-50/95 border-emerald-200 text-emerald-800")
+                      : (isDark ? "bg-[#0E143C]/85 border-indigo-400/25 text-indigo-100" : "bg-white/95 border-indigo-200 text-indigo-950")
+                )}
+              >
+                {!isOnline ? (
+                  <>
+                    <WifiOff className={cn("w-3.5 h-3.5 shrink-0", isDark ? "text-rose-400" : "text-rose-600")} />
+                    <span className="truncate max-w-[70vw] sm:max-w-none">
+                      {syncPendingCount > 0
+                        ? `Offline Mode · ${syncPendingCount} change${syncPendingCount > 1 ? "s" : ""} queued`
+                        : "Offline Mode · Viewing cached data"}
+                    </span>
+                  </>
+                ) : showReconnectedBanner ? (
+                  <>
+                    <CheckCircle2 className={cn("w-3.5 h-3.5 shrink-0", isDark ? "text-emerald-400" : "text-emerald-600")} />
+                    <span className="truncate max-w-[72vw] sm:max-w-none">
+                      Back online · Synchronized
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className={cn("w-3.5 h-3.5 shrink-0", isDark ? "text-purple-400" : "text-purple-600", isSyncing && "animate-spin")} />
+                    <span className="truncate max-w-[56vw] sm:max-w-none">
+                      {syncPendingCount} action{syncPendingCount > 1 ? "s" : ""} queued
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleTopBarSync}
+                      disabled={isSyncing}
+                      className={cn(
+                        "px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition shrink-0 cursor-pointer",
+                        isDark
+                          ? "bg-purple-500/30 hover:bg-purple-500/45 border border-purple-400/40 text-white"
+                          : "bg-purple-600/10 hover:bg-purple-600/20 border border-purple-600/30 text-purple-900"
+                      )}
+                    >
+                      {isSyncing ? "Syncing..." : "Sync"}
+                    </button>
+                  </>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.header>
 

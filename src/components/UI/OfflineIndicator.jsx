@@ -19,8 +19,29 @@ import { useTheme } from '../../context/ThemeContext';
 export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
   const { theme } = useTheme();
   const location = useLocation();
-  const isSplash = location?.pathname === '/';
+  const pathname = location?.pathname || '/';
+  const isSplash = pathname === '/';
   const isDark = theme !== 'light';
+
+  // TopAppBar owns the inline responsive offline/sync banner on all screens where it renders.
+  // OfflineIndicator acts strictly as a lightweight fallback on full-bleed routes where TopAppBar
+  // is suppressed (immersive video/reels, studios, live, auth screens) or hidden on desktop (/home, /admin*).
+  const isNoTopBarRoute = (
+    pathname.startsWith('/videos') ||
+    pathname.startsWith('/reels') ||
+    pathname.startsWith('/call') ||
+    pathname.startsWith('/video-editor') ||
+    pathname.startsWith('/audio-editor') ||
+    pathname.startsWith('/thumbnail-designer') ||
+    pathname.startsWith('/live') ||
+    pathname.startsWith('/camera') ||
+    pathname.startsWith('/create-story') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/welcome') ||
+    pathname.startsWith('/setup-profile')
+  );
+  const isDesktopOnlyFallback = pathname === '/home' || pathname.startsWith('/admin');
 
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [pendingCount, setPendingCount] = useState(0);
@@ -59,13 +80,21 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
         onlineTimerRef.current = null;
       }
     };
+    const handleQueueChanged = (event) => {
+      const nextCount = event?.detail?.count;
+      if (typeof nextCount === 'number' && Number.isFinite(nextCount)) {
+        setPendingCount(nextCount);
+      }
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('arvdoul:sync_queue_changed', handleQueueChanged);
 
     return () => {
       unsubscribe?.();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('arvdoul:sync_queue_changed', handleQueueChanged);
       if (onlineTimerRef.current) {
         clearTimeout(onlineTimerRef.current);
         onlineTimerRef.current = null;
@@ -91,19 +120,23 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
     }
   };
 
-  // Determine whether banner should be shown (suppressed on splash screen)
-  const shouldShow = !isSplash && (!isOnline || pendingCount > 0 || showOnlinePill || isSyncing);
+  // Determine whether fallback banner should be shown
+  const allowFallback = isNoTopBarRoute || isDesktopOnlyFallback;
+  const shouldShow = !isSplash && allowFallback && (!isOnline || pendingCount > 0 || showOnlinePill || isSyncing);
 
   return (
     <AnimatePresence>
       {shouldShow && (
         <motion.div
           id={id}
-          initial={{ y: -40, opacity: 0, scale: 0.95 }}
+          initial={{ y: -24, opacity: 0, scale: 0.96 }}
           animate={{ y: 0, opacity: 1, scale: 1 }}
-          exit={{ y: -40, opacity: 0, scale: 0.95 }}
+          exit={{ y: -24, opacity: 0, scale: 0.96 }}
           transition={{ type: 'spring', damping: 24, stiffness: 350 }}
-          className="fixed top-2 sm:top-3 left-1/2 -translate-x-1/2 z-[100] flex flex-wrap sm:flex-nowrap items-center justify-center gap-x-2 gap-y-1 px-3 sm:px-4 py-1.5 sm:py-2 rounded-2xl sm:rounded-full text-[11px] sm:text-xs font-semibold backdrop-blur-2xl shadow-lg border w-max max-w-[calc(100vw-16px)] sm:max-w-md pointer-events-auto"
+          className={cn(
+            "fixed top-2.5 right-3 sm:right-5 z-[90] flex flex-wrap sm:flex-nowrap items-center justify-center gap-x-2 gap-y-1 px-3 sm:px-4 py-1.5 rounded-2xl sm:rounded-full text-[11px] sm:text-xs font-semibold backdrop-blur-2xl shadow-lg border w-max max-w-[calc(100vw-24px)] sm:max-w-md pointer-events-auto",
+            isDesktopOnlyFallback && !isNoTopBarRoute && "hidden lg:flex"
+          )}
           style={{
             background: !isOnline
               ? (isDark

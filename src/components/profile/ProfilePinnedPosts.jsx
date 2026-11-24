@@ -28,7 +28,8 @@ const ProfilePinnedPosts = memo(({
       const pinned = posts.filter(p => p.isPinned || p.pinned);
       if (pinned.length > 0) {
         return pinned.slice(0, 4).map((p) => {
-          const rawLikes = p.likesCount ?? (Array.isArray(p.likes) ? p.likes.length : p.likes) ?? p.stats?.likes;
+          const shardedLikes = Array.isArray(p.likes) ? p.likes.length : p.likes;
+          const rawLikes = shardedLikes ?? p.stats?.likes ?? p.likesCount;
           const numLikes = typeof rawLikes === 'number' ? rawLikes : null;
           const formattedLikes = numLikes == null
             ? '—'

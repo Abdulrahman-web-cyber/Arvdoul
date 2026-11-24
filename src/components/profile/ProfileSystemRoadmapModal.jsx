@@ -10,7 +10,7 @@
 import React, { memo, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { X, Crown, ShieldCheck, CheckCircle2, Lock, ArrowRight, Zap } from "lucide-react";
+import { X, Crown, ShieldCheck, CheckCircle2, Lock, ArrowRight, Zap, Landmark } from "lucide-react";
 import { cn } from '../../lib/utils';
 import { unknownNumber } from '../../lib/unknownNumber.js';
 import { LEVEL_PERKS, CITIZEN_TIERS, ROYAL_ELIGIBILITY, getRankTitle, getCitizenTier, getRoyalEligibility, getLevelInfo } from "../../shared/levelConfig.cjs";
@@ -271,7 +271,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 space-y-1">
                   <div className="font-black text-cyan-700 dark:text-cyan-400 flex items-center gap-1.5 text-xs">
-                    <span>🏛️</span>
+                    <Landmark className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                     <span>1. Citizen</span>
                   </div>
                   <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-tight">
@@ -281,7 +281,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
                 <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
                   <div className="font-black text-purple-700 dark:text-purple-400 flex items-center gap-1.5 text-xs">
-                    <span>⚡</span>
+                    <Zap className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                     <span>2. Level</span>
                   </div>
                   <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-tight">
@@ -291,7 +291,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
                 <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
                   <div className="font-black text-amber-700 dark:text-amber-400 flex items-center gap-1.5 text-xs">
-                    <span>👑</span>
+                    <Crown className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                     <span>3. Royal Family</span>
                   </div>
                   <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-tight">

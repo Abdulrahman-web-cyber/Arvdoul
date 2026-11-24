@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Heart, Send, X, AlertCircle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { getMonetizationService } from '../../services/monetizationService.js';
 import { pickDisplayName } from '../../services/profileReadModel.js';
 import { newIdempotencyKey } from '../../utils/IdempotencyKey.js';
@@ -115,7 +116,7 @@ export default function ProfileTipModal({
 
       setSuccess(true);
       setUserBalance((prev) => Math.max(0, prev - effectiveAmount));
-      toast.success(`Sent ${effectiveAmount} coins to ${recipient.displayName || 'creator'}! 🎉`);
+      toast.success(`Sent ${effectiveAmount} coins to ${recipient.displayName || 'creator'}!`);
       
       if (onTipSuccess) {
         onTipSuccess(effectiveAmount);
@@ -160,7 +161,7 @@ export default function ProfileTipModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.2 }}
-          className="relative w-full max-w-md overflow-hidden rounded-2xl sm:rounded-3xl bg-white dark:bg-[#080F2E] border border-slate-200 dark:border-white/10 shadow-2xl p-6"
+          className="relative w-full max-w-md overflow-hidden rounded-2xl sm:rounded-3xl bg-white dark:bg-[#0B1234]/72 dark:backdrop-blur-2xl border border-slate-200 dark:border-white/[0.09] shadow-2xl p-6"
         >
           {/* Close button */}
           <button
@@ -228,11 +229,12 @@ export default function ProfileTipModal({
                         key={amt}
                         type="button"
                         onClick={() => handleSelectPreset(amt)}
+                        style={isSelected ? { background: BRAND_GRADIENT } : undefined}
                         className={cn(
-                          'flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-semibold text-sm transition-all border',
+                          'flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-semibold text-sm transition-all border cursor-pointer',
                           isSelected
-                            ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-500/20'
-                            : 'bg-gray-50 dark:bg-gray-800/60 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-purple-400'
+                            ? 'text-white border-transparent shadow-md shadow-arvdoul-purple/25'
+                            : 'bg-gray-50 dark:bg-white/[0.05] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-white/10 hover:border-arvdoul-purple/60'
                         )}
                       >
                         <Coins className="w-4 h-4 text-amber-400" />
@@ -268,10 +270,10 @@ export default function ProfileTipModal({
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
                   Optional Note (Public or Creator-Only)
                 </label>
-                <input aria-label="Keep up the inspiring work! 🚀"
+                <input aria-label="Keep up the inspiring work!"
                   type="text"
                   maxLength={120}
-                  placeholder="Keep up the inspiring work! 🚀"
+                  placeholder="Keep up the inspiring work!"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
@@ -308,11 +310,12 @@ export default function ProfileTipModal({
                   type="button"
                   onClick={handleSendTip}
                   disabled={submitting || hasInsufficientBalance || effectiveAmount <= 0}
+                  style={!(submitting || hasInsufficientBalance || effectiveAmount <= 0) ? { background: BRAND_GRADIENT } : undefined}
                   className={cn(
                     'flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-bold text-sm text-white transition-all shadow-md',
                     submitting || hasInsufficientBalance || effectiveAmount <= 0
-                      ? 'bg-purple-400 dark:bg-purple-700 cursor-not-allowed opacity-60'
-                      : 'bg-arvdoul-gradient hover:opacity-95 shadow-purple-500/20'
+                      ? 'bg-slate-400 dark:bg-white/10 text-slate-600 dark:text-slate-400 cursor-not-allowed opacity-70 shadow-none'
+                      : 'hover:opacity-95 shadow-arvdoul-purple/25 cursor-pointer'
                   )}
                 >
                   {submitting ? (

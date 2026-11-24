@@ -63,10 +63,12 @@ describe('Avatar upload, single offline banner, and bio-only quick edit', () => 
     expect(modal).toContain('!err?._toastShown');
   });
 
-  test('TopAppBar removes duplicate offline pill while OfflineIndicator remains responsive', () => {
+  test('TopAppBar hosts the responsive inline offline banner and OfflineIndicator avoids duplicating it', () => {
     const topBar = read('src/components/Shared/TopAppBar.jsx');
     const offlineBanner = read('src/components/UI/OfflineIndicator.jsx');
-    expect(topBar).not.toMatch(/No Internet|Offline Mode|Back online/i);
+    expect(topBar).toContain('arvdoul-topbar-offline-banner');
+    expect(topBar).toContain('subscribeSyncStatus');
+    expect(offlineBanner).toContain('isNoTopBarRoute');
     expect(offlineBanner).toContain("import { cn } from '../../lib/utils'");
   });
 
@@ -106,6 +108,10 @@ describe('ProfileTabsBar DNA liquidity, tab relocation, Creator Dashboard Lv.1 u
   test('Dark-theme profile components use soft translucent deep-navy liquid glass without heavy #080F2E opacity', () => {
     const files = [
       'src/screens/Profile/ProfileMyScreen.jsx',
+      'src/screens/Profile/CreatorDashboardScreen.jsx',
+      'src/screens/Profile/ConnectionsScreen.jsx',
+      'src/screens/Profile/HighlightsScreen.jsx',
+      'src/screens/NotificationsScreen.jsx',
       'src/components/profile/ProfileHeroSection.jsx',
       'src/components/profile/ProfileTabsBar.jsx',
       'src/components/profile/ProfileCreatorDashboard.jsx',
@@ -117,6 +123,12 @@ describe('ProfileTabsBar DNA liquidity, tab relocation, Creator Dashboard Lv.1 u
       'src/components/profile/ProfileAbout.jsx',
       'src/components/profile/ProfileOptionsMenu.jsx',
       'src/components/profile/ProfileSkeleton.jsx',
+      'src/components/profile/ProfileLocationModal.jsx',
+      'src/components/profile/ProfilePerspectiveModal.jsx',
+      'src/components/profile/ProfileTipModal.jsx',
+      'src/components/profile/ProfileVerificationModal.jsx',
+      'src/components/profile/ProfileQRScannerModal.jsx',
+      'src/components/profile/ProfileViewAsBanner.jsx',
       'src/screens/Profile/EditProfileScreen.jsx',
     ];
     for (const file of files) {
@@ -125,3 +137,37 @@ describe('ProfileTabsBar DNA liquidity, tab relocation, Creator Dashboard Lv.1 u
     }
   });
 });
+
+describe('Counters, sharded likes, profile views, and friend-request synchronization', () => {
+  test('CountersManager, firestoreService, profileStore, and analyticsService read sharded post counters accurately', () => {
+    const counters = read('src/utils/CountersManager.js');
+    const fsSvc = read('src/services/firestoreService.js');
+    const profileStore = read('src/store/profileStore.js');
+    const analyticsSvc = read('src/services/analyticsService.js');
+
+    expect(counters).toContain('item[field] ?? (item.stats && item.stats[field])');
+    expect(fsSvc).toContain('post?.likes ?? post?.stats?.likes ?? post?.likesCount ?? 0');
+    expect(fsSvc).toContain("this.invalidateCachePattern('user_posts_*');");
+    expect(profileStore).toContain('p?.likes ?? p?.stats?.likes ?? p?.likesCount ?? 0');
+    expect(profileStore).toContain('_trackedProfileViews');
+    expect(analyticsSvc).toContain("fields: ['likes', 'comments', 'shares']");
+  });
+
+  test('functions/analytics.js checks blocks bidirectionally on both profile and post views', () => {
+    const fnAnalytics = read('functions/analytics.js');
+    expect(fnAnalytics).toContain('blocks/${viewerId}_${profileOwnerId}');
+    expect(fnAnalytics).toContain('blocks/${profileOwnerId}_${viewerId}');
+    expect(fnAnalytics).toContain('blocks/${viewerId}_${authorId}');
+    expect(fnAnalytics).toContain('blocks/${authorId}_${viewerId}');
+  });
+
+  test('CreatorDashboardScreen allows Level 1+ owners and NotificationsScreen synchronizes friend requests', () => {
+    const creatorScreen = read('src/screens/Profile/CreatorDashboardScreen.jsx');
+    const notifScreen = read('src/screens/NotificationsScreen.jsx');
+    expect(creatorScreen).toContain('typeof userLevel === \'number\' && userLevel >= 1');
+    expect(notifScreen).toContain('requestsLoaded');
+    expect(notifScreen).toContain('pendingRequestIds');
+    expect(notifScreen).toContain('arvdoul:friend-request-changed');
+  });
+});
+

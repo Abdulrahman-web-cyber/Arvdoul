@@ -275,7 +275,7 @@ describe('Profile System Hardening & Validation Contracts', () => {
 
 describe('Profile default tab - persisted setting is actually consumed', () => {
   test('PROFILE_TABS is the single source for the validated tab ids', () => {
-    expect(PROFILE_TABS).toEqual(['posts', 'reels', 'audio', 'citizenship', 'about']);
+    expect(PROFILE_TABS).toEqual(['posts', 'videos', 'reels', 'photos', 'stories', 'audio', 'saved', 'tagged']);
     // Validation must accept every declared tab and reject anything else.
     for (const tab of PROFILE_TABS) {
       expect(validateProfileUpdate({ defaultTab: tab }).sanitized.defaultTab).toBe(tab);

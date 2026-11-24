@@ -435,6 +435,30 @@ class UltimateAnalyticsService {
         limit(10),
       ));
       const topPosts = pSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (topPosts.length > 0) {
+        const hadStats = topPosts.map((p) => Boolean(p.stats && typeof p.stats === 'object'));
+        const origStats = topPosts.map((p) => (p.stats ? { ...p.stats } : null));
+        await countersManager.applyAll({
+          items: topPosts,
+          collection: 'posts',
+          fields: ['likes', 'comments', 'shares'],
+          scope: 'stats',
+        });
+        topPosts.forEach((p, idx) => {
+          if (!hadStats[idx]) {
+            const hasPositiveShard = (p.stats?.likes || 0) > 0 || (p.stats?.comments || 0) > 0 || (p.stats?.shares || 0) > 0;
+            if (!hasPositiveShard) {
+              p.stats = origStats[idx] || undefined;
+            }
+          } else if (origStats[idx]) {
+            for (const f of ['likes', 'comments', 'shares']) {
+              if (origStats[idx][f] == null && p.stats[f] === 0) {
+                delete p.stats[f];
+              }
+            }
+          }
+        });
+      }
       let complete = true;
       const add = (raw) => {
         const n = unknownNumber(raw);

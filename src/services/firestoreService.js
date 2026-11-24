@@ -578,7 +578,7 @@ class EnterpriseFirestoreService {
 
       let totalLikes = 0;
       for (const post of posts) {
-        const likes = Number(post?.stats?.likes ?? post?.likes ?? 0);
+        const likes = Number(post?.likes ?? post?.stats?.likes ?? post?.likesCount ?? 0);
         if (Number.isFinite(likes) && likes > 0) {
           totalLikes += likes;
         }
@@ -803,6 +803,7 @@ class EnterpriseFirestoreService {
 
       this._rememberLocalLike(postId, userId, true);
       this.cache.delete(postId);
+      this.invalidateCachePattern('user_posts_*');
       countersManager.invalidate({ docPath: `posts/${postId}`, field: 'likes' });
       auditLogger.log('content.like', { userId, meta: { postId, alreadyLiked } });
 
@@ -871,6 +872,7 @@ class EnterpriseFirestoreService {
 
       this._rememberLocalLike(postId, userId, false);
       this.cache.delete(postId);
+      this.invalidateCachePattern('user_posts_*');
       countersManager.invalidate({ docPath: `posts/${postId}`, field: 'likes' });
       auditLogger.log('content.unlike', { userId, meta: { postId } });
       return { success: true };

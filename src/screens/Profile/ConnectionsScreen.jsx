@@ -550,7 +550,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           aria-label="Connection lists"
           className={cn(
             "p-1 rounded-2xl border flex items-center gap-1 overflow-x-auto no-scrollbar",
-            isDark ? "bg-[#080F2E]/85 border-white/[0.08]" : "bg-slate-200/60 border-slate-200/80"
+            isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-slate-200/60 border-slate-200/80"
           )}
         >
           {tabs.map((tab) => {
@@ -602,7 +602,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         <div className={cn(
           "px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 text-xs",
           isDark
-            ? "bg-[#080F2E]/75 border-white/[0.08] text-slate-300"
+            ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] text-slate-300"
             : "bg-white border-slate-200/80 text-slate-700 shadow-[0_1px_6px_rgba(15,23,42,0.03)]"
         )}>
           <div className="min-w-0">
@@ -636,7 +636,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           <div className={cn(
             "flex items-center gap-2.5 px-3.5 min-h-[44px] rounded-2xl border transition-colors",
             isDark
-              ? "bg-[#080F2E]/90 border-white/[0.08] focus-within:border-purple-500/50"
+              ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] focus-within:border-purple-500/50"
               : "bg-white border-slate-200 focus-within:border-purple-400"
           )}>
             <Search className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
@@ -670,7 +670,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         ) : searchQuery.trim() ? (
           <div className={cn(
             "px-3.5 py-2 rounded-xl border flex items-center justify-between gap-2 text-xs",
-            isDark ? "bg-[#080F2E]/80 border-white/[0.08] text-slate-300" : "bg-white border-slate-200 text-slate-700"
+            isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] text-slate-300" : "bg-white border-slate-200 text-slate-700"
           )}>
             <div className="flex items-center gap-2 min-w-0">
               <Search className="w-3.5 h-3.5 text-arvdoul-purple shrink-0" aria-hidden="true" />
@@ -696,7 +696,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           /* Privacy Protected State */
           <div className={cn(
             "rounded-3xl p-8 sm:p-12 text-center border space-y-4 my-6",
-            isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200"
+            isDark ? "bg-[#0B1234]/48 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200"
           )}>
             <div className={cn(
               "w-14 h-14 mx-auto rounded-2xl flex items-center justify-center border",
@@ -727,7 +727,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           /* Empty State */
           <div className={cn(
             "py-16 text-center rounded-3xl border space-y-2.5 px-6",
-            isDark ? "bg-[#080F2E]/60 border-white/[0.08]" : "bg-white border-slate-200"
+            isDark ? "bg-[#0B1234]/34 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200"
           )}>
             <div className={cn(
               "w-12 h-12 mx-auto rounded-2xl flex items-center justify-center",
@@ -774,7 +774,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                   className={cn(
                     "p-3.5 sm:p-4 rounded-2xl border transition-colors flex items-center justify-between gap-3",
                     isDark
-                      ? "bg-[#080F2E]/90 hover:bg-[#080F2E] border-white/[0.08] hover:border-white/15"
+                      ? "bg-[#0B1234]/42 hover:bg-[#0B1234]/60 backdrop-blur-xl border-white/[0.08] hover:border-white/15"
                       : "bg-white hover:bg-slate-50/80 border-slate-200/80 hover:border-slate-300"
                   )}
                 >
@@ -929,7 +929,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                   className={cn(
                     "min-h-[44px] px-5 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer disabled:opacity-60",
                     isDark
-                      ? "bg-[#080F2E]/90 border-white/[0.08] text-slate-200 hover:bg-white/10"
+                      ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] text-slate-200 hover:bg-white/10"
                       : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50"
                   )}
                 >

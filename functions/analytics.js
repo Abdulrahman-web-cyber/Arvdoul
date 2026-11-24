@@ -55,8 +55,11 @@ exports.trackProfileView = functions.https.onCall(async (data, context) => {
   await checkRateLimit(viewerId, 'trackProfileView', MAX_VIEWS_PER_MINUTE, 60000);
 
   // A block is mutual and absolute: a blocked viewer's visit is not analytics.
-  const blocked = await db.doc(`blocks/${viewerId}_${profileOwnerId}`).get();
-  if (blocked.exists) return { success: true, counted: false };
+  const [blockedOutgoing, blockedIncoming] = await Promise.all([
+    db.doc(`blocks/${viewerId}_${profileOwnerId}`).get(),
+    db.doc(`blocks/${profileOwnerId}_${viewerId}`).get(),
+  ]);
+  if (blockedOutgoing.exists || blockedIncoming.exists) return { success: true, counted: false };
 
   const today = new Date().toISOString().slice(0, 10);
   const viewId = `${viewerId}_${profileOwnerId}_${today}`;
@@ -162,8 +165,11 @@ exports.trackProfileView = functions.https.onCall(async (data, context) => {
 
     // A block is mutual and absolute: a blocked viewer's visit is not analytics.
     if (authorId) {
-      const blocked = await db.doc(`blocks/${viewerId}_${authorId}`).get();
-      if (blocked.exists) return { success: true, counted: false };
+      const [blockedOutgoing, blockedIncoming] = await Promise.all([
+        db.doc(`blocks/${viewerId}_${authorId}`).get(),
+        db.doc(`blocks/${authorId}_${viewerId}`).get(),
+      ]);
+      if (blockedOutgoing.exists || blockedIncoming.exists) return { success: true, counted: false };
     }
 
     const today = new Date().toISOString().slice(0, 10);

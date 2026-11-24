@@ -43,13 +43,15 @@ export default function CreatorDashboardScreen() {
     : (currentUserId && storeUser?.uid === currentUserId ? storeUser : null);
   // The canonical active-day count lives on the authenticated user's profile.
   const activeDaysCount = profileSupplement?.activeDaysCount ?? null;
-  const isCreator = resolveCreatorFlag(profileSupplement || {}, authUser || {}, profileSupplement?.level ?? authUser?.level ?? null);
+  const userLevel = profileSupplement?.level ?? authUser?.level ?? null;
+  const isCreator = resolveCreatorFlag(profileSupplement || {}, authUser || {}, userLevel)
+    || (typeof userLevel === 'number' && userLevel >= 1);
 
   useEffect(() => {
     if (!authInitialized) return;
     if (!currentUserId) navigate('/login', { replace: true });
     else if (profileSupplement && !isCreator) navigate('/profile', { replace: true });
-  }, [authInitialized, currentUserId, isCreator, navigate]);
+  }, [authInitialized, currentUserId, profileSupplement, isCreator, navigate]);
   
   const analyticsState = useAnalyticsStore();
   const timeframe = analyticsState.timeframe;
@@ -181,11 +183,8 @@ export default function CreatorDashboardScreen() {
             <button
               type="button"
               onClick={handleRefresh}
-              className={cn(
-                'px-4 py-2 rounded-xl font-medium cursor-pointer',
-                'bg-purple-600 text-white',
-                'hover:bg-purple-500'
-              )}
+              style={{ background: BRAND_GRADIENT }}
+              className="px-4 py-2 rounded-xl font-medium cursor-pointer text-white hover:opacity-95 transition-opacity shadow-sm"
             >
               Try Again
             </button>
@@ -232,7 +231,7 @@ export default function CreatorDashboardScreen() {
                     key={metric.key}
                     className={cn(
                       'p-4 rounded-2xl',
-                      'bg-white dark:bg-[#080F2E]/90 backdrop-blur-xl',
+                      'bg-white dark:bg-[#0B1234]/42 backdrop-blur-xl',
                       'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
                     )}
                   >
@@ -314,7 +313,7 @@ export default function CreatorDashboardScreen() {
             {/* Daily Stats Chart */}
             <div className={cn(
               'p-4 sm:p-5 rounded-2xl',
-              'bg-white dark:bg-[#080F2E]/90 backdrop-blur-xl',
+              'bg-white dark:bg-[#0B1234]/42 backdrop-blur-xl',
               'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
             )}>
               <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white mb-4">
@@ -352,7 +351,7 @@ export default function CreatorDashboardScreen() {
             {typeof analytics?.growthRate === 'number' && (
               <div className={cn(
                 'p-4 rounded-2xl',
-                'bg-white dark:bg-[#080F2E]/90 backdrop-blur-xl',
+                'bg-white dark:bg-[#0B1234]/42 backdrop-blur-xl',
                 'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
               )}>
                 <div className="flex items-center justify-between">
@@ -386,7 +385,7 @@ export default function CreatorDashboardScreen() {
                 value renders unknown. */}
             <div className={cn(
               'p-4 rounded-2xl',
-              'bg-white dark:bg-[#080F2E]/90 backdrop-blur-xl',
+              'bg-white dark:bg-[#0B1234]/42 backdrop-blur-xl',
               'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
             )}>
               <div className="flex items-center justify-between">

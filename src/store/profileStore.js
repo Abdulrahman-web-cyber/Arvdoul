@@ -137,6 +137,12 @@ let _lastCompletedProfileAt = 0;
 let _activeSwrKey = null;
 let _activeSwrAliasKey = null;
 const _swrProfileCache = new Map();
+const _trackedProfileViews = new Set();
+
+function buildViewTrackKey(viewerId, targetUid) {
+  const today = new Date().toISOString().slice(0, 10);
+  return `${viewerId}::${targetUid}::${today}`;
+}
 
 function buildSwrKey(userId, currentUserId, viewAs) {
   return `${String(userId || '').trim()}::${currentUserId ? String(currentUserId).trim() : ''}::${viewAs || 'default'}`;
@@ -281,6 +287,17 @@ export const useProfileStore = create(
         if (swrHit.isFresh) {
           _lastCompletedProfileKey = dedupeKey;
           _lastCompletedProfileAt = Date.now();
+          const isOwnerHit = Boolean(currentUserId && (cachedUid === currentUserId || userId === currentUserId));
+          if (!isOwnerHit && currentUserId && cachedUid && !options?.viewAs) {
+            const viewKey = buildViewTrackKey(currentUserId, cachedUid);
+            if (!_trackedProfileViews.has(viewKey)) {
+              if (_trackedProfileViews.size > 200) _trackedProfileViews.clear();
+              _trackedProfileViews.add(viewKey);
+              getAnalyticsService().trackProfileView(currentUserId, cachedUid).catch((e) => {
+                console.warn('Profile view not tracked', e?.message);
+              });
+            }
+          }
           return;
         }
       }
@@ -516,6 +533,9 @@ export const useProfileStore = create(
         
         // Track profile view once using resolvedUid (never raw @handle)
         if (!isOwner && currentUserId && resolvedUid && !options?.viewAs) {
+          const viewKey = buildViewTrackKey(currentUserId, resolvedUid);
+          if (_trackedProfileViews.size > 200) _trackedProfileViews.clear();
+          _trackedProfileViews.add(viewKey);
           analyticsService.trackProfileView(currentUserId, resolvedUid).catch((e) => {
             console.warn('Profile view not tracked', e?.message);
           });
@@ -732,7 +752,7 @@ export const useProfileStore = create(
         }
 
         const loadedLikesTotal = livePosts.reduce((sum, p) => {
-          const likes = Number(p?.stats?.likes ?? p?.likes ?? 0);
+          const likes = Number(p?.likes ?? p?.stats?.likes ?? p?.likesCount ?? 0);
           return sum + (Number.isFinite(likes) && likes > 0 ? likes : 0);
         }, 0);
         let nextLikesCount = null;
@@ -831,7 +851,7 @@ export const useProfileStore = create(
           }
           if (!result.hasMore) {
             const fullLikesTotal = livePosts.reduce((sum, p) => {
-              const likes = Number(p?.stats?.likes ?? p?.likes ?? 0);
+              const likes = Number(p?.likes ?? p?.stats?.likes ?? p?.likesCount ?? 0);
               return sum + (Number.isFinite(likes) && likes > 0 ? likes : 0);
             }, 0);
             state.postsLikesCount = fullLikesTotal;

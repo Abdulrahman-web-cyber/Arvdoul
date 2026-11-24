@@ -86,31 +86,38 @@ function getRetryDelay(attempt) {
   return Math.min(base + jitter, 30000);
 }
 
-let dbInstance = null;
-async function getCacheDB() {
-  if (dbInstance) return dbInstance;
-  dbInstance = await openDB('ArvdoulFeedCache', DB_VERSION, {
-    upgrade(db, oldVersion, transaction) {
-      if (oldVersion < 1) {
+let dbPromise = null;
+function getCacheDB() {
+  if (dbPromise) return dbPromise;
+  dbPromise = openDB('ArvdoulFeedCache', DB_VERSION, {
+    upgrade(db, oldVersion, _newVersion, transaction) {
+      if (oldVersion < 1 && !db.objectStoreNames.contains('feed')) {
         const feedStore = db.createObjectStore('feed', { keyPath: 'userId' });
         feedStore.createIndex('timestamp', 'timestamp');
       }
-      if (oldVersion < 2) {
+      if (oldVersion < 2 && !db.objectStoreNames.contains('optimisticQueue')) {
         db.createObjectStore('optimisticQueue', { keyPath: 'id' });
       }
       if (oldVersion < 3) {
-        db.createObjectStore('feedSnapshot', { keyPath: 'userId' });
-        db.createObjectStore('scrollPosition', { keyPath: 'userId' });
+        if (!db.objectStoreNames.contains('feedSnapshot')) {
+          db.createObjectStore('feedSnapshot', { keyPath: 'userId' });
+        }
+        if (!db.objectStoreNames.contains('scrollPosition')) {
+          db.createObjectStore('scrollPosition', { keyPath: 'userId' });
+        }
       }
-      if (oldVersion < 4) {
+      if (oldVersion < 4 && db.objectStoreNames.contains('feed')) {
         const feedStore = transaction.objectStore('feed');
         if (!feedStore.indexNames.contains('version')) {
           feedStore.createIndex('version', 'version');
         }
       }
     },
+  }).catch((err) => {
+    dbPromise = null;
+    throw err;
   });
-  return dbInstance;
+  return dbPromise;
 }
 
 function trimPostForCache(post) {

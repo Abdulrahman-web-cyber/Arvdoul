@@ -181,6 +181,11 @@ const ProfileFeedGrid = memo(({
       if (res && res.success === false) {
         throw new Error(res.error || 'Could not update like');
       }
+      if (!(res && res.alreadyLiked)) {
+        import('../../store/profileStore.js')
+          .then(({ useProfileStore }) => useProfileStore.getState().adjustPostLikes?.(postId, nextLiked ? 1 : -1))
+          .catch(() => {});
+      }
     } catch {
       setLikedPosts((prev) => ({ ...prev, [postId]: currentlyLiked }));
       toast.error('Could not update like');
@@ -219,12 +224,12 @@ const ProfileFeedGrid = memo(({
   // An absent server count stays unknown (rendered '—'); only a real number is
   // shifted by the session's like delta.
   const likeCount = useCallback((item) => {
-    const raw = item?.likes ?? item?.likesCount;
+    const raw = item?.likes ?? item?.stats?.likes ?? item?.likesCount;
     const base = raw === null || raw === undefined ? null : Number(raw);
     if (base === null || Number.isNaN(base)) return '—';
     const serverLiked = Boolean(likeBaseline[item?.id]);
     const viewerLiked = Boolean(likedPosts[item?.id]);
-    return base + (viewerLiked ? 1 : 0) - (serverLiked ? 1 : 0);
+    return Math.max(0, base + (viewerLiked ? 1 : 0) - (serverLiked ? 1 : 0));
   }, [likeBaseline, likedPosts]);
   const commentCount = useCallback((item) => {
     const raw = item?.comments ?? item?.commentsCount;
@@ -447,6 +452,8 @@ const ProfileFeedGrid = memo(({
     );
   } else if (activeTab === 'photos') {
     displayItems = displayItems.filter(p => {
+      const isVibe = p.type === 'story' || p.type === 'vibe' || p.isStory || p.isVibe;
+      if (isVibe) return false;
       const isVideoOrAudio =
         p.type === 'video' ||
         p.type === 'reel' ||

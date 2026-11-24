@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { X, Camera, Upload, Search, CheckCircle2, AlertCircle, Loader2, ScanLine, RefreshCw, UserCheck } from "lucide-react";
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { getUserService } from '../../services/userService';
 
 const ProfileQRScannerModal = memo(({
@@ -343,7 +344,7 @@ const ProfileQRScannerModal = memo(({
         className={cn(
           "relative w-full max-w-sm rounded-3xl p-6 border shadow-2xl transition-all overflow-hidden",
           isDark
-            ? "bg-[#080F2E] border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]"
+            ? "bg-[#0B1234]/72 backdrop-blur-2xl border-white/[0.09] text-white shadow-[0_14px_40px_rgba(3,7,27,0.45)]"
             : "bg-white border-slate-200 text-slate-900 shadow-[0_16px_50px_rgba(0,0,0,0.12)]"
         )}
       >
@@ -504,7 +505,7 @@ const ProfileQRScannerModal = memo(({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="w-full aspect-square rounded-2xl border-2 border-dashed border-purple-500/30 hover:border-purple-500 p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-purple-500/5 mb-4 group focus:outline-none focus:ring-2 focus:ring-arvdoul-blue"
+            className="w-full aspect-square rounded-2xl border-2 border-dashed border-purple-500/30 hover:border-purple-500 p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-purple-500/5 mb-4 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
           >
             <div className="w-14 h-14 rounded-2xl bg-purple-600/10 text-purple-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
               <Upload className="w-7 h-7" />
@@ -546,7 +547,8 @@ const ProfileQRScannerModal = memo(({
             <button
               type="submit"
               disabled={isProcessing || !manualInput.trim()}
-              className="w-full py-2.5 rounded-2xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/25 hover:opacity-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+              style={{ background: BRAND_GRADIENT }}
+              className="w-full py-2.5 rounded-2xl text-xs font-bold text-white shadow-md shadow-arvdoul-purple/25 hover:opacity-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
               <UserCheck className="w-4 h-4" />
               <span>Find & Open Profile</span>
