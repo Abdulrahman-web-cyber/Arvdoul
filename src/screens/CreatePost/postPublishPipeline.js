@@ -246,139 +246,271 @@ export async function executePostPublish({
   );
 
   try {
-    const uploadedMedia = await uploadComposerMedia(current.mediaItems || [], {
-      uid: userNow.uid,
-      storageService: services?.storage,
-      onItemProgress: onMediaItemProgress,
-      onBatchProgress: onMediaBatchProgress,
-    });
+    const firstVideoItem =
+      effectiveType === 'video'
+        ? (current.mediaItems || []).find(
+            (m) => m.type === 'video' || m.file?.type?.startsWith('video/')
+          ) || current.mediaItems?.[0]
+        : null;
+    const hasPreHostedVideoUrl = Boolean(
+      (typeof firstVideoItem?.url === 'string' &&
+        (firstVideoItem.url.startsWith('https://') || firstVideoItem.url.startsWith('http://'))) ||
+        (typeof current.typeData?.video?.url === 'string' &&
+          (current.typeData.video.url.startsWith('https://') ||
+            current.typeData.video.url.startsWith('http://')))
+    );
+    const shouldUseMuxSparkUpload =
+      effectiveType === 'video' &&
+      !isScheduled &&
+      !communityId &&
+      !hasPreHostedVideoUrl &&
+      Boolean(firstVideoItem?.file || firstVideoItem?.preview || current.typeData?.video?.file);
 
-    const uploadedAudioCover =
-      effectiveType === 'audio'
-        ? await uploadAudioCoverIfNeeded(current.typeData?.audio, {
-            uid: userNow.uid,
-            storageService: services?.storage,
-          })
-        : '';
+    let result = null;
+    let finalPostData = null;
 
-    const audioMediaUrl = uploadedMedia.find((m) => m.type === 'audio')?.url || '';
-    const existingAudioUrl =
-      typeof current.typeData?.audio?.url === 'string' &&
-      current.typeData.audio.url.startsWith('http')
-        ? current.typeData.audio.url
-        : '';
+    if (shouldUseMuxSparkUpload) {
+      const { mediaUrlToFile } = await import('./postMediaPipeline.js');
+      const { default: videoService } = await import('../../services/videoService.js');
 
-    const finalAudioUrl = audioMediaUrl || existingAudioUrl;
-    if (effectiveType === 'audio' && !finalAudioUrl) {
-      throw new Error('Please attach or upload an audio track before publishing.');
-    }
+      let videoFile = firstVideoItem?.file || current.typeData?.video?.file || null;
+      if (!videoFile && firstVideoItem?.preview) {
+        videoFile = await mediaUrlToFile(
+          firstVideoItem.preview,
+          firstVideoItem.name || `spark_${Date.now()}.mp4`,
+          'video/mp4'
+        );
+      }
+      if (!videoFile) {
+        throw new Error('Could not read the selected video file for upload.');
+      }
 
-    const firstMedia = uploadedMedia[0] || null;
-    const videoMedia = uploadedMedia.find((m) => m.type === 'video') || null;
-    const rawVideoUrl =
-      videoMedia?.url ||
-      (typeof current.typeData?.video?.url === 'string' &&
-      current.typeData.video.url.startsWith('http')
-        ? current.typeData.video.url
-        : '');
+      let thumbnailFile = firstVideoItem?.thumbnailFile || null;
+      if (
+        !thumbnailFile &&
+        typeof firstVideoItem?.thumbnailUrl === 'string' &&
+        (firstVideoItem.thumbnailUrl.startsWith('blob:') ||
+          firstVideoItem.thumbnailUrl.startsWith('data:'))
+      ) {
+        thumbnailFile = await mediaUrlToFile(
+          firstVideoItem.thumbnailUrl,
+          `spark_thumb_${Date.now()}.jpg`,
+          'image/jpeg'
+        ).catch(() => null);
+      }
 
-    const finalPostData = {
-      id: clientPostId,
-      clientPostId,
-      type: effectiveType,
-      content: effectiveText || sanitizedContent,
-      contentJSON: sanitizedJSON,
-      media: uploadedMedia,
-      mediaUrl: firstMedia?.url || '',
-      videoUrl: rawVideoUrl,
-      thumbnailUrl: firstMedia?.thumbnail || firstMedia?.url || uploadedAudioCover || '',
-      authorId: userNow.uid,
-      authorName: pickDisplayName([userNow.displayName, userNow.name, userNow.username]),
-      authorUsername: deriveHandle(userNow.username) || deriveHandle(userNow.email) || '',
-      authorPhoto: userNow.photoURL || userNow.photo || '',
-      visibility: communityId ? 'community' : current.visibility || 'public',
-      communityId: communityId || null,
-      location: current.location || null,
-      hashtags: extractMergedHashtags(effectiveText, current.hashtags),
-      scheduledTime: current.scheduledTime || null,
-      poll:
-        effectiveType === 'poll'
-          ? {
-              question: effectiveText,
-              options: (current.typeData?.poll?.options || []).filter((o) => o && o.trim()),
-              allowMultiple: !!current.typeData?.poll?.allowMultiple,
-              closesAt: current.pollClosesAt || null,
-            }
-          : null,
-      event:
-        effectiveType === 'event'
-          ? {
-              title: effectiveText,
-              date: current.typeData?.event?.date,
-              location: current.typeData?.event?.location || '',
-              locationData: current.typeData?.event?.locationData || null,
-              description: current.typeData?.event?.description || '',
-              coverImage: current.typeData?.event?.coverImage || '',
-              rsvpEnabled: !!current.typeData?.event?.rsvpEnabled,
-              capacity: current.typeData?.event?.capacity ?? null,
-              timezone: current.typeData?.event?.timezone || null,
-            }
-          : null,
-      link:
-        effectiveType === 'link'
-          ? {
-              url: current.typeData?.link?.url || '',
-              title: current.typeData?.link?.title || effectiveText,
-              thumbnail: current.typeData?.link?.thumbnail || '',
-              metadata: current.typeData?.link?.metadata || null,
-            }
-          : null,
-      question:
-        effectiveType === 'question'
-          ? { text: effectiveText, bounty: 0, closed: false, answers: [] }
-          : null,
-      audio:
-        effectiveType === 'audio'
-          ? {
-              url: finalAudioUrl,
-              duration: current.typeData?.audio?.duration || 0,
-              title: current.typeData?.audio?.title || effectiveText,
-              artist: current.typeData?.audio?.artist || '',
-              genre: current.typeData?.audio?.genre || '',
-              coverUrl: uploadedAudioCover || '',
-              sourceSoundId: current.typeData?.audio?.sourceSoundId || null,
-            }
-          : null,
-      video:
-        effectiveType === 'video'
-          ? {
-              url: rawVideoUrl,
-              duration: videoMedia?.duration || current.typeData?.video?.duration || 0,
-            }
-          : null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      likesCount: 0,
-      commentsCount: 0,
-      sharesCount: 0,
-      viewsCount: 0,
-      stats: { likes: 0, comments: 0, shares: 0, saves: 0, views: 0 },
-    };
+      const mergedTags = extractMergedHashtags(effectiveText, current.hashtags);
+      const sparkSubType = current.typeData?.video?.subType || 'spark';
+      const sparkDuration =
+        Number(firstVideoItem?.duration || current.typeData?.video?.duration || 0) || null;
 
-    let result;
-    if (communityId) {
-      const { getCommunityService } = await import('../../services/communityService.js');
-      const communityService = services?.community || getCommunityService();
-      const communityPost = await communityService.createCommunityPost(
-        communityId,
-        userNow.uid,
-        finalPostData
+      const uploadRes = await videoService.uploadVideo(
+        videoFile,
+        {
+          title: (effectiveText || firstVideoItem?.name || 'Untitled Spark').slice(0, 140),
+          description: effectiveText || sanitizedContent || '',
+          content: effectiveText || sanitizedContent || '',
+          tags: mergedTags,
+          hashtags: mergedTags,
+          visibility: current.visibility || 'public',
+          subType: sparkSubType,
+          type: sparkSubType === 'reel' ? 'reel' : 'video',
+          duration: sparkDuration,
+          allowDownload: current.typeData?.video?.allowDownload ?? true,
+          duetEnabled: current.typeData?.video?.duetEnabled ?? true,
+          stitchEnabled: current.typeData?.video?.stitchEnabled ?? true,
+          chapters: Array.isArray(current.typeData?.video?.chapters)
+            ? current.typeData.video.chapters
+            : [],
+          thumbnailFile,
+          location: current.location || null,
+        },
+        {
+          onProgress: (fraction) => {
+            const pct = Math.min(100, Math.round((Number(fraction) || 0) * 100));
+            if (firstVideoItem?.id) onMediaItemProgress?.(firstVideoItem.id, pct);
+            onMediaBatchProgress?.(pct);
+          },
+        }
       );
-      result = communityPost?.id ? { postId: communityPost.id } : null;
+
+      if (uploadRes?.postId || uploadRes?.videoId) {
+        const canonicalId = uploadRes.postId || uploadRes.videoId;
+        result = { postId: canonicalId };
+        finalPostData = {
+          id: canonicalId,
+          clientPostId,
+          type: 'video',
+          subType: sparkSubType,
+          content: effectiveText || sanitizedContent,
+          contentJSON: sanitizedJSON,
+          media: [],
+          mediaUrl: '',
+          videoUrl: uploadRes.playbackId
+            ? `https://stream.mux.com/${uploadRes.playbackId}.m3u8`
+            : firstVideoItem?.preview || '',
+          muxPlaybackId: uploadRes.playbackId || null,
+          processingState: uploadRes.processingState || 'UPLOAD_RESERVED',
+          thumbnailUrl: uploadRes.thumbnailUrl || firstVideoItem?.thumbnailUrl || '',
+          authorId: userNow.uid,
+          authorName: pickDisplayName([userNow.displayName, userNow.name, userNow.username]),
+          authorUsername: deriveHandle(userNow.username) || deriveHandle(userNow.email) || '',
+          authorPhoto: userNow.photoURL || userNow.photo || '',
+          visibility: current.visibility || 'public',
+          communityId: null,
+          location: current.location || null,
+          hashtags: mergedTags,
+          scheduledTime: null,
+          video: {
+            url: '',
+            duration: sparkDuration || 0,
+          },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          likesCount: 0,
+          commentsCount: 0,
+          sharesCount: 0,
+          viewsCount: 0,
+          stats: { likes: 0, comments: 0, shares: 0, saves: 0, views: 0 },
+        };
+      }
     } else {
-      const { getFirestoreService } = await import('../../services/firestoreService.js');
-      const firestoreService = services?.firestore || getFirestoreService();
-      result = await firestoreService.createPost(finalPostData);
+      const uploadedMedia = await uploadComposerMedia(current.mediaItems || [], {
+        uid: userNow.uid,
+        storageService: services?.storage,
+        onItemProgress: onMediaItemProgress,
+        onBatchProgress: onMediaBatchProgress,
+      });
+
+      const uploadedAudioCover =
+        effectiveType === 'audio'
+          ? await uploadAudioCoverIfNeeded(current.typeData?.audio, {
+              uid: userNow.uid,
+              storageService: services?.storage,
+            })
+          : '';
+
+      const audioMediaUrl = uploadedMedia.find((m) => m.type === 'audio')?.url || '';
+      const existingAudioUrl =
+        typeof current.typeData?.audio?.url === 'string' &&
+        current.typeData.audio.url.startsWith('http')
+          ? current.typeData.audio.url
+          : '';
+
+      const finalAudioUrl = audioMediaUrl || existingAudioUrl;
+      if (effectiveType === 'audio' && !finalAudioUrl) {
+        throw new Error('Please attach or upload an audio track before publishing.');
+      }
+
+      const firstMedia = uploadedMedia[0] || null;
+      const videoMedia = uploadedMedia.find((m) => m.type === 'video') || null;
+      const rawVideoUrl =
+        videoMedia?.url ||
+        (typeof current.typeData?.video?.url === 'string' &&
+        current.typeData.video.url.startsWith('http')
+          ? current.typeData.video.url
+          : '');
+
+      finalPostData = {
+        id: clientPostId,
+        clientPostId,
+        type: effectiveType,
+        ...(effectiveType === 'video'
+          ? { subType: current.typeData?.video?.subType || 'spark' }
+          : {}),
+        content: effectiveText || sanitizedContent,
+        contentJSON: sanitizedJSON,
+        media: uploadedMedia,
+        mediaUrl: firstMedia?.url || '',
+        videoUrl: rawVideoUrl,
+        thumbnailUrl: firstMedia?.thumbnail || firstMedia?.url || uploadedAudioCover || '',
+        authorId: userNow.uid,
+        authorName: pickDisplayName([userNow.displayName, userNow.name, userNow.username]),
+        authorUsername: deriveHandle(userNow.username) || deriveHandle(userNow.email) || '',
+        authorPhoto: userNow.photoURL || userNow.photo || '',
+        visibility: communityId ? 'community' : current.visibility || 'public',
+        communityId: communityId || null,
+        location: current.location || null,
+        hashtags: extractMergedHashtags(effectiveText, current.hashtags),
+        scheduledTime: current.scheduledTime || null,
+        poll:
+          effectiveType === 'poll'
+            ? {
+                question: effectiveText,
+                options: (current.typeData?.poll?.options || []).filter((o) => o && o.trim()),
+                allowMultiple: !!current.typeData?.poll?.allowMultiple,
+                closesAt: current.pollClosesAt || null,
+              }
+            : null,
+        event:
+          effectiveType === 'event'
+            ? {
+                title: effectiveText,
+                date: current.typeData?.event?.date,
+                location: current.typeData?.event?.location || '',
+                locationData: current.typeData?.event?.locationData || null,
+                description: current.typeData?.event?.description || '',
+                coverImage: current.typeData?.event?.coverImage || '',
+                rsvpEnabled: !!current.typeData?.event?.rsvpEnabled,
+                capacity: current.typeData?.event?.capacity ?? null,
+                timezone: current.typeData?.event?.timezone || null,
+              }
+            : null,
+        link:
+          effectiveType === 'link'
+            ? {
+                url: current.typeData?.link?.url || '',
+                title: current.typeData?.link?.title || effectiveText,
+                thumbnail: current.typeData?.link?.thumbnail || '',
+                metadata: current.typeData?.link?.metadata || null,
+              }
+            : null,
+        question:
+          effectiveType === 'question'
+            ? { text: effectiveText, bounty: 0, closed: false, answers: [] }
+            : null,
+        audio:
+          effectiveType === 'audio'
+            ? {
+                url: finalAudioUrl,
+                duration: current.typeData?.audio?.duration || 0,
+                title: current.typeData?.audio?.title || effectiveText,
+                artist: current.typeData?.audio?.artist || '',
+                genre: current.typeData?.audio?.genre || '',
+                coverUrl: uploadedAudioCover || '',
+                sourceSoundId: current.typeData?.audio?.sourceSoundId || null,
+              }
+            : null,
+        video:
+          effectiveType === 'video'
+            ? {
+                url: rawVideoUrl,
+                duration: videoMedia?.duration || current.typeData?.video?.duration || 0,
+              }
+            : null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        likesCount: 0,
+        commentsCount: 0,
+        sharesCount: 0,
+        viewsCount: 0,
+        stats: { likes: 0, comments: 0, shares: 0, saves: 0, views: 0 },
+      };
+
+      if (communityId) {
+        const { getCommunityService } = await import('../../services/communityService.js');
+        const communityService = services?.community || getCommunityService();
+        const communityPost = await communityService.createCommunityPost(
+          communityId,
+          userNow.uid,
+          finalPostData
+        );
+        result = communityPost?.id ? { postId: communityPost.id } : null;
+      } else {
+        const { getFirestoreService } = await import('../../services/firestoreService.js');
+        const firestoreService = services?.firestore || getFirestoreService();
+        result = await firestoreService.createPost(finalPostData);
+      }
     }
 
     if (!result?.postId) {

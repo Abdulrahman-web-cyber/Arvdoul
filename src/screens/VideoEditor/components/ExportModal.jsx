@@ -304,6 +304,8 @@ export default function ExportModal({
         videoFile: file,
         videoUrl: exportedUrl,
         title: projectName,
+        duration: total,
+        subType: 'spark',
       },
     });
   };

@@ -34,11 +34,11 @@ service firebase.storage {
     // policy), no client path uploads to `banners/`, and no surface reads it, so
     // the namespace was a dead, world-readable upload target. Do not re-add.
 
-    // Post media — owner write/delete, public read, max 200 MB
+    // Post media — owner write/delete, public read, max 100 MB
     match /posts/{userId}/{fileName=**} {
       allow read: if true;
       allow delete: if isOwner(userId);
-      allow write: if isOwner(userId) && request.resource.size < 200 * 1024 * 1024;
+      allow write: if isOwner(userId) && request.resource.size <= 100 * 1024 * 1024;
     }
 
     // Story media (Vibes) — owner write/delete, visibility-scoped reads:
@@ -141,11 +141,11 @@ service firebase.storage {
         request.resource.contentType.matches('audio/.*');
     }
 
-    // Video uploads (videoService) — owner write/delete, public read
+    // Video uploads (videoService / Sparks) — owner write/delete, public read, max 100 MB
     match /videos/{userId}/{fileName=**} {
       allow read: if true;
       allow delete: if isOwner(userId);
-      allow write: if isOwner(userId) && request.resource.size < 500 * 1024 * 1024;
+      allow write: if isOwner(userId) && request.resource.size <= 100 * 1024 * 1024;
     }
 
     // Video thumbnails / exports — owner write/delete, public read

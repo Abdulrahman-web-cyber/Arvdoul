@@ -30,6 +30,13 @@ import {
   deleteUploadedStorageAsset,
   extractStoragePathFromUrl,
 } from './postMediaPipeline.js';
+import videoConfig from '../../shared/videoConfig.cjs';
+
+const {
+  validateSparkDuration,
+  validateSparkFileSize,
+  validateSparkMimeOrExtension,
+} = videoConfig;
 
 const MAX_VIDEOS = MEDIA_LIMITS.maxVideos;
 const MAX_CAPTION_LENGTH = 2200;
@@ -377,12 +384,16 @@ export default function CreateVideo() {
             if (cancelled) return;
             const thumbUrl = thumbBlob ? URL.createObjectURL(thumbBlob) : null;
             if (thumbUrl) createdBlobUrlsRef.current.add(thumbUrl);
+            const thumbFile = thumbBlob
+              ? new File([thumbBlob], `spark_thumb_${media.id}.jpg`, { type: 'image/jpeg' })
+              : null;
             dispatch({
               type: 'UPDATE_MEDIA_ITEM',
               payload: {
                 id: media.id,
                 updates: {
                   thumbnailUrl: thumbUrl || media.thumbnailUrl || null,
+                  thumbnailFile: thumbFile || media.thumbnailFile || null,
                   duration: duration || media.duration || 0,
                 },
               },
@@ -428,78 +439,110 @@ export default function CreateVideo() {
       const fileArray = Array.from(files || []).slice(0, remaining);
 
       for (const file of fileArray) {
-        if (!file.type.startsWith('video/')) continue;
-        if (file.size > MAX_FILE_SIZE_BYTES) {
-          toast.error(`${file.name} exceeds ${MEDIA_LIMITS.maxFileSizeMB}MB`);
+        const typeCheck = validateSparkMimeOrExtension(file.type, file.name);
+        if (!typeCheck.valid) {
+          toast.error(typeCheck.reason);
+          continue;
+        }
+        const sizeCheck = validateSparkFileSize(file.size);
+        if (!sizeCheck.valid) {
+          toast.error(`${file.name}: ${sizeCheck.reason}`);
           continue;
         }
         const preview = URL.createObjectURL(file);
         createdBlobUrlsRef.current.add(preview);
         const duration = await readVideoDuration(file);
+        if (duration > 0) {
+          const durCheck = validateSparkDuration(duration);
+          if (!durCheck.valid) {
+            URL.revokeObjectURL(preview);
+            createdBlobUrlsRef.current.delete(preview);
+            toast.error(durCheck.reason);
+            continue;
+          }
+        }
+        const scheduledMode = Boolean(state?.scheduledTime);
         newItems.push({
           id: uuidv4(),
           file,
           preview,
           thumbnailUrl: null,
+          thumbnailFile: null,
           duration,
           type: 'video',
           name: file.name,
           size: file.size,
-          progress: 0,
+          progress: scheduledMode ? 0 : 100,
           error: null,
         });
       }
 
       if (newItems.length === 0) return;
       dispatch({ type: 'ADD_MEDIA_ITEMS', payload: newItems });
+      dispatch({
+        type: 'SET_TYPE_DATA',
+        payload: {
+          video: {
+            duration: newItems[0].duration || 0,
+            subType: state?.typeData?.video?.subType || 'spark',
+            allowDownload: state?.typeData?.video?.allowDownload ?? true,
+            duetEnabled: state?.typeData?.video?.duetEnabled ?? true,
+            stitchEnabled: state?.typeData?.video?.stitchEnabled ?? true,
+          },
+        },
+      });
       if (!selectedId) setSelectedId(newItems[0].id);
 
-      for (const item of newItems) {
-        const controller = new AbortController();
-        uploadControllersRef.current.set(item.id, controller);
-        try {
-          const res = await uploadSingleMediaAsset({
-            file: item.file,
-            folder: 'videos',
-            uid: uploaderUid,
-            signal: controller.signal,
-            maxSize: MAX_FILE_SIZE_BYTES,
-            storageService: services?.storage,
-            onProgress: (percent) => {
-              dispatch({
-                type: 'UPDATE_MEDIA_PROGRESS',
-                payload: { id: item.id, updates: { progress: percent } },
-              });
-            },
-          });
-          if (res.storagePath) {
-            sessionUploadedPathsRef.current.add(res.storagePath);
-          }
-          dispatch({
-            type: 'UPDATE_MEDIA_ITEM',
-            payload: {
-              id: item.id,
-              updates: {
-                url: res.downloadURL,
-                storagePath: res.storagePath,
-                progress: 100,
-                error: null,
+      // Scheduled/legacy uploads stage into owner-scoped Storage; live Sparks
+      // stream directly to Mux on publish (no duplicate Storage copy).
+      if (state?.scheduledTime) {
+        for (const item of newItems) {
+          const controller = new AbortController();
+          uploadControllersRef.current.set(item.id, controller);
+          try {
+            const res = await uploadSingleMediaAsset({
+              file: item.file,
+              folder: 'videos',
+              uid: uploaderUid,
+              signal: controller.signal,
+              maxSize: MAX_FILE_SIZE_BYTES,
+              storageService: services?.storage,
+              onProgress: (percent) => {
+                dispatch({
+                  type: 'UPDATE_MEDIA_PROGRESS',
+                  payload: { id: item.id, updates: { progress: percent } },
+                });
               },
-            },
-          });
-        } catch (err) {
-          if (err?.name === 'AbortError' || controller.signal.aborted) continue;
-          toast.error(`Failed to upload ${item.name}`);
-          dispatch({
-            type: 'UPDATE_MEDIA_PROGRESS',
-            payload: { id: item.id, updates: { error: err?.message || 'Upload failed' } },
-          });
-        } finally {
-          uploadControllersRef.current.delete(item.id);
+            });
+            if (res.storagePath) {
+              sessionUploadedPathsRef.current.add(res.storagePath);
+            }
+            dispatch({
+              type: 'UPDATE_MEDIA_ITEM',
+              payload: {
+                id: item.id,
+                updates: {
+                  url: res.downloadURL,
+                  storagePath: res.storagePath,
+                  progress: 100,
+                  error: null,
+                },
+              },
+            });
+          } catch (err) {
+            if (err?.name === 'AbortError' || controller.signal.aborted) continue;
+            toast.error(`Failed to upload ${item.name}`);
+            dispatch({
+              type: 'UPDATE_MEDIA_PROGRESS',
+              payload: { id: item.id, updates: { error: err?.message || 'Upload failed' } },
+            });
+          } finally {
+            uploadControllersRef.current.delete(item.id);
+          }
         }
       }
     },
-    [mediaItems.length, resolveLiveUid, dispatch, selectedId, services?.storage]
+    [mediaItems.length, resolveLiveUid, dispatch, selectedId, services?.storage, state?.scheduledTime, state?.typeData?.video]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -712,6 +755,78 @@ export default function CreateVideo() {
               maxLength={MAX_CAPTION_LENGTH}
               isDark={isDark}
             />
+
+            {/* Spark Format & Remix Controls */}
+            <div
+              className={`rounded-2xl border p-3.5 space-y-3 ${
+                isDark ? 'bg-[#03071B]/55 border-white/10' : 'bg-white/80 border-slate-200/80'
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  Spark Format
+                </span>
+                <div className="inline-flex rounded-xl p-0.5 bg-slate-100 dark:bg-white/5 border border-slate-200/70 dark:border-white/10">
+                  {[
+                    { id: 'spark', label: 'Spark' },
+                    { id: 'reel', label: 'Reel' },
+                    { id: 'video', label: 'Long Video' },
+                  ].map((fmt) => {
+                    const currentFmt = state?.typeData?.video?.subType || 'spark';
+                    const activeFmt = currentFmt === fmt.id;
+                    return (
+                      <button
+                        key={fmt.id}
+                        type="button"
+                        onClick={() =>
+                          dispatch({
+                            type: 'SET_TYPE_DATA',
+                            payload: { video: { subType: fmt.id } },
+                          })
+                        }
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeFmt
+                            ? 'text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                        style={activeFmt ? { background: BRAND_GRADIENT } : undefined}
+                      >
+                        {fmt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-200/60 dark:border-white/10">
+                {[
+                  { key: 'allowDownload', label: 'Allow downloads' },
+                  { key: 'duetEnabled', label: 'Allow Duet' },
+                  { key: 'stitchEnabled', label: 'Allow Stitch' },
+                ].map((opt) => {
+                  const checked = state?.typeData?.video?.[opt.key] ?? true;
+                  return (
+                    <label
+                      key={opt.key}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer border border-slate-200/80 dark:border-white/10 bg-white/60 dark:bg-white/[0.04] text-slate-700 dark:text-slate-200"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) =>
+                          dispatch({
+                            type: 'SET_TYPE_DATA',
+                            payload: { video: { [opt.key]: e.target.checked } },
+                          })
+                        }
+                        className="rounded border-slate-300 text-arvdoul-purple focus:ring-arvdoul-purple"
+                      />
+                      <span>{opt.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           </>
         )}
 

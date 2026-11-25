@@ -1,11 +1,12 @@
 // src/components/Videos/VideoComments.jsx
 
-import { useState, useEffect, useRef, useMemo, memo } from "react";
+import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Heart, Reply, Send, BadgeCheck, Smile, Crown, Sparkles } from "lucide-react";
+import { X, Heart, Reply, Send, BadgeCheck, Smile, Crown, Sparkles } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { formatTimeAgo, SPRING_ANIMATION } from '../../utils/videoUtils';
 import { pickDisplayName, deriveHandle } from '../../services/profileReadModel.js';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
 import { LazyImage } from '../../components/Shared/LazyImage';
@@ -13,7 +14,7 @@ import { LazyImage } from '../../components/Shared/LazyImage';
 const EMOJI_PRESETS = ['🔥', '❤️', '👏', '😂', '🚀', '💡', '💯', '🙌'];
 
 /**
- * VideoComments - World-Class Comments bottom sheet with real-time updates
+ * VideoComments - Canonical Spark & legacy video comments drawer
  */
 const VideoComments = memo(({
   isOpen = false,
@@ -28,16 +29,17 @@ const VideoComments = memo(({
   const [sortBy, setSortBy] = useState('best');
   const [loading, setLoading] = useState(false);
   const [blockedUserIds, setBlockedUserIds] = useState(new Set());
-  // A commenter with no real handle is addressed by name, never an invented @handle.
+
+  const canonicalTargetId = video?.canonicalPostId || video?.id;
+  const targetType = video?._sourceCollection === 'videos' && !video?.canonicalPostId
+    ? 'legacy_video'
+    : 'post';
+
   const replyToLabel = useMemo(
     () => (replyTo ? (replyTo.user.username ? `@${replyTo.user.username}` : replyTo.user.name) : ''),
     [replyTo]
   );
 
-
-  // Both block directions: a user who blocked the viewer (or whom the viewer
-  // blocked) must not have their comments rendered here. CommentsDrawer already
-  // filtered its thread; this sheet did not.
   useEffect(() => {
     if (!isOpen) return undefined;
     let cancelled = false;
@@ -62,9 +64,8 @@ const VideoComments = memo(({
     [comments, blockedUserIds]
   );
 
-  // Load comments from real service
   useEffect(() => {
-    if (!isOpen || !video?.id) return;
+    if (!isOpen || !canonicalTargetId) return;
 
     const loadComments = async () => {
       setLoading(true);
@@ -73,7 +74,7 @@ const VideoComments = memo(({
         const auth = await getAuthInstance();
         const viewerUid = auth?.currentUser?.uid || null;
         const { getCommentService } = await import('../../services/commentService.js');
-        const res = await getCommentService().getCommentsByPost(video.id, {
+        const res = await getCommentService().getCommentsByPost(canonicalTargetId, {
           nested: true,
           limit: 50,
           cacheFirst: false,
@@ -83,20 +84,14 @@ const VideoComments = memo(({
           id: c.id,
           user: {
             id: c.userId,
-            // Never invent a handle: `deriveHandle` returns null for a
-            // placeholder/absent value, and the render gates on it.
             name: pickDisplayName([c.userName], { fallback: null }) || `user ${String(c.userId || '').slice(0, 6)}`,
             username: deriveHandle(c.userUsername),
             avatar: c.userAvatar || null,
             isVerified: !!c.isVerified,
-            isCreator: c.userId === video.userId || c.userId === video.creatorId,
+            isCreator: c.userId === video?.userId || c.userId === video?.authorId || c.userId === video?.creatorId,
           },
           text: c.content || c.text || '',
           likes: typeof c.likes === 'number' ? c.likes : null,
-          // The comment doc carries `likesBy` (the ids that liked it); a card
-          // that hardcoded `false` showed an unliked heart for a comment the
-          // viewer had liked, and the toggle then re-called `likeComment`
-          // (which throws "already liked"), so the like appeared to no-op.
           isLiked: Array.isArray(c.likesBy) && !!viewerUid && c.likesBy.includes(viewerUid),
           createdAt: c.createdAt instanceof Date
             ? c.createdAt.toISOString()
@@ -113,16 +108,15 @@ const VideoComments = memo(({
     };
 
     loadComments();
-  }, [isOpen, video?.id, video?.userId, video?.creatorId]);
+  }, [isOpen, canonicalTargetId, video?.userId, video?.authorId, video?.creatorId]);
 
-  // Handle submit comment
   const handleSubmit = async () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || !canonicalTargetId) return;
 
     const textToSend = newComment.trim();
     const optimistic = {
       id: `local_${Date.now()}`,
-      user: { id: 'current', name: 'You', username: 'you', avatar: null, isVerified: false, isCreator: false },
+      user: { id: 'current', name: 'You', username: null, avatar: null, isVerified: false, isCreator: false },
       text: textToSend,
       likes: 0,
       isLiked: false,
@@ -143,13 +137,23 @@ const VideoComments = memo(({
             replyTo.id,
             uid,
             textToSend,
-            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL, targetType: 'video' }
+            {
+              userName: auth.currentUser.displayName,
+              userUsername: auth.currentUser.username || auth.currentUser.displayName,
+              userAvatar: auth.currentUser.photoURL,
+              targetType,
+            }
           )
         : await getCommentService().createComment(
-            video.id,
+            canonicalTargetId,
             uid,
             textToSend,
-            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL, targetType: 'video' }
+            {
+              userName: auth.currentUser.displayName,
+              userUsername: auth.currentUser.username || auth.currentUser.displayName,
+              userAvatar: auth.currentUser.photoURL,
+              targetType,
+            }
           );
 
       if (res?.offlineQueued) {
@@ -179,13 +183,11 @@ const VideoComments = memo(({
     }
   };
 
-  // Quick Emoji Click
   const handleEmojiClick = (emoji) => {
     setNewComment((prev) => prev + emoji);
     inputRef.current?.focus();
   };
 
-  // Handle like comment
   const handleLike = async (commentId, isReply = false, parentId = null) => {
     const applyToggle = (prev) =>
       prev.map((c) => {
@@ -194,13 +196,13 @@ const VideoComments = memo(({
             ...c,
             replies: c.replies.map((r) =>
               r.id === commentId
-                ? { ...r, isLiked: !r.isLiked, likes: r.isLiked ? r.likes - 1 : r.likes + 1 }
+                ? { ...r, isLiked: !r.isLiked, likes: (r.likes ?? 0) + (r.isLiked ? -1 : 1) }
                 : r
             ),
           };
         }
         if (!isReply && c.id === commentId) {
-          return { ...c, isLiked: !c.isLiked, likes: c.isLiked ? c.likes - 1 : c.likes + 1 };
+          return { ...c, isLiked: !c.isLiked, likes: (c.likes ?? 0) + (c.isLiked ? -1 : 1) };
         }
         return c;
       });
@@ -213,9 +215,9 @@ const VideoComments = memo(({
       const auth = await getAuthInstance();
       const uid = auth?.currentUser?.uid;
       if (!uid) return;
-      const target = (isReply && parentId
+      const target = isReply && parentId
         ? comments.find((c) => c.id === parentId)?.replies.find((r) => r.id === commentId)
-        : comments.find((c) => c.id === commentId));
+        : comments.find((c) => c.id === commentId);
       const wasLiked = !target?.isLiked;
       if (wasLiked) {
         await getCommentService().likeComment(commentId, uid);
@@ -228,22 +230,18 @@ const VideoComments = memo(({
     }
   };
 
-  // Handle reply
   const handleReply = (comment) => {
     setReplyTo(comment);
     inputRef.current?.focus();
   };
 
-  // Sort comments
   const sortedComments = [...visibleComments].sort((a, b) => {
     switch (sortBy) {
       case 'newest':
         return new Date(b.createdAt) - new Date(a.createdAt);
-      case 'oldest':
-        return new Date(a.createdAt) - new Date(b.createdAt);
       case 'best':
       default:
-        return b.likes - a.likes;
+        return (b.likes ?? 0) - (a.likes ?? 0);
     }
   });
 
@@ -264,34 +262,41 @@ const VideoComments = memo(({
           exit={{ y: '100%' }}
           transition={SPRING_ANIMATION.bottomSheet}
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-2xl mx-auto max-h-[85vh] rounded-t-3xl backdrop-blur-2xl bg-[#0d0f1d]/95 border-t border-white/10 shadow-2xl overflow-hidden flex flex-col"
+          className={`w-full max-w-2xl mx-auto max-h-[85vh] rounded-t-3xl backdrop-blur-2xl border-t shadow-2xl overflow-hidden flex flex-col ${
+            isDark ? 'bg-[#080F2E]/95 border-white/12' : 'bg-white/95 border-gray-200'
+          }`}
         >
-          {/* Top Drag Handle Indicator */}
-          <div className="w-full flex items-center justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing">
-            <div className="w-12 h-1.5 rounded-full bg-white/20" />
+          {/* Drag Handle */}
+          <div className="w-full flex items-center justify-center pt-3 pb-1">
+            <div className={`w-12 h-1.5 rounded-full ${isDark ? 'bg-white/20' : 'bg-gray-300'}`} />
           </div>
 
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
+          <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
             <div className="flex items-center gap-3">
-              <h2 className="text-white font-extrabold text-base tracking-tight">
+              <h2 className={`${isDark ? 'text-white' : 'text-gray-900'} font-extrabold text-base tracking-tight`}>
                 Comments
-                <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                <span className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  isDark ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-purple-100 text-purple-700'
+                }`}>
                   {visibleComments.length}
                 </span>
               </h2>
-              
-              {/* Sort Selection */}
-              <div className="flex items-center gap-1 bg-white/5 p-0.5 rounded-xl border border-white/10">
+
+              <div className={`flex items-center gap-1 p-0.5 rounded-xl border ${
+                isDark ? 'bg-white/5 border-white/10' : 'bg-gray-100 border-gray-200'
+              }`}>
                 {['best', 'newest'].map((mode) => (
                   <button
                     key={mode}
+                    type="button"
                     onClick={() => setSortBy(mode)}
-                    className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold transition-all ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                       sortBy === mode
-                        ? 'bg-purple-600 text-white shadow-sm'
-                        : 'text-white/60 hover:text-white'
+                        ? 'text-white shadow-sm'
+                        : isDark ? 'text-white/60 hover:text-white' : 'text-gray-600 hover:text-gray-900'
                     }`}
+                    style={sortBy === mode ? { background: BRAND_GRADIENT } : undefined}
                   >
                     {mode.charAt(0).toUpperCase() + mode.slice(1)}
                   </button>
@@ -300,8 +305,11 @@ const VideoComments = memo(({
             </div>
 
             <button
+              type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white flex items-center justify-center transition-colors"
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                isDark ? 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+              }`}
               aria-label="Close comments"
             >
               <X className="w-4 h-4" />
@@ -313,21 +321,24 @@ const VideoComments = memo(({
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <div className="w-7 h-7 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs text-white/50 font-medium">Loading conversations...</span>
+                <span className={`text-xs font-medium ${isDark ? 'text-white/50' : 'text-gray-500'}`}>Loading conversations...</span>
               </div>
             ) : sortedComments.length === 0 ? (
               <div className="text-center py-12 flex flex-col items-center gap-2">
                 <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
                   <Sparkles className="w-6 h-6" />
                 </div>
-                <p className="text-white/80 font-bold text-sm">No comments yet</p>
-                <p className="text-white/50 text-xs max-w-xs">Be the first to share your thoughts with the creator!</p>
+                <p className={`${isDark ? 'text-white/85' : 'text-gray-900'} font-bold text-sm`}>No comments yet</p>
+                <p className={`${isDark ? 'text-white/50' : 'text-gray-500'} text-xs max-w-xs`}>
+                  Be the first to share your thoughts with the creator!
+                </p>
               </div>
             ) : (
               sortedComments.map((comment) => (
                 <CommentItem
                   key={comment.id}
                   comment={comment}
+                  isDark={isDark}
                   blockedUserIds={blockedUserIds}
                   onLike={(isReply, parentId) => handleLike(comment.id, isReply, parentId)}
                   onReply={() => handleReply(comment)}
@@ -338,14 +349,17 @@ const VideoComments = memo(({
 
           {/* Reply Indicator Bar */}
           {replyTo && (
-            <div className="px-5 py-2 bg-purple-950/40 border-t border-purple-500/20 flex items-center justify-between">
-              <span className="text-purple-200 text-xs font-medium flex items-center gap-1.5 truncate">
+            <div className={`px-5 py-2 border-t flex items-center justify-between ${
+              isDark ? 'bg-purple-950/40 border-purple-500/20' : 'bg-purple-50 border-purple-200'
+            }`}>
+              <span className={`${isDark ? 'text-purple-200' : 'text-purple-800'} text-xs font-medium flex items-center gap-1.5 truncate`}>
                 <Reply className="w-3.5 h-3.5 text-purple-400" />
-                Replying to <span className="font-bold text-white">{replyToLabel}</span>
+                Replying to <span className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{replyToLabel}</span>
               </span>
               <button
+                type="button"
                 onClick={() => setReplyTo(null)}
-                className="text-purple-300 hover:text-white p-1 rounded-md"
+                className="text-purple-400 hover:text-purple-300 p-1 rounded-md"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -353,15 +367,22 @@ const VideoComments = memo(({
           )}
 
           {/* Quick Reaction Emojis Ribbon */}
-          <div className="px-5 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar border-t border-white/5 bg-white/[0.02]">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-white/40 flex-shrink-0 flex items-center gap-1">
+          <div className={`px-5 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar border-t ${
+            isDark ? 'border-white/5 bg-white/[0.02]' : 'border-gray-100 bg-gray-50/70'
+          }`}>
+            <span className={`text-[11px] font-bold uppercase tracking-wider flex-shrink-0 flex items-center gap-1 ${
+              isDark ? 'text-white/40' : 'text-gray-400'
+            }`}>
               <Smile className="w-3.5 h-3.5" /> React:
             </span>
             {EMOJI_PRESETS.map((emoji) => (
               <button
                 key={emoji}
+                type="button"
                 onClick={() => handleEmojiClick(emoji)}
-                className="px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/15 text-sm transition-transform hover:scale-110 active:scale-95 flex-shrink-0"
+                className={`px-2.5 py-1 rounded-full text-sm transition-transform hover:scale-110 active:scale-95 flex-shrink-0 ${
+                  isDark ? 'bg-white/5 hover:bg-white/15' : 'bg-white hover:bg-gray-100 border border-gray-200'
+                }`}
               >
                 {emoji}
               </button>
@@ -369,33 +390,43 @@ const VideoComments = memo(({
           </div>
 
           {/* Input Bar */}
-          <div className="p-4 border-t border-white/10 bg-[#090b14]/90">
+          <div className={`p-4 border-t ${isDark ? 'border-white/10 bg-[#03071B]/95' : 'border-gray-200 bg-white'}`}>
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-violet-600 to-fuchsia-600 flex items-center justify-center text-white font-bold text-xs shadow-md">
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-md shrink-0"
+                style={{ background: BRAND_GRADIENT }}
+              >
                 ✦
               </div>
               <div className="flex-1 relative flex items-center">
-                <input aria-label="Add a comment"
+                <input
+                  aria-label="Add a comment"
                   ref={inputRef}
                   type="text"
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                  placeholder={replyTo ? `Reply to ${replyToLabel}...` : "Add a comment..."}
-                  className="w-full bg-white/10 text-white placeholder-white/40 text-sm rounded-full pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-arvdoul-purple border border-white/10 transition-all"
+                  placeholder={replyTo ? `Reply to ${replyToLabel}...` : 'Add a comment...'}
+                  className={`w-full text-sm rounded-full pl-4 pr-12 py-2.5 focus:outline-none focus:ring-2 focus:ring-arvdoul-purple border transition-all ${
+                    isDark
+                      ? 'bg-white/10 text-white placeholder-white/40 border-white/10'
+                      : 'bg-gray-100 text-gray-900 placeholder-gray-500 border-gray-200'
+                  }`}
                   maxLength={500}
                 />
                 {newComment.length > 0 && (
-                  <span className="absolute right-3 text-[10px] font-mono text-white/40">
+                  <span className={`absolute right-3 text-[10px] font-mono ${isDark ? 'text-white/40' : 'text-gray-400'}`}>
                     {500 - newComment.length}
                   </span>
                 )}
               </div>
               <motion.button
+                type="button"
                 whileTap={{ scale: 0.9 }}
                 onClick={handleSubmit}
                 disabled={!newComment.trim()}
-                className="w-10 h-10 rounded-full bg-arvdoul-gradient flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-lg shadow-purple-500/20"
+                className="w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-lg shrink-0"
+                style={{ background: BRAND_GRADIENT }}
                 aria-label="Send comment"
               >
                 <Send className="w-4 h-4 translate-x-0.5" />
@@ -410,18 +441,17 @@ const VideoComments = memo(({
 
 VideoComments.displayName = 'VideoComments';
 
-/**
- * Single comment item component
- */
-const CommentItem = memo(({ comment, blockedUserIds, onLike, onReply }) => {
+const CommentItem = memo(({ comment, isDark, blockedUserIds, onLike, onReply }) => {
   const [showReplies, setShowReplies] = useState(false);
   const replies = (comment.replies || []).filter((r) => !blockedUserIds?.has(r.user?.id));
   const replyCount = replies.length;
 
   return (
     <div className="flex gap-3 group">
-      {/* Avatar */}
-      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500/80 to-pink-500/80 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs ring-1 ring-white/20 shadow-md">
+      <div
+        className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs ring-1 ring-white/20 shadow-md overflow-hidden"
+        style={{ background: BRAND_GRADIENT }}
+      >
         {comment.user.avatar ? (
           <LazyImage src={comment.user.avatar} alt={comment.user.name} className="w-full h-full rounded-full object-cover" />
         ) : (
@@ -429,36 +459,33 @@ const CommentItem = memo(({ comment, blockedUserIds, onLike, onReply }) => {
         )}
       </div>
 
-      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          {comment.user.username && (
-            <span className="text-white font-bold text-xs tracking-tight">
-              @{comment.user.username}
-            </span>
-          )}
+          <span className={`${isDark ? 'text-white' : 'text-gray-900'} font-bold text-xs tracking-tight`}>
+            {comment.user.username ? `@${comment.user.username}` : comment.user.name}
+          </span>
           {comment.user.isCreator && (
-            <span className="px-1.5 py-0.2 rounded-md bg-pink-500/20 text-pink-300 border border-pink-500/40 text-[9px] font-bold flex items-center gap-0.5">
+            <span className="px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[9px] font-bold flex items-center gap-0.5">
               <Crown className="w-2.5 h-2.5" /> Creator
             </span>
           )}
           {comment.user.isVerified && (
             <BadgeCheck className="w-3.5 h-3.5 text-blue-400" />
           )}
-          <span className="text-white/40 text-[11px] font-medium ml-auto">
+          <span className={`${isDark ? 'text-white/40' : 'text-gray-400'} text-[11px] font-medium ml-auto`}>
             {formatTimeAgo(comment.createdAt)}
           </span>
         </div>
 
-        <p className="text-white/90 text-sm mt-1 leading-relaxed break-words font-normal">
+        <p className={`${isDark ? 'text-white/90' : 'text-gray-800'} text-sm mt-1 leading-relaxed break-words font-normal`}>
           {comment.text}
         </p>
 
-        {/* Action Buttons */}
         <div className="flex items-center gap-4 mt-2">
           <button
+            type="button"
             onClick={() => onLike(false)}
-            className="flex items-center gap-1 text-white/50 hover:text-red-400 transition-colors"
+            className={`flex items-center gap-1 transition-colors ${isDark ? 'text-white/50 hover:text-red-400' : 'text-gray-500 hover:text-red-500'}`}
           >
             <Heart
               className={`w-3.5 h-3.5 ${comment.isLiked ? 'fill-red-400 text-red-400 scale-110' : ''}`}
@@ -467,17 +494,20 @@ const CommentItem = memo(({ comment, blockedUserIds, onLike, onReply }) => {
           </button>
 
           <button
+            type="button"
             onClick={onReply}
-            className="flex items-center gap-1 text-white/50 hover:text-white transition-colors text-xs font-semibold"
+            className={`flex items-center gap-1 transition-colors text-xs font-semibold ${
+              isDark ? 'text-white/50 hover:text-white' : 'text-gray-500 hover:text-gray-900'
+            }`}
           >
             <Reply className="w-3.5 h-3.5" />
             <span>Reply</span>
           </button>
         </div>
 
-        {/* Replies toggle */}
         {replyCount > 0 && (
           <button
+            type="button"
             onClick={() => setShowReplies(!showReplies)}
             className="text-purple-400 hover:text-purple-300 text-xs font-bold mt-2.5 flex items-center gap-1.5"
           >
@@ -486,42 +516,45 @@ const CommentItem = memo(({ comment, blockedUserIds, onLike, onReply }) => {
           </button>
         )}
 
-        {/* Threaded Replies */}
         <AnimatePresence>
           {showReplies && replyCount > 0 && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="mt-3 pl-3 border-l border-white/10 space-y-3"
+              className={`mt-3 pl-3 border-l space-y-3 ${isDark ? 'border-white/10' : 'border-gray-200'}`}
             >
               {replies.map((reply) => (
                 <div key={reply.id} className="flex gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-[10px]">
+                  <div
+                    className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-[10px]"
+                    style={{ background: BRAND_GRADIENT }}
+                  >
                     {reply.user.name?.[0]?.toUpperCase() || '?'}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      {reply.user.username && (
-                        <span className="text-white font-semibold text-xs">
-                          @{reply.user.username}
-                        </span>
-                      )}
+                      <span className={`${isDark ? 'text-white' : 'text-gray-900'} font-semibold text-xs`}>
+                        {reply.user.username ? `@${reply.user.username}` : reply.user.name}
+                      </span>
                       {reply.user.isCreator && (
-                        <span className="px-1 py-0.2 rounded bg-pink-500/20 text-pink-300 text-[8px] font-bold">
+                        <span className="px-1 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[8px] font-bold">
                           Creator
                         </span>
                       )}
-                      <span className="text-white/40 text-[10px] ml-auto">
+                      <span className={`${isDark ? 'text-white/40' : 'text-gray-400'} text-[10px] ml-auto`}>
                         {formatTimeAgo(reply.createdAt)}
                       </span>
                     </div>
-                    <p className="text-white/80 text-xs mt-0.5 leading-relaxed break-words">
+                    <p className={`${isDark ? 'text-white/80' : 'text-gray-700'} text-xs mt-0.5 leading-relaxed break-words`}>
                       {reply.text}
                     </p>
                     <button
+                      type="button"
                       onClick={() => onLike(true, comment.id)}
-                      className="flex items-center gap-1 text-white/50 hover:text-red-400 transition-colors mt-1"
+                      className={`flex items-center gap-1 transition-colors mt-1 ${
+                        isDark ? 'text-white/50 hover:text-red-400' : 'text-gray-500 hover:text-red-500'
+                      }`}
                     >
                       <Heart
                         className={`w-3 h-3 ${reply.isLiked ? 'fill-red-400 text-red-400' : ''}`}
@@ -542,6 +575,7 @@ const CommentItem = memo(({ comment, blockedUserIds, onLike, onReply }) => {
 CommentItem.displayName = 'CommentItem';
 CommentItem.propTypes = {
   comment: PropTypes.object.isRequired,
+  isDark: PropTypes.bool,
   blockedUserIds: PropTypes.instanceOf(Set),
   onLike: PropTypes.func.isRequired,
   onReply: PropTypes.func.isRequired,

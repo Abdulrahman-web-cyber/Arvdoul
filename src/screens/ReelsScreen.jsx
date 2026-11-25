@@ -35,6 +35,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 import videoService from '../services/videoService';
+import useHlsVideo from '../hooks/useHlsVideo.js';
+import { generateShareUrl } from '../utils/videoUtils';
 import { getMonetizationService } from '../services/monetizationService';
 import { getUserService } from '../services/userService';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
@@ -92,6 +94,13 @@ const formatDuration = (seconds) => {
 
   const currentReel = reels[currentReelIndex] || null;
 
+  useHlsVideo({
+    videoRef,
+    video: currentReel,
+    signedUrlCacheKey: currentReel?.canonicalPostId || currentReel?.id,
+    enabled: Boolean(currentReel),
+  });
+
   const patchReel = useCallback((id, patch) => {
     setReels((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }, []);
@@ -102,6 +111,10 @@ const formatDuration = (seconds) => {
     const creatorId = v.creator?.id || v.authorId || v.userId || null;
     return {
       id: v.id,
+      canonicalPostId: v.canonicalPostId || null,
+      _sourceCollection: v._sourceCollection || 'posts',
+      muxPlaybackId: v.muxPlaybackId || null,
+      playbackPolicy: v.playbackPolicy || null,
       creator: {
         id: creatorId,
         name: creatorName,
@@ -455,13 +468,13 @@ const formatDuration = (seconds) => {
   const handleShare = async () => {
     if (!currentReel) return;
     const reel = currentReel;
-    const url = `${window.location.origin}/video/${reel.id}`;
+    const url = generateShareUrl(reel.canonicalPostId || reel.id);
     try {
       if (navigator.share) {
         await navigator.share({ title: reel.title || 'Watch this on ARVDOUL', url });
       } else {
         await navigator.clipboard?.writeText(url);
-        toast.success('Reel link copied');
+        toast.success('Spark link copied');
       }
     } catch (err) {
       // User dismissed the native share sheet — not a failure, not a share.
@@ -706,10 +719,9 @@ const formatDuration = (seconds) => {
       >
         {/* Background Reel Media / Video Player */}
         <div className="absolute inset-0 z-0 bg-[#03071B] flex items-center justify-center">
-          {currentReel.videoUrl ? (
+          {currentReel.videoUrl || currentReel.muxPlaybackId ? (
             <video
               ref={videoRef}
-              src={currentReel.videoUrl}
               poster={currentReel.thumbnailUrl || undefined}
               autoPlay={autoPlayEnabled}
               loop

@@ -667,29 +667,23 @@ service cloud.firestore {
         // `boostData` is the paid-promotion record, written only by the
         // server-side `boostPost` callable after it debits coins. A create must
         // not seed it (else a client mints a free promotion at post-creation).
-        request.resource.data.get('boostData', null) == null;
-      // Two legitimate updates, nothing else:
-      //  - the author editing their own post, minus the moderation fields. Those
-      //    belong to the server (reportContent / adminModerateContent); without
-      //    this an author could clear `moderationStatus` / `reportCount` on
-      //    their own flagged content — "moderation fields changed by the owner".
-      //  - `poll` and `gifts` are server-owned: the vote tally is written by the
-      //    `votePostPoll` callable and the gift aggregate by `sendGift`, so no
-      //    client (author included) may move them on update.
-      //  - the ONLY `stats` field a client may move is `reactions.<emoji>`
-      //    (the per-user choice lives in `posts/{id}/reactions/{uid}`). A bare
-      //    `hasOnly([...])` on the top-level diff matched key NAMES only, so any
-      //    signed-in user could REPLACE the whole `stats` map (likes, views,
-      //    comments, pollVotes) on anyone's post — forging engagement — and the
-      //    author could rewrite `stats.giftValue`. The carve-out is now nested:
-      //    top-level keys are constrained AND, when `stats` changes, the changed
-      //    `stats` keys must be `reactions` only.
+        request.resource.data.get('boostData', null) == null &&
+        // Server-owned Spark/Mux & ranking fields cannot be forged on client create.
+        request.resource.data.get('muxAssetId', null) == null &&
+        request.resource.data.get('muxPlaybackId', null) == null &&
+        request.resource.data.get('muxUploadId', null) == null &&
+        request.resource.data.get('mediaAssetId', null) == null &&
+        request.resource.data.get('rankingScore', 0) == 0 &&
+        request.resource.data.get('viralScore', 0) == 0;
       allow update: if isAdmin() || (isSignedIn() && (
         (
           (request.auth.uid == resource.data.authorId &&
             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
               'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore', 'reportCount',
-              'poll', 'gifts', 'boostData'
+              'poll', 'gifts', 'boostData',
+              'muxAssetId', 'muxPlaybackId', 'muxUploadId', 'mediaAssetId',
+              'processingState', 'playbackPolicy', 'audioFingerprint',
+              'audioFingerprintStatus', 'viralScore', 'rankingScore', 'videoStats'
             ])) ||
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'stats', 'updatedAt'
@@ -718,6 +712,9 @@ service cloud.firestore {
           get(/databases/$(database)/documents/posts/$(postId)).data.authorId == uid());
         allow write: if false;
       }
+      match /saved_by/{saverId} {
+        allow read, write: if false; // server-owned (toggleVideoSave)
+      }
       // post subcollections (likes, saves, gifts, reactions): the doc id
       // encodes the acting user (e.g. likes/{userId}, gifts/{userId}_<ts>) —
       // enforce it. `answer_votes` and `poll_votes` are excluded — both are
@@ -726,14 +723,16 @@ service cloud.firestore {
       // (poll_votes is readable only by the voter, keyed on their own uid).
       match /{subcollection}/{docId} {
         // Social-signal subcollections (likes/reactions/gifts/saves) are public
-        // by design. `answer_votes`/`poll_votes` are vote records, and
-        // `daily_stats` is per-post author analytics — none of those may be read
-        // through the wildcard (the specific blocks above/below own them).
+        // by design. `answer_votes`/`poll_votes` are vote records, `saved_by`
+        // is server-internal, and `daily_stats` is per-post author analytics.
         allow read: if subcollection != 'answer_votes' &&
           subcollection != 'daily_stats' &&
+          subcollection != 'saved_by' &&
           (subcollection != 'poll_votes' || docId == uid());
         allow write: if isSignedIn() &&
-          subcollection != 'answer_votes' && subcollection != 'poll_votes' &&
+          subcollection != 'answer_votes' &&
+          subcollection != 'poll_votes' &&
+          subcollection != 'saved_by' &&
           (docId == uid() || docId.startsWith(uid() + '_'));
       }
     }
@@ -2602,6 +2601,20 @@ service cloud.firestore {
     match /{path=**}/reactions/{reactorId} {
       allow read: if resource.data.conversationId is string &&
         isConvParticipantById(resource.data.conversationId);
+    }
+
+    // ==================== SPARKS MIGRATION & WEBHOOK INTERNALS ====================
+    // Legacy videos/{id} -> canonical posts/{postId} mapping (server-written).
+    match /video_migration_map/{legacyId} {
+      allow get: if isSignedIn();
+      allow list, write: if false;
+    }
+    match /mux_events/{eventId} {
+      allow read, write: if false; // server-only Mux webhook idempotency ledger
+    }
+    match /migration_checkpoints/{jobId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // ==================== DEFAULT DENY ====================

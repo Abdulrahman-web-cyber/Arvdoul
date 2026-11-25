@@ -79,6 +79,7 @@ export default function SavedScreen() {
         // written but never surfaced anywhere.
         const videoItems = (videoRes.status === 'fulfilled' ? (videoRes.value || []) : []).map((v, i) => ({
           id: v.videoId || v.id || `saved-video-${i}`,
+          canonicalPostId: v.canonicalPostId || v.postId || v.videoId || v.id || null,
           source: 'video',
           title: v.title || 'Saved video',
           author: {
@@ -87,7 +88,7 @@ export default function SavedScreen() {
             avatar: resolveAvatarUrl(v.creator?.avatar, v.creator?.name, v.creator?.id),
           },
           type: 'video',
-          thumbnail: v.thumbnail || '/assets/default-profile.png',
+          thumbnail: v.thumbnail || v.thumbnailUrl || '/assets/default-profile.png',
           videoUrl: v.videoUrl || '',
           savedAt: formatSavedDate(v.savedAt),
           tags: [],
@@ -366,7 +367,9 @@ export default function SavedScreen() {
                     if (isSelectMode) {
                       handleToggleSelect(item.id);
                     } else {
-                      navigate(item.source === 'video' ? `/video/${item.id}` : `/post/${item.id}`);
+                      navigate(item.source === 'video' || item.type === 'video'
+                        ? `/sparks/${item.canonicalPostId || item.id}`
+                        : `/post/${item.id}`);
                     }
                   }}
                   className={cn(
@@ -441,7 +444,9 @@ export default function SavedScreen() {
                     if (isSelectMode) {
                       handleToggleSelect(item.id);
                     } else {
-                      navigate(item.source === 'video' ? `/video/${item.id}` : `/post/${item.id}`);
+                      navigate(item.source === 'video' || item.type === 'video'
+                        ? `/sparks/${item.canonicalPostId || item.id}`
+                        : `/post/${item.id}`);
                     }
                   }}
                   className={cn(

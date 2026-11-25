@@ -20,7 +20,7 @@ const { logger } = require('./logger');
 const Stripe = require('stripe');
 const { v4: uuidv4 } = require('uuid');
 const { enqueuePush } = require('./pushQueue');
-const { getUserIdFromContext, getUserEmail, getRuntimeConfig } = require('./auth');
+const { getUserIdFromContext, getUserEmail, getRuntimeConfig, checkIsAdmin } = require('./auth');
 const { settleWithdrawal, STRIPE_PAYOUT_METHODS } = require('./withdrawalSettlement');
 const { readCoinBalance, writeCoinBalance, availableFrom } = require('./coinBalance');
 const { writeNotification } = require('./notificationWriter');
@@ -2003,43 +2003,91 @@ exports.watchAd = functions.https.onCall(async (data, context) => {
 
 // ---------------------------------------------------------------
 // VIDEO EVENTS — status pipeline callbacks (created → processed →
-// moderated → watermarked). Owner-scoped.
+// moderated → watermarked). Processing/moderation/playbackId transitions are
+// server/admin-authoritative so owners cannot self-approve moderation or forge
+// playback IDs.
 // ---------------------------------------------------------------
 exports.processVideoEvent = functions.https.onCall(async (data, context) => {
   try {
     const uid = getUserIdFromContext(context);
-    const { eventType, videoId, payload = {} } = data;
+    const { eventType, videoId, payload = {} } = data || {};
     if (!eventType || !videoId) throw new functions.https.HttpsError('invalid-argument', 'eventType and videoId are required.');
 
-    const videoRef = admin.firestore().collection('videos').doc(videoId);
-    const videoSnap = await videoRef.get();
-    if (!videoSnap.exists) throw new functions.https.HttpsError('not-found', 'Video not found.');
-    if (videoSnap.data().userId !== uid) {
-      throw new functions.https.HttpsError('permission-denied', 'Only the video owner can process events.');
+    const db = admin.firestore();
+    const videoRef = db.collection('videos').doc(videoId);
+    const postRef = db.collection('posts').doc(videoId);
+    const [videoSnap, postSnap, callerIsAdmin] = await Promise.all([
+      videoRef.get(),
+      postRef.get(),
+      checkIsAdmin(context),
+    ]);
+    if (!videoSnap.exists && !postSnap.exists) {
+      throw new functions.https.HttpsError('not-found', 'Video not found.');
+    }
+
+    const ownerId = (videoSnap.exists && (videoSnap.data().userId || videoSnap.data().authorId)) ||
+      (postSnap.exists && (postSnap.data().authorId || postSnap.data().userId));
+
+    if (!callerIsAdmin && ownerId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Only the video owner or an admin can process events.');
     }
 
     const updates = {};
+    const postUpdates = {};
     switch (eventType) {
       case 'video.created':
         updates.status = 'processing';
+        updates.processingState = 'PROCESSING';
+        postUpdates.status = 'processing';
+        postUpdates.processingState = 'PROCESSING';
         break;
       case 'video.processed':
+        if (!callerIsAdmin) {
+          throw new functions.https.HttpsError('permission-denied', 'Only Mux webhooks or admins can finalize video processing.');
+        }
         updates.status = 'ready';
-        if (payload.playbackId) updates.playbackId = payload.playbackId;
+        updates.processingState = 'PUBLISHED';
+        postUpdates.status = 'published';
+        postUpdates.processingState = 'PUBLISHED';
+        if (payload.playbackId) {
+          updates.muxPlaybackId = payload.playbackId;
+          postUpdates.muxPlaybackId = payload.playbackId;
+        }
         break;
       case 'video.moderated':
+        if (!callerIsAdmin) {
+          throw new functions.https.HttpsError('permission-denied', 'Only admins can update video moderation decisions.');
+        }
         updates.moderationStatus = payload.approved ? 'approved' : 'rejected';
+        postUpdates.moderationStatus = updates.moderationStatus;
+        if (!payload.approved) {
+          updates.status = 'failed';
+          updates.isDeleted = true;
+          updates.processingState = 'MODERATION_REJECTED';
+          postUpdates.status = 'failed';
+          postUpdates.isDeleted = true;
+          postUpdates.processingState = 'MODERATION_REJECTED';
+        }
         break;
       case 'video.watermarked':
         updates.watermarkStatus = 'done';
+        postUpdates.watermarkStatus = 'done';
         break;
       default:
         throw new functions.https.HttpsError('invalid-argument', 'Unknown eventType.');
     }
-    updates.updatedAt = serverTS();
-    await videoRef.update(updates);
 
-    logEvent('video_event_processed', { uid, videoId, eventType });
+    updates.updatedAt = serverTS();
+    postUpdates.updatedAt = serverTS();
+    const batch = db.batch();
+    if (videoSnap.exists) batch.update(videoRef, updates);
+    const canonicalPostId = (videoSnap.exists && videoSnap.data()?.canonicalPostId) || (postSnap.exists ? postSnap.id : null);
+    if (canonicalPostId) {
+      batch.update(db.collection('posts').doc(canonicalPostId), postUpdates);
+    }
+    await batch.commit();
+
+    logEvent('video_event_processed', { uid, videoId, eventType, callerIsAdmin });
     return { success: true, videoId, eventType };
   } catch (err) { throw handleError(err); }
 });

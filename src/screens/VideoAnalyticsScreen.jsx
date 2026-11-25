@@ -53,23 +53,54 @@ const VideoAnalyticsScreen = () => {
       try {
         setLoading(true);
         setLoadError(null);
-        const { default: analyticsService } = await import('../services/analyticsService.js');
-        const data = await analyticsService.getUserAnalytics(user.uid, timeRange === '7d' ? '7d' : timeRange === '28d' ? '30d' : '90d');
+        const [{ default: analyticsService }, { default: videoService }] = await Promise.all([
+          import('../services/analyticsService.js'),
+          import('../services/videoService.js'),
+        ]);
+        const [data, sparksRes] = await Promise.all([
+          analyticsService.getUserAnalytics(user.uid, timeRange === '7d' ? '7d' : timeRange === '28d' ? '30d' : '90d'),
+          videoService.getVideosByUser(user.uid, { limit: 25 }).catch(() => ({ videos: [] })),
+        ]);
         if (cancelled) return;
+
+        const mergedMap = new Map();
+        for (const v of (sparksRes?.videos || [])) {
+          mergedMap.set(v.id, {
+            id: v.id,
+            title: v.title || v.description?.slice(0, 40) || 'Untitled Spark',
+            thumbnail: v.thumbnailUrl || v.thumbnail || '/assets/default-profile.png',
+            views: typeof (v.views ?? v.stats?.views) === 'number' ? (v.views ?? v.stats?.views) : null,
+            likes: typeof (v.likes ?? v.stats?.likes) === 'number' ? (v.likes ?? v.stats?.likes) : null,
+            comments: typeof (v.comments ?? v.stats?.comments) === 'number' ? (v.comments ?? v.stats?.comments) : null,
+            shares: typeof (v.shares ?? v.stats?.shares) === 'number' ? (v.shares ?? v.stats?.shares) : null,
+            watchTime: null,
+            completionRate: null,
+            earnings: null,
+          });
+        }
+        for (const p of (data.topPosts || [])) {
+          if (mergedMap.has(p.id)) continue;
+          if (p.type && p.type !== 'video') continue;
+          mergedMap.set(p.id, {
+            id: p.id,
+            title: p.title || p.caption || p.content?.slice(0, 40) || 'Spark',
+            thumbnail: p.thumbnailUrl || (p.media && (p.media[0]?.thumbnailUrl || p.media[0]?.url)) || p.mediaUrl || '/assets/default-profile.png',
+            views: typeof (p.stats?.views ?? p.views) === 'number' ? (p.stats?.views ?? p.views) : null,
+            likes: typeof (p.stats?.likes ?? p.likeCount) === 'number' ? (p.stats?.likes ?? p.likeCount) : null,
+            comments: typeof (p.stats?.comments ?? p.commentCount) === 'number' ? (p.stats?.comments ?? p.commentCount) : null,
+            shares: typeof (p.stats?.shares ?? p.shareCount) === 'number' ? (p.stats?.shares ?? p.shareCount) : null,
+            watchTime: null,
+            completionRate: null,
+            earnings: null,
+          });
+        }
+
         setAnalytics({
           overview: {
-            // An absent total is unknown (rendered '—'), not a measured zero.
             totalViews: typeof data.totalViews === 'number' ? data.totalViews : null,
-            // A change with no previous period (or a zero baseline) is unknown
-            // (the badge hides), never a fabricated "0%".
             viewsChange: typeof data.changes?.views === 'number' ? data.changes.views : null,
-            // `totalEngagement` is not incremented server-side; an absent
-            // value is unknown (rendered '—'), not a measured zero.
             totalLikes: typeof data.totalEngagement === 'number' ? data.totalEngagement : null,
             likesChange: typeof data.changes?.engagement === 'number' ? data.changes.engagement : null,
-            // Profile analytics tracks a single engagement total; there is no
-            // per-type comment/share/watch-time breakdown, so report those as
-            // unavailable (null) rather than duplicating the engagement number.
             totalComments: null,
             commentsChange: null,
             totalShares: null,
@@ -78,8 +109,6 @@ const VideoAnalyticsScreen = () => {
             watchTimeChange: null,
             avgCompletionRate: null,
             completionChange: null,
-            // Real per-day view series for the chart. A day the server never
-            // recorded is dropped, not plotted as a fabricated 0.
             series: (data.dailyStats || [])
               .map((d) => ({ date: d.date, views: unknownNumber(d.views) }))
               .filter((d) => d.views !== null),
@@ -91,24 +120,9 @@ const VideoAnalyticsScreen = () => {
             subscriptions: null,
             payPerView: null,
             gifts: null,
-            // The period-over-period revenue change is only known when a real
-            // previous period exists; otherwise it is unknown (badge hides).
             change: typeof data.changes?.coins === 'number' ? data.changes.coins : null,
           },
-          videos: (data.topPosts || []).map((p, i) => ({
-            id: p.id || `v-${i}`,
-            title: p.caption || p.content?.slice(0, 40) || `Video ${i + 1}`,
-            thumbnail: (p.media && p.media[0]?.url) || p.mediaUrl || '/assets/default-profile.png',
-            // Post engagement lives under `stats`; the top-level fields are
-            // never written, so an absent count is unknown ('—'), not 0.
-            views: typeof (p.stats?.views ?? p.views) === 'number' ? (p.stats?.views ?? p.views) : null,
-            likes: typeof (p.stats?.likes ?? p.likeCount) === 'number' ? (p.stats?.likes ?? p.likeCount) : null,
-            comments: typeof (p.stats?.comments ?? p.commentCount) === 'number' ? (p.stats?.comments ?? p.commentCount) : null,
-            shares: typeof (p.stats?.shares ?? p.shareCount) === 'number' ? (p.stats?.shares ?? p.shareCount) : null,
-            watchTime: null,
-            completionRate: null,
-            earnings: null,
-          })),
+          videos: Array.from(mergedMap.values()),
           audience: {
             demographics: {
               age: Object.entries(data.demographics?.ageGroups || {}).map(([range, percentage]) => ({ range, percentage })),
@@ -142,13 +156,16 @@ const VideoAnalyticsScreen = () => {
   return (
     <div className={`min-h-screen pb-20 ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a] text-white' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] text-gray-900'}`}>
       {/* Header */}
-      <div className="sticky top-0 z-30 backdrop-blur-xl bg-black/80 border-b border-white/10">
+      <div className={`sticky top-0 z-30 backdrop-blur-xl border-b ${isDark ? 'bg-[#03071B]/90 border-white/10' : 'bg-[#F6F8FC]/90 border-slate-200'}`}>
         <div className="max-w-5xl mx-auto px-4 py-4">
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ background: ARVDOUL_GRADIENT }}
+            >
               <TrendingUp className="w-4 h-4 text-white" />
             </div>
-            Video Analytics
+            Sparks Analytics
           </h1>
         </div>
       </div>
@@ -159,12 +176,14 @@ const VideoAnalyticsScreen = () => {
           {['24h', '7d', '30d', '90d', '1y'].map((range) => (
             <button
               key={range}
+              type="button"
               onClick={() => setTimeRange(range)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              className={`px-4 py-2 min-h-[40px] rounded-full text-sm font-medium transition-colors ${
                 timeRange === range
-                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                  : 'bg-white/10 text-white/60 hover:text-white'
+                  ? 'text-white shadow-md'
+                  : isDark ? 'bg-white/10 text-white/60 hover:text-white' : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
               }`}
+              style={timeRange === range ? { background: ARVDOUL_GRADIENT } : undefined}
             >
               {range}
             </button>
@@ -173,15 +192,16 @@ const VideoAnalyticsScreen = () => {
       </div>
 
       {/* Tabs */}
-      <div className="max-w-5xl mx-auto px-4 flex border-b border-white/10">
+      <div className={`max-w-5xl mx-auto px-4 flex border-b ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            type="button"
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === tab.id
-                ? 'text-white border-b-2 border-purple-500'
-                : 'text-white/50 hover:text-white'
+                ? `${isDark ? 'text-white' : 'text-slate-900'} border-b-2 border-purple-500`
+                : isDark ? 'text-white/50 hover:text-white' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             <tab.icon className="w-4 h-4" />
@@ -193,7 +213,7 @@ const VideoAnalyticsScreen = () => {
       {/* Content */}
       <div className="max-w-5xl mx-auto p-4">
         {!analytics && loading && (
-          <div className="text-center py-16 text-white/50" role="status" aria-label="Loading analytics">
+          <div className={`text-center py-16 ${isDark ? 'text-white/50' : 'text-slate-500'}`} role="status" aria-label="Loading analytics">
             Loading analytics...
           </div>
         )}
@@ -205,8 +225,8 @@ const VideoAnalyticsScreen = () => {
           />
         )}
         {!analytics && !loading && !loadError && (
-          <div className="text-center py-16 text-white/50">
-            No analytics available yet. Publish videos to see insights.
+          <div className={`text-center py-16 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+            No analytics available yet. Publish Sparks to see insights.
           </div>
         )}
         {/* Overview Tab */}
@@ -604,10 +624,10 @@ const RevenueTab = ({ revenue }) => {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="p-8 rounded-3xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 backdrop-blur-xl text-center"
+        className={`p-8 rounded-3xl border backdrop-blur-xl text-center ${isDark ? 'bg-white/5 border-purple-500/30' : 'bg-white border-purple-200'}`}
       >
-        <p className="text-white/60 mb-2">Total Earnings (USD)</p>
-        <p className="text-5xl font-bold text-white mb-2">
+        <p className={`${isDark ? 'text-white/60' : 'text-slate-600'} mb-2`}>Total Earnings (USD)</p>
+        <p className={`text-5xl font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
           {formatUsd(revenue.total)}
         </p>
         {typeof revenue.change === 'number' && (

@@ -36,6 +36,7 @@ merge(require('./feed.js'));
 merge(require('./comments.js'));
 merge(require('./stories.js'));
 merge(require('./video.js'));
+merge(require('./videoMigration.js'));
 // Live-stream aggregates (viewer totals) — derived server-side because the
 // parent `live_streams` doc is owner-write-only and a viewer's client cannot
 // maintain it.
@@ -302,32 +303,7 @@ exports.generateSignedUrl = functions.https.onCall(async (data, context) => {
   return { signedUrl };
 });
 
-exports.deleteVideo = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { videoId } = data;
-  const userId = context.auth.uid;
-
-  const videoRef = db.doc(`videos/${videoId}`);
-  const videoSnap = await videoRef.get();
-  if (!videoSnap.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-  const video = videoSnap.data();
-  if (video.userId !== userId) {
-    throw new functions.https.HttpsError('permission-denied', 'You can only delete your own videos');
-  }
-
-  await videoRef.update({
-    isDeleted: true,
-    deletedAt: admin.firestore.FieldValue.serverTimestamp(),
-    status: 'deleted',
-  });
-
-  if (video.storagePath) {
-    const bucket = admin.storage().bucket();
-    const file = bucket.file(video.storagePath);
-    await file.delete().catch((e) => logger.warn('Temp file cleanup failed', { error: e.message }));
-  }
-  return { success: true };
-});
+// deleteVideo is exported cleanly by functions/video.js (unified canonical posts + videos soft-delete + Mux/Storage cleanup).
 
 // ==================== PUSH & EMAIL NOTIFICATIONS ====================
 
@@ -391,22 +367,38 @@ exports.awardCoinsOnNotificationRead = functions.firestore
 // never fabricates 'ready' (previously it slept 5s and marked the video
 // ready with no processing having occurred).
 exports.processVideo = functions.storage.object().onFinalize(async (object) => {
-  const filePath = object.name;
-  if (!filePath.startsWith('videos/')) return null;
-  const pathParts = filePath.split('/');
-  const videoId = pathParts[2].replace('.mp4', '');
-  const videoRef = db.doc(`videos/${videoId}`);
-  const snap = await videoRef.get();
-  if (!snap.exists) return null;
+  const filePath = object.name || '';
+  if (!filePath.startsWith('videos/') && !filePath.startsWith('posts/')) return null;
+  const pathParts = filePath.split('/').filter(Boolean);
+  const rawName = pathParts[pathParts.length - 1] || '';
+  const candidateId = (pathParts[2] || rawName).replace(/\.[^.]+$/, '');
+  if (!candidateId) return null;
 
-  // If the doc already has a Mux playback id (upload flow), the webhook
-  // drives status; otherwise record the honest pending state.
-  const hasMux = Boolean(snap.data()?.muxPlaybackId || snap.data()?.playbackId);
-  await videoRef.update({
-    status: hasMux ? snap.data().status || 'processing' : 'processing',
-    transcodeStatus: hasMux ? 'mux_pipeline' : 'pending_upload_completion',
-    processedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  const videoRef = db.doc(`videos/${candidateId}`);
+  const postRef = db.doc(`posts/${candidateId}`);
+  const [videoSnap, postSnap] = await Promise.all([
+    videoRef.get().catch(() => null),
+    postRef.get().catch(() => null),
+  ]);
+
+  const updates = [];
+  if (videoSnap && videoSnap.exists) {
+    const hasMux = Boolean(videoSnap.data()?.muxPlaybackId || videoSnap.data()?.playbackId);
+    updates.push(videoRef.update({
+      status: hasMux ? videoSnap.data().status || 'processing' : 'processing',
+      transcodeStatus: hasMux ? 'mux_pipeline' : 'pending_upload_completion',
+      processedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }));
+  }
+  if (postSnap && postSnap.exists && postSnap.data()?.type === 'video') {
+    const hasMux = Boolean(postSnap.data()?.muxPlaybackId || postSnap.data()?.playbackId);
+    updates.push(postRef.update({
+      status: hasMux ? postSnap.data().status || 'processing' : 'processing',
+      transcodeStatus: hasMux ? 'mux_pipeline' : 'pending_upload_completion',
+      processedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }));
+  }
+  if (updates.length) await Promise.all(updates);
   return null;
 });
 

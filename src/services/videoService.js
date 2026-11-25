@@ -11,21 +11,36 @@ import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { pickDisplayName, deriveHandle } from './profileReadModel.js';
 import { featureFlagService } from './featureFlagService.js';
 import { newIdempotencyKey } from '../utils/IdempotencyKey.js';
+import { countersManager } from '../utils/CountersManager.js';
+import videoConfig from '../shared/videoConfig.cjs';
+
+const {
+  MIN_DURATION_SEC,
+  MAX_DURATION_SEC,
+  MAX_FILE_SIZE_BYTES,
+  ALLOWED_VIDEO_EXTENSIONS,
+  SPARK_PROCESSING_STATES,
+  normalizeSparkVisibility,
+  validateSparkDuration,
+  validateSparkFileSize,
+  validateSparkMimeOrExtension,
+  resolveCanonicalPostId,
+} = videoConfig;
 
 const VIDEO_CONFIG = {
   UPLOAD: {
     MAX_FILE_SIZE: {
-      free: 200 * 1024 * 1024,
-      premium: 1 * 1024 * 1024 * 1024,
-      creator: 2 * 1024 * 1024 * 1024,
+      free: MAX_FILE_SIZE_BYTES,
+      premium: MAX_FILE_SIZE_BYTES,
+      creator: MAX_FILE_SIZE_BYTES,
     },
-    SUPPORTED_FORMATS: ['mp4', 'webm', 'mov', 'avi', 'mkv', 'flv', 'm4v', 'mpg', 'mpeg'],
-    MIN_DURATION: 3,
-    MAX_DURATION: 60 * 60,
+    SUPPORTED_FORMATS: [...ALLOWED_VIDEO_EXTENSIONS, 'flv', 'm4v', 'mpg', 'mpeg'],
+    MIN_DURATION: MIN_DURATION_SEC,
+    MAX_DURATION: MAX_DURATION_SEC,
     DAILY_LIMIT_PER_USER: {
-      free: 5,
+      free: 15,
       premium: 50,
-      creator: 200,
+      creator: 100,
     },
     COUNTER_SHARDS: 10,
   },
@@ -150,84 +165,6 @@ function enhanceError(error, defaultMessage) {
   return new VideoError(code, msg, { original: error });
 }
 
-class LRUCache {
-  constructor(maxSize = 100, ttl = 5 * 60 * 1000) {
-    this.maxSize = maxSize;
-    this.ttl = ttl;
-    this.cache = new Map();
-    this.accessOrder = [];
-    this.videoIndex = new Map(); // videoId -> Set of cache keys
-  }
-
-  get(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-    if (Date.now() - entry.timestamp > this.ttl) {
-      this.cache.delete(key);
-      this._removeAccess(key);
-      return null;
-    }
-    this._recordAccess(key);
-    return entry.value;
-  }
-
-  set(key, value) {
-    if (this.cache.size >= this.maxSize) {
-      const oldest = this.accessOrder.shift();
-      this.cache.delete(oldest);
-      this._removeAccess(oldest);
-    }
-    this.cache.set(key, { value, timestamp: Date.now() });
-    this._recordAccess(key);
-    const videoMatch = key.match(/video_([^_]+)/);
-    if (videoMatch) {
-      const videoId = videoMatch[1];
-      if (!this.videoIndex.has(videoId)) this.videoIndex.set(videoId, new Set());
-      this.videoIndex.get(videoId).add(key);
-    }
-  }
-
-  delete(key) {
-    this.cache.delete(key);
-    this._removeAccess(key);
-    const videoMatch = key.match(/video_([^_]+)/);
-    if (videoMatch) {
-      const videoId = videoMatch[1];
-      const keys = this.videoIndex.get(videoId);
-      if (keys) keys.delete(key);
-      if (keys?.size === 0) this.videoIndex.delete(videoId);
-    }
-  }
-
-  invalidateVideo(videoId) {
-    const keys = this.videoIndex.get(videoId);
-    if (keys) {
-      for (const key of keys) {
-        this.cache.delete(key);
-        this._removeAccess(key);
-      }
-      this.videoIndex.delete(videoId);
-    }
-  }
-
-  clear() {
-    this.cache.clear();
-    this.accessOrder = [];
-    this.videoIndex.clear();
-  }
-
-  _recordAccess(key) {
-    this.accessOrder = this.accessOrder.filter(k => k !== key);
-    this.accessOrder.push(key);
-  }
-
-  _removeAccess(key) {
-    this.accessOrder = this.accessOrder.filter(k => k !== key);
-  }
-
-  get size() { return this.cache.size; }
-}
-
 const pendingRequests = new Map();
 // Firestore `in`/`documentId() in` queries accept at most 30 values.
 const IN_CHUNK = 30;
@@ -336,10 +273,12 @@ class UltimateVideoService {
       getMuxPlaybackUrl: null,
       likeVideo: null,
       shareVideo: null,
+      toggleVideoSave: null,
       recordVideoView: null,
       payPerView: null,
       sendTip: null,
       setVideoChapters: null,
+      deleteVideo: null,
       createDuet: null,
       createStitch: null,
       reportVideo: null,
@@ -374,6 +313,7 @@ class UltimateVideoService {
         this.fns.payPerView = cf(FUNCTIONS.PAY_PER_VIEW);
         this.fns.sendTip = cf(FUNCTIONS.SEND_TIP);
         this.fns.setVideoChapters = cf(FUNCTIONS.SET_VIDEO_CHAPTERS);
+        this.fns.deleteVideo = cf(FUNCTIONS.DELETE_VIDEO);
         this.fns.createDuet = cf(FUNCTIONS.CREATE_DUET);
         this.fns.createStitch = cf(FUNCTIONS.CREATE_STITCH);
         this.fns.reportVideo = cf(FUNCTIONS.REPORT_VIDEO);
@@ -400,18 +340,25 @@ class UltimateVideoService {
     return this.ensureInitialized();
   }
 
-  async uploadVideo(file, metadata, options = {}) {
+  async uploadVideo(file, metadata = {}, options = {}) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
     if (!currentUser) throw new VideoError('unauthenticated', 'Authentication required');
 
-    const videoType = metadata.type || VIDEO_CONFIG.VIDEO_TYPES.VIDEO;
+    const sizeCheck = validateSparkFileSize(file?.size);
+    if (!sizeCheck.valid) throw new VideoError('invalid-video', sizeCheck.reason);
+    const typeCheck = validateSparkMimeOrExtension(file?.type, file?.name);
+    if (!typeCheck.valid) throw new VideoError('invalid-video', typeCheck.reason);
+    if (metadata.duration !== undefined && metadata.duration !== null) {
+      const durCheck = validateSparkDuration(metadata.duration);
+      if (!durCheck.valid) throw new VideoError('invalid-video', durCheck.reason);
+    }
+
+    const subType = metadata.subType || (metadata.type === 'reel' || metadata.isReel ? 'reel' : 'spark');
+    const videoType = subType === 'reel' ? VIDEO_CONFIG.VIDEO_TYPES.REEL : VIDEO_CONFIG.VIDEO_TYPES.VIDEO;
     if (videoType === VIDEO_CONFIG.VIDEO_TYPES.REEL) {
       if (metadata.duration && metadata.duration > VIDEO_CONFIG.REEL.MAX_DURATION) {
         throw new VideoError('invalid-video', `Reel duration cannot exceed ${VIDEO_CONFIG.REEL.MAX_DURATION}s`);
-      }
-      if (metadata.aspectRatio && metadata.aspectRatio !== VIDEO_CONFIG.REEL.ASPECT_RATIO) {
-        throw new VideoError('invalid-video', `Reels must have aspect ratio ${VIDEO_CONFIG.REEL.ASPECT_RATIO}`);
       }
     }
 
@@ -421,82 +368,91 @@ class UltimateVideoService {
     const canUpload = await this._checkDailyUploadLimitSharded(currentUser.uid);
     if (!canUpload) throw new VideoError('daily-limit-reached', 'Daily upload limit reached.');
 
+    const normalizedVisibility = normalizeSparkVisibility(metadata.visibility || VIDEO_CONFIG.VISIBILITY.PUBLIC);
+
+    // Server creates BOTH canonical `posts/{postId}` and media telemetry `videos/{postId}` atomically.
     const { data: uploadData } = await this.fns.createMuxUpload({
       fileName: file.name,
       fileSize: file.size,
       mimeType: file.type,
-      visibility: metadata.visibility || VIDEO_CONFIG.VISIBILITY.PUBLIC,
-      isReel: videoType === VIDEO_CONFIG.VIDEO_TYPES.REEL,
-    });
-    const { uploadUrl, assetId, playbackId } = uploadData;
-
-    // Chunked upload with retry
-    await this._chunkedUpload(uploadUrl, file, options.onProgress);
-
-    const videoId = assetId;
-    const videoRef = doc(this.firestore, 'videos', videoId);
-    const now = serverTimestamp();
-    const videoDoc = {
-      id: videoId,
-      userId: currentUser.uid,
-      title: metadata.title || 'Untitled',
-      description: metadata.description || '',
-      category: metadata.category || 'other',
-      tags: metadata.tags || [],
-      visibility: metadata.visibility || VIDEO_CONFIG.VISIBILITY.PUBLIC,
+      duration: metadata.duration ?? null,
+      visibility: normalizedVisibility,
+      isReel: subType === 'reel',
+      subType,
+      title: metadata.title || '',
+      description: metadata.description || metadata.content || '',
+      tags: Array.isArray(metadata.tags) ? metadata.tags : [],
       allowDownload: metadata.allowDownload ?? true,
-      status: VIDEO_CONFIG.STATUS.UPLOADING,
-      duration: metadata.duration || 0,
-      aspectRatio: metadata.aspectRatio || null,
-      mimeType: file.type,
-      fileSize: file.size,
-      muxPlaybackId: playbackId,
-      thumbnails: [],
-      // `avgWatchTime` is deliberately NOT seeded: no writer ever computes it
-      // (the server writes `stats.totalWatchTime`, not an average), so a seeded
-      // `0` would present an unwritten value as a measured average. `views`/
-      // `likes`/`comments`/`shares`/`saves` ARE maintained by server writers.
-      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, totalWatchTime: 0 },
-      monetization: metadata.monetization || { type: 'none' },
-      rankingScore: 0,
-      viralScore: 0,
-      createdAt: now,
-      updatedAt: now,
-      isDeleted: false,
-      type: videoType,
-      music: metadata.music || null,
-      effects: metadata.effects || null,
-      chapters: metadata.chapters || [],
       duetEnabled: metadata.duetEnabled ?? true,
       stitchEnabled: metadata.stitchEnabled ?? true,
-      watermarkDisabled: metadata.watermarkDisabled ?? false,
-      audioFingerprint: null,
-    };
-    await setDoc(videoRef, videoDoc);
+      monetization: metadata.monetization || null,
+      communityId: metadata.communityId || null,
+      chapters: Array.isArray(metadata.chapters) ? metadata.chapters : [],
+      music: metadata.music || null,
+      effects: metadata.effects || null,
+    });
+    const { uploadUrl, assetId, playbackId } = uploadData;
+    const postId = uploadData.postId || assetId;
+    const mediaAssetId = uploadData.mediaAssetId || assetId || postId;
 
-    // Server-side processing pipeline (all onCall functions — real calls,
-    // best-effort so a single failure never blocks the upload):
-    // 1. Mark the video as processing.
+    // Upload raw media directly to Mux Direct Upload URL (no duplicate Firebase Storage copy).
+    await this._chunkedUpload(uploadUrl, file, options.onProgress);
+
+    // Optional instant poster preview upload into owner-scoped Storage path (updates non-protected field only).
+    let previewThumbUrl = typeof metadata.thumbnailUrl === 'string' && metadata.thumbnailUrl.startsWith('http')
+      ? metadata.thumbnailUrl
+      : null;
+    if (!previewThumbUrl && metadata.thumbnailFile && this.storage) {
+      try {
+        const { ref: storageRefFn, uploadBytes, getDownloadURL } = await import('firebase/storage');
+        const thumbRef = storageRefFn(this.storage, `thumbnails/${currentUser.uid}/${postId}_${Date.now()}.jpg`);
+        await uploadBytes(thumbRef, metadata.thumbnailFile, { contentType: metadata.thumbnailFile.type || 'image/jpeg' });
+        previewThumbUrl = await getDownloadURL(thumbRef);
+      } catch (thumbErr) {
+        logger.warn('[Video] Preview thumbnail upload skipped:', thumbErr?.message);
+      }
+    }
+
+    const extraNonProtectedPatch = {};
+    if (previewThumbUrl) extraNonProtectedPatch.thumbnailUrl = previewThumbUrl;
+    if (metadata.aspectRatio) extraNonProtectedPatch.aspectRatio = metadata.aspectRatio;
+    if (Array.isArray(metadata.hashtags) && metadata.hashtags.length > 0) extraNonProtectedPatch.hashtags = metadata.hashtags;
+    if (metadata.location) extraNonProtectedPatch.location = metadata.location;
+    if (Object.keys(extraNonProtectedPatch).length > 0) {
+      extraNonProtectedPatch.updatedAt = serverTimestamp();
+      await updateDoc(doc(this.firestore, 'posts', postId), extraNonProtectedPatch).catch((err) => {
+        logger.warn('[Video] Post metadata patch skipped:', err?.message);
+      });
+    }
+
+    // Best-effort post-upload pipeline hooks (never overwrite protected Mux/state fields from client).
+    const videoId = postId;
     this.fns.processVideoEvent({ eventType: 'video.created', videoId }).catch((err) =>
-      logger.warn('[Video] processVideoEvent failed (status stays uploading):', err.message)
+      logger.warn('[Video] processVideoEvent note:', err?.message)
     );
-    // 2. Moderation (Google Video Intelligence) — reject content server-side.
     this.fns.moderateVideo({ videoId }).catch((err) =>
-      logger.warn('[Video] moderateVideo unavailable (needs deployment):', err.message)
+      logger.warn('[Video] moderateVideo note:', err?.message)
     );
-    // 3. Watermark (ffmpeg pipeline) when enabled.
-    if (VIDEO_CONFIG.WATERMARK.ENABLED && !videoDoc.watermarkDisabled) {
+    if (VIDEO_CONFIG.WATERMARK.ENABLED && !metadata.watermarkDisabled) {
       this.fns.watermarkVideo({ videoId }).catch((err) =>
-        logger.warn('[Video] watermarkVideo unavailable (needs deployment):', err.message)
+        logger.warn('[Video] watermarkVideo note:', err?.message)
       );
     }
 
-    this.cache.invalidateVideo(videoId);
+    this.cache.invalidateVideo(postId);
     auditLogger.log('content.video_upload', {
       userId: currentUser.uid,
-      meta: { videoId, title: videoDoc.title, videoType, fileSize: file.size, visibility: videoDoc.visibility },
+      meta: { videoId: postId, postId, title: metadata.title || 'Untitled', subType, fileSize: file.size, visibility: normalizedVisibility },
     });
-    return { success: true, videoId, playbackId };
+    return {
+      success: true,
+      videoId: postId,
+      postId,
+      mediaAssetId,
+      playbackId: playbackId || null,
+      thumbnailUrl: previewThumbUrl,
+      processingState: uploadData.processingState || SPARK_PROCESSING_STATES.UPLOAD_RESERVED,
+    };
   }
 
   async _chunkedUpload(uploadUrl, file, onProgress) {
@@ -530,6 +486,143 @@ class UltimateVideoService {
     }
   }
 
+  async getMuxPlaybackUrl({ playbackId = null, videoId = null, postId = null, watermarked = false } = {}) {
+    await this.ensureInitialized();
+    const targetId = postId || videoId;
+    if (!targetId) throw new VideoError('invalid-argument', 'postId or videoId is required');
+    const { data } = await this.fns.getMuxPlaybackUrl({
+      playbackId,
+      videoId: targetId,
+      postId: postId || targetId,
+      watermarked,
+    });
+    return data;
+  }
+
+  async deleteVideo(videoId) {
+    await this.ensureInitialized();
+    const currentUser = this.auth.currentUser;
+    if (!currentUser) throw new VideoError('unauthenticated', 'Authentication required');
+    if (!videoId) throw new VideoError('invalid-argument', 'videoId is required');
+    const res = await this.fns.deleteVideo({ videoId, postId: videoId });
+    this.cache.invalidateVideo(videoId);
+    try {
+      const { getFeedService } = await import('./feedService.js');
+      getFeedService().clearUserCache(currentUser.uid);
+    } catch {
+      // Cache clear is best-effort
+    }
+    auditLogger.log('content.video_delete', {
+      userId: currentUser.uid,
+      meta: { videoId },
+    });
+    return res.data;
+  }
+
+  async _resolvePostOrVideoDoc(targetId) {
+    if (!targetId) return null;
+    try {
+      const postSnap = await getDoc(doc(this.firestore, 'posts', targetId));
+      if (postSnap.exists()) {
+        return {
+          id: postSnap.id,
+          canonicalPostId: postSnap.id,
+          _sourceCollection: 'posts',
+          ...postSnap.data(),
+        };
+      }
+    } catch {
+      // Fall through to migration map / legacy video doc
+    }
+
+    try {
+      const mapSnap = await getDoc(doc(this.firestore, 'video_migration_map', targetId));
+      if (mapSnap.exists() && mapSnap.data()?.canonicalPostId) {
+        const canonicalId = mapSnap.data().canonicalPostId;
+        const mappedPostSnap = await getDoc(doc(this.firestore, 'posts', canonicalId));
+        if (mappedPostSnap.exists()) {
+          return {
+            id: mappedPostSnap.id,
+            canonicalPostId: mappedPostSnap.id,
+            legacyVideoId: targetId,
+            _sourceCollection: 'posts',
+            ...mappedPostSnap.data(),
+          };
+        }
+      }
+    } catch {
+      // Fall through to legacy video doc
+    }
+
+    try {
+      const videoSnap = await getDoc(doc(this.firestore, 'videos', targetId));
+      if (!videoSnap.exists()) return null;
+      const vData = videoSnap.data() || {};
+      const linkedPostId = vData.canonicalPostId || vData.postId || null;
+      if (linkedPostId) {
+        const linkedPostSnap = await getDoc(doc(this.firestore, 'posts', linkedPostId)).catch(() => null);
+        if (linkedPostSnap?.exists()) {
+          return {
+            id: linkedPostSnap.id,
+            canonicalPostId: linkedPostSnap.id,
+            mediaAssetId: videoSnap.id,
+            _sourceCollection: 'posts',
+            ...linkedPostSnap.data(),
+          };
+        }
+      }
+      return {
+        id: videoSnap.id,
+        canonicalPostId: linkedPostId || null,
+        _sourceCollection: 'videos',
+        ...vData,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  _formatVideoItem(item) {
+    if (!item) return null;
+    const mediaList = Array.isArray(item.media) ? item.media : [];
+    const videoMedia = mediaList.find(m => m.type === 'video' || m.muxPlaybackId || m.url?.includes('.m3u8') || m.url?.includes('.mp4') || m.url?.includes('video')) || mediaList[0];
+    const muxPlaybackId = item.muxPlaybackId || videoMedia?.muxPlaybackId || null;
+    const playbackPolicy = item.playbackPolicy || videoMedia?.playbackPolicy || (muxPlaybackId ? 'signed' : null);
+    const rawUrl = item.signedUrl || item.videoUrl || item.url || videoMedia?.url || item.video?.file || item.video?.url || '';
+    const videoUrl = rawUrl || (muxPlaybackId ? `https://stream.mux.com/${muxPlaybackId}.m3u8` : '');
+    const thumbnailUrl = item.thumbnailUrl || item.thumbnail || item.poster || videoMedia?.thumbnailUrl || videoMedia?.preview || videoMedia?.thumbnail || (muxPlaybackId ? `https://image.mux.com/${muxPlaybackId}/thumbnail.jpg` : '');
+    const canonicalId = resolveCanonicalPostId(item, item.id);
+    const ownerId = item.authorId || item.userId || item.creator?.id || null;
+
+    return {
+      ...item,
+      id: canonicalId || item.id,
+      canonicalPostId: item.canonicalPostId || (item._sourceCollection === 'posts' ? item.id : null),
+      userId: ownerId,
+      authorId: ownerId,
+      muxPlaybackId,
+      playbackPolicy,
+      videoUrl,
+      thumbnailUrl,
+      storyboardUrl: item.storyboardUrl || (muxPlaybackId ? `https://image.mux.com/${muxPlaybackId}/storyboard.vtt` : null),
+      subType: item.subType || (item.type === 'reel' ? 'reel' : 'spark'),
+      title: item.title || item.content?.slice(0, 50) || '',
+      description: item.description || item.content || '',
+      creator: item.creator || {
+        name: pickDisplayName([item.authorName]),
+        username: deriveHandle(item.authorUsername) || '',
+        avatar: getSafeAvatarUrl(item.authorPhoto, pickDisplayName([item.authorName]), ownerId),
+        id: ownerId,
+        isVerified: Boolean(item.authorVerified || item.verified),
+      },
+      likes: item.stats?.likes ?? item.likes ?? null,
+      comments: item.stats?.comments ?? item.comments ?? null,
+      shares: item.stats?.shares ?? item.shares ?? null,
+      saves: item.stats?.saves ?? item.saves ?? null,
+      views: item.stats?.views ?? item.views ?? null,
+    };
+  }
+
   async getVideo(videoId, options = {}) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -539,36 +632,79 @@ class UltimateVideoService {
       if (cached) return { success: true, video: cached, cached: true };
     }
 
-    const videoRef = doc(this.firestore, 'videos', videoId);
-    const snap = await getDoc(videoRef);
-    if (!snap.exists()) return { success: false, error: 'Video not found' };
-    const video = { id: snap.id, ...snap.data() };
+    const rawVideo = await this._resolvePostOrVideoDoc(videoId);
+    if (!rawVideo) return { success: false, error: 'Video not found' };
+    const video = this._formatVideoItem(rawVideo);
+    const ownerId = video.authorId || video.userId;
+    const isOwner = Boolean(currentUser?.uid && ownerId === currentUser.uid);
 
     if (video.isDeleted) return { success: false, error: 'Video not found' };
-    if (video.visibility === VIDEO_CONFIG.VISIBILITY.PRIVATE && video.userId !== currentUser?.uid) {
+
+    const normalizedVis = normalizeSparkVisibility(video.visibility || 'public');
+    if (normalizedVis === 'private' && !isOwner) {
       return { success: false, error: 'Access denied' };
     }
-    if (video.visibility === VIDEO_CONFIG.VISIBILITY.FOLLOWERS && video.userId !== currentUser?.uid) {
-      const isFollowing = await this._checkFollowStatus(currentUser?.uid, video.userId);
+    if (normalizedVis === 'followers' && !isOwner) {
+      const isFollowing = await this._checkFollowStatus(currentUser?.uid, ownerId);
       if (!isFollowing) return { success: false, error: 'Access denied' };
     }
-    if (video.status !== VIDEO_CONFIG.STATUS.READY && video.userId !== currentUser?.uid) {
+    if (normalizedVis === 'friends' && !isOwner) {
+      const [outFollow, inFollow] = await Promise.all([
+        this._checkFollowStatus(currentUser?.uid, ownerId),
+        this._checkFollowStatus(ownerId, currentUser?.uid),
+      ]);
+      if (!outFollow || !inFollow) return { success: false, error: 'Access denied' };
+    }
+    if (normalizedVis === 'public' && video.authorIsPrivate === true && !isOwner) {
+      const isFollowing = await this._checkFollowStatus(currentUser?.uid, ownerId);
+      if (!isFollowing) return { success: false, error: 'Access denied' };
+    }
+
+    const isPublished = video._sourceCollection === 'posts'
+      ? (video.status === 'published' || video.status === 'live')
+      : (video.status === VIDEO_CONFIG.STATUS.READY || video.status === 'live');
+    if (!isPublished && !isOwner) {
       return { success: false, error: 'Video is still processing' };
     }
 
-    if (featureFlagService.isEnabled('monetization.pay_per_view') && video.monetization?.type === 'pay_per_view' && video.userId !== currentUser?.uid) {
-      const hasAccess = await this._checkPayPerViewAccess(videoId, currentUser?.uid);
+    if (video._sourceCollection === 'posts') {
+      await countersManager.applyAll({
+        items: [video],
+        collection: 'posts',
+        fields: ['likes', 'comments', 'shares', 'saves', 'views'],
+        scope: 'stats',
+      }).catch(() => {});
+      video.likes = video.stats?.likes ?? video.likes ?? 0;
+      video.comments = video.stats?.comments ?? video.comments ?? 0;
+      video.shares = video.stats?.shares ?? video.shares ?? 0;
+      video.saves = video.stats?.saves ?? video.saves ?? 0;
+      video.views = video.stats?.views ?? video.views ?? 0;
+    }
+
+    if (
+      featureFlagService.isEnabled('monetization.pay_per_view') &&
+      (video.monetization?.type === 'pay_per_view' || video.monetization?.type === 'ppv') &&
+      !isOwner
+    ) {
+      const hasAccess = await this._checkPayPerViewAccess(video.id, currentUser?.uid);
       if (!hasAccess) throw new VideoError('access-denied', 'Payment required.');
     }
 
     let signedUrl = null;
-    if (video.muxPlaybackId) {
-      const { data: urlData } = await this.fns.getMuxPlaybackUrl({
-        playbackId: video.muxPlaybackId,
-        videoId,
-        quality: options.quality || VIDEO_CONFIG.TRANSCODING.DEFAULT_QUALITY,
-      });
-      signedUrl = urlData.url;
+    if (video.muxPlaybackId && currentUser?.uid) {
+      try {
+        const { data: urlData } = await this.fns.getMuxPlaybackUrl({
+          playbackId: video.muxPlaybackId,
+          videoId: video.id,
+          postId: video.canonicalPostId || video.id,
+          quality: options.quality || VIDEO_CONFIG.TRANSCODING.DEFAULT_QUALITY,
+        });
+        signedUrl = urlData?.url || null;
+        if (urlData?.thumbnailUrl) video.thumbnailUrl = urlData.thumbnailUrl;
+        if (urlData?.storyboardUrl) video.storyboardUrl = urlData.storyboardUrl;
+      } catch (err) {
+        logger.warn('[Video] Playback URL signing note:', err?.message);
+      }
     }
 
     video.signedUrl = signedUrl;
@@ -578,17 +714,18 @@ class UltimateVideoService {
     if (options.subscribeToStats && currentUser && VIDEO_CONFIG.REAL_TIME.ENABLED) {
       const userCount = this.userListenerCounts.get(currentUser.uid) || 0;
       if (userCount < VIDEO_CONFIG.PERFORMANCE.REALTIME_LISTENER_LIMIT_PER_USER) {
-        const videoCount = this.videoListenerCounts.get(videoId) || 0;
+        const videoCount = this.videoListenerCounts.get(video.id) || 0;
         if (videoCount < VIDEO_CONFIG.REAL_TIME.MAX_CONCURRENT_LISTENERS_PER_VIDEO) {
-          this._subscribeToVideoStats(videoId, currentUser.uid, options.onStatsUpdate);
+          this._subscribeToVideoStats(video.id, currentUser.uid, options.onStatsUpdate, video._sourceCollection);
         }
       }
     }
     return { success: true, video };
   }
 
-  _subscribeToVideoStats(videoId, userId, callback) {
-    const videoRef = doc(this.firestore, 'videos', videoId);
+  _subscribeToVideoStats(videoId, userId, callback, collectionName = 'posts') {
+    const colName = collectionName === 'videos' ? 'videos' : 'posts';
+    const videoRef = doc(this.firestore, colName, videoId);
     const unsubscribe = onSnapshot(videoRef, (snap) => {
       if (snap.exists()) {
         const data = snap.data();
@@ -612,15 +749,32 @@ class UltimateVideoService {
 
   async getVideosByUser(userId, options = {}) {
     await this.ensureInitialized();
-    const videosRef = collection(this.firestore, 'videos');
     const isOwnerView = Boolean(options.viewerId && options.viewerId === userId);
+    const isApprovedFollower = Boolean(options.isApprovedFollower);
     const pageLimit = options.limit || VIDEO_CONFIG.PERFORMANCE.PAGE_LIMIT;
-    // The list rule admits two shapes (rules are not filters): the owner's own
-    // shape (`userId == uid()`, any status/visibility) and the public shape
-    // (`isDeleted == false` + `status == 'ready'` + `visibility == 'public'`).
-    // A query that omits the public constraints is denied wholesale for a
-    // non-owner, so a visitor's video tab would silently show nothing.
-    let q = isOwnerView
+
+    // Primary read: canonical `posts` where type == 'video'
+    const postsRef = collection(this.firestore, 'posts');
+    const postConstraints = [
+      where('authorId', '==', userId),
+      where('type', '==', 'video'),
+      where('isDeleted', '==', false),
+    ];
+    if (!isOwnerView) {
+      postConstraints.push(where('status', '==', 'published'));
+      if (!isApprovedFollower) {
+        postConstraints.push(where('authorIsPrivate', '==', false));
+        postConstraints.push(where('visibility', '==', 'public'));
+      }
+    }
+    let postQuery = query(postsRef, ...postConstraints, orderBy('createdAt', 'desc'), limit(pageLimit));
+    if (options.startAfterDoc) {
+      postQuery = query(postQuery, startAfter(options.startAfterDoc));
+    }
+
+    // Legacy read: un-migrated `videos` docs
+    const videosRef = collection(this.firestore, 'videos');
+    const legacyQuery = isOwnerView
       ? query(
         videosRef,
         where('userId', '==', userId),
@@ -637,15 +791,53 @@ class UltimateVideoService {
         orderBy('createdAt', 'desc'),
         limit(pageLimit)
       );
-    if (options.startAfterDoc) {
-      q = query(q, startAfter(options.startAfterDoc));
+
+    const [postSnap, legacySnap] = await Promise.all([
+      getDocs(postQuery).catch(() => ({ docs: [] })),
+      getDocs(legacyQuery).catch(() => ({ docs: [] })),
+    ]);
+
+    const seenIds = new Set();
+    const merged = [];
+
+    postSnap.docs.forEach((d) => {
+      const formatted = this._formatVideoItem({ id: d.id, _sourceCollection: 'posts', ...d.data() });
+      if (formatted && !seenIds.has(formatted.id)) {
+        seenIds.add(formatted.id);
+        merged.push(formatted);
+      }
+    });
+
+    legacySnap.docs.forEach((d) => {
+      const data = d.data() || {};
+      const canonicalId = data.canonicalPostId || data.postId || d.id;
+      if (seenIds.has(canonicalId) || seenIds.has(d.id)) return;
+      seenIds.add(canonicalId);
+      const formatted = this._formatVideoItem({ id: d.id, _sourceCollection: 'videos', ...data });
+      if (formatted) merged.push(formatted);
+    });
+
+    const canonicalItems = merged.filter((item) => item._sourceCollection === 'posts');
+    if (canonicalItems.length > 0) {
+      await countersManager.applyAll({
+        items: canonicalItems,
+        collection: 'posts',
+        fields: ['likes', 'comments', 'shares', 'saves', 'views'],
+        scope: 'stats',
+      }).catch(() => {});
+      canonicalItems.forEach((item) => {
+        item.likes = item.stats?.likes ?? item.likes ?? 0;
+        item.comments = item.stats?.comments ?? item.comments ?? 0;
+        item.shares = item.stats?.shares ?? item.shares ?? 0;
+        item.saves = item.stats?.saves ?? item.saves ?? 0;
+        item.views = item.stats?.views ?? item.views ?? 0;
+      });
     }
-    const snap = await getDocs(q);
-    const videos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
     return {
       success: true,
-      videos,
-      nextCursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
+      videos: merged.slice(0, pageLimit),
+      nextCursor: postSnap.docs.length ? postSnap.docs[postSnap.docs.length - 1] : null,
     };
   }
 
@@ -655,13 +847,26 @@ class UltimateVideoService {
     if (!currentUser || currentUser.uid !== userId) {
       throw new VideoError('permission-denied', 'Not authorized');
     }
-    const videoRef = doc(this.firestore, 'videos', videoId);
-    const snap = await getDoc(videoRef);
-    if (!snap.exists()) throw new VideoError('not-found', 'Video not found');
-    if (snap.data().userId !== userId) throw new VideoError('permission-denied', 'Only owner can set chapters');
-    await updateDoc(videoRef, { chapters, updatedAt: serverTimestamp() });
-    this.cache.invalidateVideo(videoId);
-    return { success: true, chapters };
+    const target = await this._resolvePostOrVideoDoc(videoId);
+    if (!target) throw new VideoError('not-found', 'Video not found');
+    const ownerId = target.authorId || target.userId;
+    if (ownerId !== userId) throw new VideoError('permission-denied', 'Only owner can set chapters');
+
+    try {
+      const res = await this.fns.setVideoChapters({
+        videoId: target.id,
+        postId: target.canonicalPostId || target.id,
+        chapters,
+      });
+      this.cache.invalidateVideo(videoId);
+      this.cache.invalidateVideo(target.id);
+      return res.data || { success: true, chapters };
+    } catch {
+      const targetRef = doc(this.firestore, target._sourceCollection === 'videos' ? 'videos' : 'posts', target.id);
+      await updateDoc(targetRef, { chapters, updatedAt: serverTimestamp() });
+      this.cache.invalidateVideo(videoId);
+      return { success: true, chapters };
+    }
   }
 
   /**
@@ -682,18 +887,19 @@ class UltimateVideoService {
 
   async getVideoFeed(userId, options = {}) {
     await this.ensureInitialized();
-    const { feedType = 'for_you', limit = 20, type = null, signal, cursor } = options;
+    const { feedType = 'sparks', limit: pageLimit = 20, type = null, signal, cursor } = options;
     let { lastDocSnapshot } = options;
     const safeUserId = userId || 'anonymous_user';
 
-    // Callers paginate with the opaque `nextCursor` (a video id) they received
-    // from the previous page. Resolve it to a document snapshot here — the
-    // service previously only honoured `lastDocSnapshot`, so every "load more"
-    // silently returned the first page again.
     if (!lastDocSnapshot && cursor) {
       try {
-        const cursorSnap = await getDoc(doc(this.firestore, 'videos', String(cursor)));
-        if (cursorSnap.exists()) lastDocSnapshot = cursorSnap;
+        const postCursorSnap = await getDoc(doc(this.firestore, 'posts', String(cursor)));
+        if (postCursorSnap.exists()) {
+          lastDocSnapshot = postCursorSnap;
+        } else {
+          const videoCursorSnap = await getDoc(doc(this.firestore, 'videos', String(cursor)));
+          if (videoCursorSnap.exists()) lastDocSnapshot = videoCursorSnap;
+        }
       } catch (err) {
         logger.warn('[Video] Could not resolve feed cursor:', err?.message);
       }
@@ -708,112 +914,217 @@ class UltimateVideoService {
       signal.addEventListener('abort', () => controller.abort());
     }
 
-    const formatVideoItem = (item) => {
-      if (!item) return null;
-      const mediaList = Array.isArray(item.media) ? item.media : [];
-      const videoMedia = mediaList.find(m => m.type === 'video' || m.url?.includes('.mp4') || m.url?.includes('video')) || mediaList[0];
-      const videoUrl = item.videoUrl || item.url || videoMedia?.url || item.video?.file || '';
-      const thumbnailUrl = item.thumbnailUrl || item.thumbnail || item.poster || videoMedia?.preview || videoMedia?.thumbnail || '';
-      
-      return {
-        id: item.id,
-        ...item,
-        videoUrl,
-        thumbnailUrl,
-        title: item.title || item.content?.slice(0, 50) || '',
-        description: item.description || item.content || '',
-        // Preserve whatever identity the source document actually has; never
-        // synthesize an author name/handle.
-        creator: item.creator || {
-          name: item.authorName || '',
-          username: item.authorUsername || '',
-          avatar: getSafeAvatarUrl(item.authorPhoto, item.authorName || '', item.authorId || item.userId),
-          id: item.authorId || item.userId,
-          isVerified: item.authorVerified || false,
-        },
-        // An absent stat stays unknown; the cards render '—', not a fake 0.
-        likes: item.stats?.likes ?? item.likes ?? null,
-        comments: item.stats?.comments ?? item.comments ?? null,
-        shares: item.stats?.shares ?? item.shares ?? null,
-        saves: item.stats?.saves ?? item.saves ?? null,
-        views: item.stats?.views ?? item.views ?? null,
-      };
-    };
+    const hiddenAuthors = await this._getHiddenAuthors(safeUserId);
 
-    try {
-      const feedService = (await import('./feedService.js')).getFeedService();
-      const feedResult = await feedService.getSmartFeed(safeUserId, {
-        feedType: feedType === 'for_you' ? 'for_you' : (feedType === 'following' ? 'following' : 'videos'),
-        limit,
-        lastDoc: lastDocSnapshot,
-        type: type ? { video: true } : undefined,
-      });
-      if (feedResult.success && Array.isArray(feedResult.feed)) {
-        const matchingVideos = feedResult.feed
-          .filter(item => item.type === 'video' || item.postType === 'video' || item.videoUrl || item.media?.some?.(m => m.type === 'video'))
-          .map(formatVideoItem)
-          .filter(v => v && v.videoUrl);
-        if (matchingVideos.length > 0) {
-          const hydrated = await this._hydrateViewerVideoState(matchingVideos, safeUserId);
-          return { success: true, feed: hydrated, hasMore: feedResult.hasMore, nextCursor: feedResult.nextCursor };
+    // Following & Friends feeds filter canonical video posts authored by followed / mutual-friend accounts
+    if ((feedType === 'following' || feedType === 'friends') && safeUserId !== 'anonymous_user') {
+      try {
+        const { getSocialGraphService } = await import('./socialGraphService.js');
+        const graph = getSocialGraphService();
+        const followResult = await graph.listEdges(safeUserId, 'following', { limit: 60 }).catch(() => ({ ids: [] }));
+        let targetAuthorIds = Array.isArray(followResult?.ids) ? followResult.ids : [];
+
+        if (feedType === 'friends' && targetAuthorIds.length > 0) {
+          const followerResult = await graph.listEdges(safeUserId, 'followers', { limit: 120 }).catch(() => ({ ids: [] }));
+          const followerSet = new Set(Array.isArray(followerResult?.ids) ? followerResult.ids : []);
+          targetAuthorIds = targetAuthorIds.filter((id) => followerSet.has(id));
         }
+
+        targetAuthorIds = targetAuthorIds.filter((id) => id && !hiddenAuthors.has(id));
+
+        if (targetAuthorIds.length === 0) {
+          return { success: true, feed: [], hasMore: false, nextCursor: null };
+        }
+
+        const postsRef = collection(this.firestore, 'posts');
+        const chunks = [];
+        for (let i = 0; i < targetAuthorIds.length; i += IN_CHUNK) {
+          chunks.push(targetAuthorIds.slice(i, i + IN_CHUNK));
+        }
+
+        const snaps = await Promise.all(
+          chunks.map((chunk) =>
+            getDocs(
+              query(
+                postsRef,
+                where('authorId', 'in', chunk),
+                where('authorIsPrivate', '==', false),
+                where('status', '==', 'published'),
+                where('isDeleted', '==', false),
+                where('visibility', '==', 'public'),
+                where('type', '==', 'video'),
+                orderBy('createdAt', 'desc'),
+                limit(pageLimit)
+              )
+            ).catch(() => ({ docs: [] }))
+          )
+        );
+
+        const combined = [];
+        const seen = new Set();
+        snaps.forEach((s) => {
+          s.docs.forEach((d) => {
+            if (!seen.has(d.id)) {
+              seen.add(d.id);
+              combined.push(this._formatVideoItem({ id: d.id, _sourceCollection: 'posts', ...d.data() }));
+            }
+          });
+        });
+
+        combined.sort((a, b) => {
+          const ta = a.createdAt?.toMillis?.() || new Date(a.createdAt || 0).getTime();
+          const tb = b.createdAt?.toMillis?.() || new Date(b.createdAt || 0).getTime();
+          return tb - ta;
+        });
+
+        const pageItems = combined.slice(0, pageLimit).filter((v) => v && v.videoUrl);
+        if (pageItems.length > 0) {
+          await countersManager.applyAll({
+            items: pageItems,
+            collection: 'posts',
+            fields: ['likes', 'comments', 'shares', 'saves', 'views'],
+            scope: 'stats',
+          }).catch(() => {});
+          pageItems.forEach((item) => {
+            item.likes = item.stats?.likes ?? item.likes ?? 0;
+            item.comments = item.stats?.comments ?? item.comments ?? 0;
+            item.shares = item.stats?.shares ?? item.shares ?? 0;
+            item.saves = item.stats?.saves ?? item.saves ?? 0;
+            item.views = item.stats?.views ?? item.views ?? 0;
+          });
+        }
+        const hydrated = await this._hydrateViewerVideoState(pageItems, safeUserId);
+        const nextCursor = hydrated.length ? hydrated[hydrated.length - 1].id : null;
+        return { success: true, feed: hydrated, hasMore: combined.length > pageLimit, nextCursor };
+      } catch (err) {
+        logger.warn('[Video] Relationship feed failed; falling back to Sparks feed', { feedType, error: err?.message });
       }
-    } catch (e) {
-      logger.warn('[VideoService] matching-videos fallback failed', { error: e?.message });
     }
 
     try {
-      const videosRef = collection(this.firestore, 'videos');
-      // The list rule (videoListableByViewer) requires the QUERY to prove a
-      // public shape — rules are not filters — so the equality constraints must
-      // be present or every non-owner list is denied (a silent empty feed).
-      let q = query(
-        videosRef,
-        where('isDeleted', '==', false),
-        where('status', '==', VIDEO_CONFIG.STATUS.READY),
-        where('visibility', '==', VIDEO_CONFIG.VISIBILITY.PUBLIC),
-        orderBy('rankingScore', 'desc'),
-        limit(limit * VIDEO_CONFIG.PERFORMANCE.FEED_FETCH_MULTIPLIER)
-      );
-      if (type) q = query(q, where('type', '==', type));
-      if (lastDocSnapshot) {
-        q = query(q, startAfter(lastDocSnapshot));
-      }
-      const snap = await getDocs(q);
-      let rawVideos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const postsRef = collection(this.firestore, 'posts');
+      const fetchCap = pageLimit * VIDEO_CONFIG.PERFORMANCE.FEED_FETCH_MULTIPLIER;
 
-      if (rawVideos.length === 0) {
-        // Fallback: Query posts collection for video type posts
-        const postsRef = collection(this.firestore, 'posts');
-        const postQ = query(
+      let postQ = feedType === 'trending' || feedType === 'for_you' || feedType === 'sparks'
+        ? query(
+            postsRef,
+            where('authorIsPrivate', '==', false),
+            where('status', '==', 'published'),
+            where('visibility', '==', 'public'),
+            where('isDeleted', '==', false),
+            where('type', '==', 'video'),
+            orderBy('rankingScore', 'desc'),
+            orderBy('createdAt', 'desc'),
+            limit(fetchCap)
+          )
+        : query(
+            postsRef,
+            where('authorIsPrivate', '==', false),
+            where('isDeleted', '==', false),
+            where('status', '==', 'published'),
+            where('visibility', '==', 'public'),
+            where('type', '==', 'video'),
+            orderBy('createdAt', 'desc'),
+            limit(fetchCap)
+          );
+
+      if (lastDocSnapshot && lastDocSnapshot.ref?.parent?.id === 'posts') {
+        postQ = query(postQ, startAfter(lastDocSnapshot));
+      }
+
+      let postDocs = [];
+      try {
+        const postSnap = await getDocs(postQ);
+        postDocs = postSnap.docs;
+      } catch {
+        let fallbackPostQ = query(
           postsRef,
+          where('authorIsPrivate', '==', false),
           where('isDeleted', '==', false),
           where('status', '==', 'published'),
           where('visibility', '==', 'public'),
-          where('authorIsPrivate', '==', false),
           where('type', '==', 'video'),
           orderBy('createdAt', 'desc'),
-          limit(limit)
+          limit(fetchCap)
         );
-        const postSnap = await getDocs(postQ).catch(() => ({ docs: [] }));
-        rawVideos = postSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (lastDocSnapshot && lastDocSnapshot.ref?.parent?.id === 'posts') {
+          fallbackPostQ = query(fallbackPostQ, startAfter(lastDocSnapshot));
+        }
+        const fallbackPostSnap = await getDocs(fallbackPostQ).catch(() => ({ docs: [] }));
+        postDocs = fallbackPostSnap.docs;
       }
 
-      // Moderation/safety: a blocked, blocked-by or muted author's videos must
-      // not surface here (the primary feed path filters through feedService;
-      // this direct query did not, so a blocked/muted creator's Sparks leaked).
-      const hiddenAuthors = await this._getHiddenAuthors(safeUserId);
-      if (hiddenAuthors.size > 0) {
-        rawVideos = rawVideos.filter((v) => !hiddenAuthors.has(v.authorId || v.userId || v.creatorId));
+      const rawItems = [];
+      const seenCanonicalIds = new Set();
+
+      postDocs.forEach((d) => {
+        const data = d.data() || {};
+        if (type && data.subType !== type && data.type !== type) return;
+        seenCanonicalIds.add(d.id);
+        rawItems.push({ id: d.id, _sourceCollection: 'posts', ...data });
+      });
+
+      // Merge any un-migrated legacy `videos` if needed to fill the page
+      if (rawItems.length < pageLimit) {
+        const videosRef = collection(this.firestore, 'videos');
+        let legacyQ = query(
+          videosRef,
+          where('isDeleted', '==', false),
+          where('status', '==', VIDEO_CONFIG.STATUS.READY),
+          where('visibility', '==', VIDEO_CONFIG.VISIBILITY.PUBLIC),
+          orderBy('rankingScore', 'desc'),
+          limit(fetchCap)
+        );
+        if (type) legacyQ = query(legacyQ, where('type', '==', type));
+        if (lastDocSnapshot && lastDocSnapshot.ref?.parent?.id === 'videos') {
+          legacyQ = query(legacyQ, startAfter(lastDocSnapshot));
+        }
+        const legacySnap = await getDocs(legacyQ).catch(() => ({ docs: [] }));
+        legacySnap.docs.forEach((d) => {
+          const data = d.data() || {};
+          const linkedCanonical = data.canonicalPostId || data.postId || d.id;
+          if (seenCanonicalIds.has(linkedCanonical) || seenCanonicalIds.has(d.id)) return;
+          seenCanonicalIds.add(linkedCanonical);
+          rawItems.push({ id: d.id, _sourceCollection: 'videos', ...data });
+        });
       }
 
-      const formatted = await this._hydrateViewerVideoState(rawVideos.map(formatVideoItem), safeUserId);
-      const nextCursor = formatted.length ? formatted[formatted.length - 1].id : null;
-      return { success: true, feed: formatted, hasMore: formatted.length >= limit, nextCursor };
+      const visibleItems = hiddenAuthors.size > 0
+        ? rawItems.filter((v) => !hiddenAuthors.has(v.authorId || v.userId || v.creatorId))
+        : rawItems;
+
+      const formattedList = visibleItems
+        .map((item) => this._formatVideoItem(item))
+        .filter((v) => v && (v.videoUrl || v.muxPlaybackId));
+
+      const canonicalItems = formattedList.filter((item) => item._sourceCollection === 'posts');
+      if (canonicalItems.length > 0) {
+        await countersManager.applyAll({
+          items: canonicalItems,
+          collection: 'posts',
+          fields: ['likes', 'comments', 'shares', 'saves', 'views'],
+          scope: 'stats',
+        }).catch(() => {});
+        canonicalItems.forEach((item) => {
+          item.likes = item.stats?.likes ?? item.likes ?? 0;
+          item.comments = item.stats?.comments ?? item.comments ?? 0;
+          item.shares = item.stats?.shares ?? item.shares ?? 0;
+          item.saves = item.stats?.saves ?? item.saves ?? 0;
+          item.views = item.stats?.views ?? item.views ?? 0;
+        });
+      }
+
+      const pageItems = formattedList.slice(0, pageLimit);
+      const hydrated = await this._hydrateViewerVideoState(pageItems, safeUserId);
+      const nextCursor = hydrated.length ? hydrated[hydrated.length - 1].id : null;
+      return {
+        success: true,
+        feed: hydrated,
+        hasMore: formattedList.length > pageLimit || postDocs.length >= fetchCap,
+        nextCursor,
+      };
     } catch (err) {
       logger.warn('[Video] Feed query failed:', err?.message);
-      // Fail closed: an empty page reported as success hides the outage and
-      // stops pagination instead of letting the screen show an error.
       return { success: false, feed: [], hasMore: false, nextCursor: null, error: err?.message || 'video-feed-failed' };
     }
   }
@@ -825,10 +1136,7 @@ class UltimateVideoService {
       return { success: true, offlineQueued: true };
     }
     return dedupeRequest(`like_${videoId}`, async () => {
-      // Server-authoritative toggle: no direct-doc fallback. A local
-      // increment could not reproduce the toggle (like vs unlike) and
-      // videos/{id} is owner-writable, so a failed call is surfaced.
-      const res = await this.fns.likeVideo({ videoId });
+      const res = await this.fns.likeVideo({ videoId, postId: videoId });
       this.cache.invalidateVideo(videoId);
       return res.data;
     });
@@ -841,12 +1149,9 @@ class UltimateVideoService {
       return { success: true, offlineQueued: true };
     }
     try {
-      const res = await this.fns.shareVideo({ videoId, platform });
+      const res = await this.fns.shareVideo({ videoId, postId: videoId, platform });
       return res.data;
     } catch (e) {
-      // The share itself already happened client-side (native share/clipboard);
-      // the server counter is a secondary metric. No direct-doc write here —
-      // videos/{id} is owner-writable and would both over-count and fail.
       logger.warn('Video share counter not recorded', { videoId, platform, error: e?.message });
       return { success: false, counted: false };
     }
@@ -857,16 +1162,12 @@ class UltimateVideoService {
     const currentUser = this.auth.currentUser;
     if (!currentUser) return { success: false, reason: 'unauthenticated' };
 
-    // Rate limit: max N view events per user per minute (UX guard; server rules
-    // and Cloud Functions enforce the authoritative per-view limits).
     const rl = rateLimiter.checkAndHit(`video:view:${currentUser.uid}`, {
       max: VIDEO_CONFIG.PERFORMANCE.VIEW_RATE_LIMIT_MAX || 120,
       windowMs: 60000,
     });
     if (!rl.allowed) return { success: false, reason: 'rate_limited' };
 
-    // Idempotency: one counted view per (user, video, day) — matches the
-    // server-side dedupe; prevents view-count inflation from re-mounts.
     const today = new Date().toISOString().split('T')[0];
     const viewKey = `video:viewed:${currentUser.uid}:${videoId}:${today}`;
     if (rateLimiter.isAllowed(viewKey, { max: 1, windowMs: 24 * 60 * 60 * 1000 }).count >= 1) {
@@ -874,7 +1175,7 @@ class UltimateVideoService {
     }
     rateLimiter.checkAndHit(viewKey, { max: 1, windowMs: 24 * 60 * 60 * 1000 });
 
-    const res = await this.fns.recordVideoView({ videoId, ...watchData });
+    const res = await this.fns.recordVideoView({ videoId, postId: videoId, ...watchData });
     this.cache.invalidateVideo(videoId);
     return res.data;
   }
@@ -882,7 +1183,7 @@ class UltimateVideoService {
   async purchaseVideoAccess(videoId) {
     await this.ensureInitialized();
     return dedupeRequest(`ppv_${videoId}`, async () => {
-      return (await this.fns.payPerView({ videoId })).data;
+      return (await this.fns.payPerView({ videoId, postId: videoId })).data;
     });
   }
 
@@ -891,7 +1192,7 @@ class UltimateVideoService {
     if (amount < VIDEO_CONFIG.MONETIZATION.TIPS.MIN_AMOUNT || amount > VIDEO_CONFIG.MONETIZATION.TIPS.MAX_AMOUNT) {
       throw new VideoError('invalid-tip', `Tip amount must be between ${VIDEO_CONFIG.MONETIZATION.TIPS.MIN_AMOUNT} and ${VIDEO_CONFIG.MONETIZATION.TIPS.MAX_AMOUNT}`);
     }
-    const res = await this.fns.sendTip({ videoId, amount, message, idempotencyKey: newIdempotencyKey() });
+    const res = await this.fns.sendTip({ videoId, postId: videoId, amount, message, idempotencyKey: newIdempotencyKey() });
     return res.data;
   }
 
@@ -901,13 +1202,15 @@ class UltimateVideoService {
     if (!currentUser) throw new VideoError('unauthenticated', 'Login required');
     const video = await this.getVideo(videoId);
     if (!video.success) throw new VideoError('not-found', 'Video not found');
-    const isOwner = video.video.userId === currentUser.uid;
+    const ownerId = video.video.authorId || video.video.userId;
+    const isOwner = ownerId === currentUser.uid;
     if (isOwner && video.video.allowDownload) {
-      return { success: true, url: video.video.signedUrl, watermarked: false };
+      return { success: true, url: video.video.signedUrl || video.video.videoUrl, watermarked: false };
     }
     const { data } = await this.fns.getMuxPlaybackUrl({
       playbackId: video.video.muxPlaybackId,
-      videoId,
+      videoId: video.video.id,
+      postId: video.video.canonicalPostId || video.video.id,
       watermarked: true,
     });
     return { success: true, url: data.url, watermarked: true };
@@ -937,11 +1240,12 @@ class UltimateVideoService {
     if (!VIDEO_CONFIG.EFFECTS.AVAILABLE_FILTERS.includes(effect)) {
       throw new VideoError('invalid-effect', `Effect "${effect}" not supported`);
     }
-    const videoRef = doc(this.firestore, 'videos', videoId);
-    const snap = await getDoc(videoRef);
-    if (!snap.exists()) throw new VideoError('not-found', 'Video not found');
-    if (snap.data().userId !== currentUser.uid) throw new VideoError('permission-denied', 'Only owner can apply effects');
-    await updateDoc(videoRef, { 'effects.filter': effect });
+    const target = await this._resolvePostOrVideoDoc(videoId);
+    if (!target) throw new VideoError('not-found', 'Video not found');
+    const ownerId = target.authorId || target.userId;
+    if (ownerId !== currentUser.uid) throw new VideoError('permission-denied', 'Only owner can apply effects');
+    const targetRef = doc(this.firestore, target._sourceCollection === 'videos' ? 'videos' : 'posts', target.id);
+    await updateDoc(targetRef, { 'effects.filter': effect, updatedAt: serverTimestamp() });
     this.cache.invalidateVideo(videoId);
     return { success: true, effect };
   }
@@ -960,7 +1264,7 @@ class UltimateVideoService {
 
   async reportVideo(videoId, reason) {
     await this.ensureInitialized();
-    const res = await this.fns.reportVideo({ videoId, reason });
+    const res = await this.fns.reportVideo({ videoId, postId: videoId, reason });
     return res.data;
   }
 
@@ -971,24 +1275,22 @@ class UltimateVideoService {
     await this.ensureInitialized();
     if (!userId) throw new Error('userId is required to save a video');
     const savedRef = doc(this.firestore, 'users', userId, 'saved_videos', videoId);
-    let videoRef = doc(this.firestore, 'videos', videoId);
-    let videoSnap = await getDoc(videoRef);
-    if (!videoSnap.exists()) {
-      videoRef = doc(this.firestore, 'posts', videoId);
-      videoSnap = await getDoc(videoRef);
-    }
-    const data = videoSnap.exists() ? videoSnap.data() : {};
+    const resolved = await this._resolvePostOrVideoDoc(videoId);
+    const data = resolved || {};
     const savedSnap = await getDoc(savedRef);
     const alreadySaved = savedSnap.exists();
     if (!alreadySaved) {
       await setDoc(savedRef, {
         videoId,
+        postId: data.canonicalPostId || videoId,
         savedAt: serverTimestamp(),
         snapshot: {
           id: videoId,
+          canonicalPostId: data.canonicalPostId || videoId,
+          muxPlaybackId: data.muxPlaybackId || null,
           title: data.title || data.content?.slice(0, 50) || '',
           videoUrl: data.videoUrl || data.url || (Array.isArray(data.media) ? data.media.find(m => m.type === 'video')?.url : '') || '',
-          thumbnail: data.thumbnail || data.thumbnailUrl || (Array.isArray(data.media) ? data.media.find(m => m.preview)?.preview : '') || '',
+          thumbnail: data.thumbnail || data.thumbnailUrl || (Array.isArray(data.media) ? data.media.find(m => m.preview || m.thumbnailUrl)?.thumbnailUrl || data.media.find(m => m.preview)?.preview : '') || '',
           creator: data.creator || {
             name: pickDisplayName([data.authorName]),
             username: deriveHandle(data.authorUsername) || '',
@@ -1000,11 +1302,6 @@ class UltimateVideoService {
           createdAt: data.createdAt || null,
         },
       });
-      // The `saved_videos` snapshot is private to the viewer; the public
-      // `videos/{id}.stats.saves` aggregate is server-owned (`stats` is excluded
-      // from the client video update rule), so it is maintained by the callable
-      // (N436). Best-effort: a save already persisted locally must not fail just
-      // because the counter call failed.
       try {
         await this.fns.toggleVideoSave({ videoId, save: true });
       } catch (err) {
@@ -1030,36 +1327,25 @@ class UltimateVideoService {
   }
 
   /**
-   * Viewer-specific like/save state for one video. The public video document
-   * only carries aggregate counters; whether *this* viewer liked or saved it
-   * lives in the `likes` subcollection and the viewer's `saved_videos`, so a
-   * detail screen must resolve it separately (see `_hydrateViewerVideoState`).
-   * Returns { liked: false, saved: false } for anonymous viewers.
+   * Viewer-specific like/save state for one Spark/Video across canonical
+   * `posts/{id}/likes/{uid}` + `videos/{id}/likes/{uid}` and `users/{uid}/saved_videos`.
    */
   async getViewerVideoState(videoId, userId) {
     if (!videoId || !userId) return { liked: false, saved: false };
     await this.ensureInitialized();
-    const [likeSnap, savedSnap] = await Promise.all([
-      getDoc(doc(this.firestore, 'videos', videoId, 'likes', userId)),
-      getDoc(doc(this.firestore, 'users', userId, 'saved_videos', videoId)),
+    const [postLikeSnap, videoLikeSnap, savedSnap] = await Promise.all([
+      getDoc(doc(this.firestore, 'posts', videoId, 'likes', userId)).catch(() => null),
+      getDoc(doc(this.firestore, 'videos', videoId, 'likes', userId)).catch(() => null),
+      getDoc(doc(this.firestore, 'users', userId, 'saved_videos', videoId)).catch(() => null),
     ]);
-    return { liked: likeSnap.exists(), saved: savedSnap.exists() };
+    return {
+      liked: Boolean(postLikeSnap?.exists?.() || videoLikeSnap?.exists?.()),
+      saved: Boolean(savedSnap?.exists?.()),
+    };
   }
 
-  /**
-   * Resolve the viewer's like/save state for a page of videos. A `videos/{id}`
-   * document carries only aggregate counters — no writer sets a per-viewer
-   * `isLiked`/`isSaved` flag on it — so a feed that read those rendered an
-   * unliked heart for a video the viewer had liked (and a second tap re-liked
-   * it server-side, which toggles it back off).
-   *
-   * The saved half is one bounded `documentId() in` read over the viewer's own
-   * `users/{uid}/saved_videos` (chunked at 30); the like half is one point read
-   * per video because each like doc lives under a different `videos/{id}` parent
-   * and cannot be batched across parents.
-   */
   async _hydrateViewerVideoState(videos, userId) {
-    if (!userId || !Array.isArray(videos) || videos.length === 0) return videos;
+    if (!userId || userId === 'anonymous_user' || !Array.isArray(videos) || videos.length === 0) return videos;
     const ids = videos.map((v) => v?.id).filter(Boolean);
     if (ids.length === 0) return videos;
 
@@ -1076,14 +1362,31 @@ class UltimateVideoService {
     }
 
     const likedIds = new Set();
-    await Promise.all(ids.map(async (id) => {
-      try {
-        const snap = await getDoc(doc(this.firestore, 'videos', id, 'likes', userId));
-        if (snap.exists()) likedIds.add(id);
-      } catch {
-        // Denied/absent resolves to not liked.
+    try {
+      const likedCol = collection(this.firestore, 'users', userId, 'liked_posts');
+      for (let i = 0; i < ids.length; i += IN_CHUNK) {
+        const chunk = ids.slice(i, i + IN_CHUNK);
+        const snap = await getDocs(query(likedCol, where(documentId(), 'in', chunk), limit(chunk.length)));
+        snap.forEach((d) => likedIds.add(d.id));
       }
-    }));
+    } catch {
+      // Fall through to subcollection point reads
+    }
+
+    const missingLikeIds = ids.filter((id) => !likedIds.has(id));
+    if (missingLikeIds.length > 0) {
+      await Promise.all(missingLikeIds.map(async (id) => {
+        try {
+          const [postLike, legacyLike] = await Promise.all([
+            getDoc(doc(this.firestore, 'posts', id, 'likes', userId)).catch(() => null),
+            getDoc(doc(this.firestore, 'videos', id, 'likes', userId)).catch(() => null),
+          ]);
+          if (postLike?.exists?.() || legacyLike?.exists?.()) likedIds.add(id);
+        } catch {
+          // Denied/absent resolves to not liked.
+        }
+      }));
+    }
 
     return videos.map((v) => (v?.id
       ? { ...v, isLiked: likedIds.has(v.id), isSaved: savedIds.has(v.id) }
@@ -1251,6 +1554,8 @@ const videoService = {
   initialize: () => getVideoService().initialize(),
   ensureInitialized: () => getVideoService().ensureInitialized(),
   uploadVideo: (f, m, o) => getVideoService().uploadVideo(f, m, o),
+  getMuxPlaybackUrl: (opts) => getVideoService().getMuxPlaybackUrl(opts),
+  deleteVideo: (vid) => getVideoService().deleteVideo(vid),
   getVideo: (id, o) => getVideoService().getVideo(id, o),
   getVideosByUser: (uid, o) => getVideoService().getVideosByUser(uid, o),
   getVideoFeed: (uid, o) => getVideoService().getVideoFeed(uid, o),

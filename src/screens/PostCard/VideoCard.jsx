@@ -4,10 +4,11 @@ import React, {
   useState, useEffect, useRef, useCallback, useReducer, useMemo
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, Settings, Share2, Info, ArrowUp, ArrowDown } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, Settings, Share2, Info, ArrowUp, ArrowDown, Sparkles, RefreshCw } from "lucide-react";
 import { FaHeart } from 'react-icons/fa6';
 import levelSystemService from '../../services/levelSystemService';
 import { tokens, BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { useHlsVideo } from '../../hooks/useHlsVideo.js';
 
 // 1. GLOBAL FEED SCHEDULER (event‑driven, no polling, with cleanup)
 class FeedEventBus {
@@ -180,6 +181,9 @@ class FeedScheduler {
 
   _preloadURL(url, preloadType = 'auto') {
     if (!url || this.preloadCache.has(url)) return;
+    // Never preload HLS manifests or Mux stream URLs in a raw <video> element;
+    // signed Mux streams require tokenized HLS attachment via useHlsVideo.
+    if (/\.m3u8(\?|$)/i.test(url) || url.includes('stream.mux.com/')) return;
     if (this.preloadCache.size >= this.maxPreload) {
       const oldest = this.preloadCache.keys().next().value;
       const oldVideo = this.preloadCache.get(oldest);
@@ -323,9 +327,13 @@ const VideoCard = React.memo(({
   src,
   qualities = [],
   poster,
+  muxPlaybackId = null,
+  playbackPolicy = null,
+  canonicalPostId = null,
   onDoubleTap,
   onShare,
   onOpenDetails,
+  onOpenSparks,
   onNext,
   onPrev,
   postId,
@@ -384,6 +392,33 @@ const VideoCard = React.memo(({
   const lastWatchMilestone = useRef(0); // 0, 25, 50, 75, 100
   const telemetryRef = useRef({ startupDelay: 0, droppedFrames: 0, bufferingEvents: 0 });
   const isPlayingLock = useRef(false);
+
+  const hlsVideoMeta = useMemo(() => ({
+    id: canonicalPostId || postId,
+    canonicalPostId: canonicalPostId || postId,
+    muxPlaybackId,
+    playbackPolicy,
+    url: src,
+    videoUrl: src,
+    poster,
+    thumbnailUrl: poster,
+  }), [canonicalPostId, postId, muxPlaybackId, playbackPolicy, src, poster]);
+
+  const {
+    isBuffering: hlsBuffering,
+    error: hlsError,
+    qualityLevels: hlsQualityLevels,
+    currentLevel: currentHlsLevel,
+    setQualityLevel: setHlsQualityLevel,
+    thumbnailUrl: resolvedPoster,
+    refreshPlaybackUrl,
+  } = useHlsVideo({
+    videoRef,
+    video: hlsVideoMeta,
+    signedUrlCacheKey: canonicalPostId || postId,
+    quality: selectedQuality,
+    enabled: Boolean(qualities.length === 0 && (muxPlaybackId || src)),
+  });
 
   // Session recovery (after metadata loaded)
   const restoreSession = useCallback(() => {
@@ -768,7 +803,8 @@ const VideoCard = React.memo(({
   // Render
   const progress = isDraggingSeek ? dragProgress * 100 : (duration ? (currentTime / duration) * 100 : 0);
   const currentQualityObj = qualities?.find(q => q.label === selectedQuality);
-  const currentSrc = currentQualityObj?.src || src;
+  const currentSrc = qualities.length > 0 ? (currentQualityObj?.src || src) : undefined;
+  const effectivePoster = resolvedPoster || poster;
 
   return (
     <div
@@ -785,7 +821,7 @@ const VideoCard = React.memo(({
       <video
         ref={videoRef}
         src={currentSrc}
-        poster={poster}
+        poster={effectivePoster}
         className="w-full h-auto max-h-[70vh] object-contain pointer-events-none"
         style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
         playsInline
@@ -801,9 +837,27 @@ const VideoCard = React.memo(({
         onLoadedMetadata={handleLoadedMetadata}
       />
 
-      {videoState === VIDEO_STATES.BUFFERING && (
+      {(videoState === VIDEO_STATES.BUFFERING || hlsBuffering) && !hlsError && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-transparent animate-spin" style={{ borderTopColor: tokens.color.brand.violet, borderImage: ARVDOUL_GRADIENT, borderImageSlice: 1 }} />
+        </div>
+      )}
+
+      {hlsError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm p-4 text-center z-20">
+          <p className="text-xs text-white/85 max-w-xs">{hlsError}</p>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              refreshPlaybackUrl();
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white cursor-pointer"
+            style={{ background: ARVDOUL_GRADIENT }}
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry stream</span>
+          </button>
         </div>
       )}
 
@@ -902,6 +956,53 @@ const VideoCard = React.memo(({
                     </AnimatePresence>
                   </div>
                 )}
+                {qualities.length === 0 && hlsQualityLevels.length > 0 && (
+                  <div className="relative">
+                    <button onClick={(e) => { e.stopPropagation(); setShowQualityMenu(!showQualityMenu); }} className="text-white/80 hover:text-white transition" aria-label="Stream quality">
+                      <Settings className="w-5 h-5" />
+                    </button>
+                    <AnimatePresence>
+                      {showQualityMenu && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          className="absolute bottom-full left-0 mb-2 p-1.5 rounded-xl shadow-lg min-w-[96px]"
+                          style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: REDUCED_EFFECTS ? 'none' : 'blur(12px)', border: '1px solid rgba(147,51,234,0.3)' }}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setHlsQualityLevel(-1);
+                              setSelectedQuality('auto');
+                              setShowQualityMenu(false);
+                            }}
+                            className={`block w-full text-left px-3 py-1 rounded text-sm ${currentHlsLevel === -1 ? 'text-white font-medium bg-purple-500/20' : 'text-white/70'} hover:bg-white/10 transition`}
+                          >
+                            Auto
+                          </button>
+                          {hlsQualityLevels.map((lvl) => (
+                            <button
+                              type="button"
+                              key={lvl.index}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setHlsQualityLevel(lvl.index);
+                                setSelectedQuality(lvl.label);
+                                setShowQualityMenu(false);
+                                pushAnalytics('quality_switch', { postId, quality: lvl.label });
+                              }}
+                              className={`block w-full text-left px-3 py-1 rounded text-sm ${currentHlsLevel === lvl.index ? 'text-white font-medium bg-purple-500/20' : 'text-white/70'} hover:bg-white/10 transition`}
+                            >
+                              {lvl.label}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
               </div>
               <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="text-white/80 hover:text-white transition">
                 {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
@@ -915,11 +1016,26 @@ const VideoCard = React.memo(({
         {formatTime(duration)}
       </div>
 
-      {selectedQuality !== 'auto' && (
-        <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5 text-[11px] text-white/80 border border-purple-500/30">
-          {selectedQuality}
-        </div>
-      )}
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+        {selectedQuality !== 'auto' && (
+          <div className="bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5 text-[11px] text-white/80 border border-purple-500/30">
+            {selectedQuality}
+          </div>
+        )}
+        {onOpenSparks && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenSparks();
+            }}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold text-white bg-black/55 hover:bg-black/75 backdrop-blur-md border border-white/15 transition cursor-pointer"
+          >
+            <Sparkles className="w-3 h-3" />
+            <span>Sparks</span>
+          </button>
+        )}
+      </div>
 
       {showHeartBurst && (
         <motion.div

@@ -39,7 +39,6 @@ import {
   VISIBILITY_OPTIONS,
   MEDIA_LIMITS,
   SURFACE_GLASS_CLASS,
-  MEDIA_BLOB_STORE,
 } from './CreatePost/createPostConstants.js';
 import {
   initialState,

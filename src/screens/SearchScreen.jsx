@@ -228,6 +228,7 @@ const SearchScreen = memo(() => {
 
   // Handle result click
   const handleResultClick = useCallback((result) => {
+    const targetId = result.canonicalPostId || result.id || result.objectID;
     switch (result.type?.toLowerCase()) {
       case 'user':
       case 'users':
@@ -235,7 +236,11 @@ const SearchScreen = memo(() => {
         break;
       case 'video':
       case 'videos':
-        navigate(`/video/${result.id || result.objectID}`);
+      case 'spark':
+      case 'sparks':
+      case 'reel':
+      case 'reels':
+        navigate(`/sparks/${targetId}`);
         break;
       case 'post':
       case 'posts':

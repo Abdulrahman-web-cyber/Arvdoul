@@ -782,7 +782,16 @@ export default function AppRoutes() {
         </Suspense>
       } />
 
-      {/* Video detail (deep links from search, notifications, shares) */}
+      {/* Spark / Video detail (canonical /sparks/:videoId + legacy /video/:videoId) */}
+      <Route path="/sparks/:videoId" element={
+        <ProtectedRoute>
+          <SectionErrorBoundary sectionName="SparkDetail">
+            <Suspense fallback={<RouteFallback />}>
+              <VideoDetailScreen />
+            </Suspense>
+          </SectionErrorBoundary>
+        </ProtectedRoute>
+      } />
       <Route path="/video/:videoId" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -1297,7 +1306,15 @@ export default function AppRoutes() {
       <Route path="/inbox" element={<Navigate to="/messages" replace />} />
       <Route path="/dm" element={<Navigate to="/messages" replace />} />
       <Route path="/requests" element={<Navigate to="/messages" replace />} />
-      <Route path="/sparks" element={<Navigate to="/videos?tab=sparks" replace />} />
+      <Route path="/sparks" element={
+        <ProtectedRoute>
+          <SectionErrorBoundary sectionName="Sparks">
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <VideosScreen />
+            </Suspense>
+          </SectionErrorBoundary>
+        </ProtectedRoute>
+      } />
       {/* Legacy / dead-link targets now resolve to real destinations */}
       <Route path="/challenges" element={<Navigate to="/rankings" replace />} />
       <Route path="/change-password" element={<Navigate to="/settings" replace />} />

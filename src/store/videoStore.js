@@ -57,7 +57,7 @@ const initialState = {
   loadingMore: false,
   hasMore: true,
   nextCursor: null,
-  feedType: 'for_you',
+  feedType: 'sparks',
 
   // Playback state
   isPlaying: false,
@@ -69,9 +69,11 @@ const initialState = {
   isPip: false,
   isLooping: true,
 
-  // User lists
+  // User lists & ephemeral client caches
   watchLater: [],
   history: [],
+  notInterestedIds: [],
+  signedUrlCache: {},
 
   // Error state
   error: null,
@@ -233,7 +235,7 @@ const useVideoStore = create(
         return get().videos.find((v) => v.id === videoId) || null;
       },
 
-      // Batch operations
+      // Batch operations & Spark state
       likeVideo: (videoId) => set((state) => ({
         videos: state.videos.map((v) =>
           v.id === videoId
@@ -245,6 +247,39 @@ const useVideoStore = create(
             : v
         ),
       })),
+
+      toggleSaveVideo: (videoId) => set((state) => ({
+        videos: state.videos.map((v) =>
+          v.id === videoId
+            ? {
+                ...v,
+                isSaved: !v.isSaved,
+                saves: v.isSaved ? Math.max(0, (v.saves ?? 0) - 1) : (v.saves ?? 0) + 1,
+              }
+            : v
+        ),
+      })),
+
+      markNotInterested: (videoId) => set((state) => ({
+        notInterestedIds: state.notInterestedIds.includes(videoId)
+          ? state.notInterestedIds
+          : [videoId, ...state.notInterestedIds].slice(0, 200),
+        videos: state.videos.filter((v) => v.id !== videoId),
+      })),
+
+      setSignedUrl: (videoId, payload) => set((state) => ({
+        signedUrlCache: {
+          ...state.signedUrlCache,
+          [videoId]: { ...payload, cachedAt: Date.now() },
+        },
+      })),
+
+      getSignedUrl: (videoId, maxAgeMs = 50 * 60 * 1000) => {
+        const entry = get().signedUrlCache?.[videoId];
+        if (!entry || !entry.url) return null;
+        if (Date.now() - (entry.cachedAt || 0) > maxAgeMs) return null;
+        return entry;
+      },
 
       incrementViews: (videoId) => set((state) => ({
         videos: state.videos.map((v) =>

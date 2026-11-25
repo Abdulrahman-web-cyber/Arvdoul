@@ -1,15 +1,22 @@
 // src/components/Videos/VideoTopBar.jsx
 
-import { memo } from "react";
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Camera, Sparkles, LayoutGrid, Smartphone, Flame } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, brandRgba } from '../../design-system/tokens.js';
 import ArvdoulLogo, { ArvdoulEmblem } from '../Shared/ArvdoulLogo';
 import PropTypes from 'prop-types';
 
+const CHANNELS = [
+  { id: 'following', label: 'Following' },
+  { id: 'friends', label: 'Friends' },
+  { id: 'sparks', label: 'Sparks', featured: true },
+  { id: 'for_you', label: 'For You' },
+];
+
 const VideoTopBar = memo(({
-  activeTab = 'for_you',
+  activeTab = 'sparks',
   onTabChange,
   onOpenSearch,
   onCreateVideo,
@@ -22,16 +29,16 @@ const VideoTopBar = memo(({
   return (
     <header
       id="arvdoul-video-top-bar"
-      className="absolute top-0 left-0 right-0 z-30 pt-3 sm:pt-4 pb-2 px-3 sm:px-5 flex items-center justify-between gap-2 pointer-events-auto select-none"
+      className="absolute top-0 left-0 right-0 z-30 pt-3 sm:pt-4 pb-2 px-3 sm:px-5 flex items-center justify-between gap-2 pointer-events-auto select-none bg-gradient-to-b from-black/70 via-black/30 to-transparent"
     >
-      {/* Left: Official ARVDOUL Brand Logo (emblem on compact screens to avoid crowding) */}
+      {/* Left: Official ARVDOUL Brand Logo */}
       <div className="flex items-center shrink-0">
         <div className="sm:hidden">
           <button
             type="button"
             onClick={() => navigate('/home')}
             aria-label="Arvdoul Home"
-            className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
           >
             <ArvdoulEmblem size={30} />
           </button>
@@ -47,70 +54,46 @@ const VideoTopBar = memo(({
         </div>
       </div>
 
-      {/* Center: Tabs (Following | Sparks | For You) */}
-      <nav aria-label="Video feed channels" className="flex items-center gap-3 sm:gap-6 min-w-0">
-        <button
-          type="button"
-          onClick={() => onTabChange?.('following')}
-          aria-pressed={activeTab === 'following'}
-          className={`relative min-h-[44px] px-1 text-xs sm:text-sm font-extrabold tracking-wide whitespace-nowrap shrink-0 transition-all ${
-            activeTab === 'following'
-              ? 'text-white scale-105 drop-shadow-md'
-              : 'text-white/65 hover:text-white/90'
-          }`}
-        >
-          Following
-          {activeTab === 'following' && (
-            <motion.div
-              layoutId="videoTabIndicator"
-              className="absolute bottom-1 left-1 right-1 h-1 rounded-full shadow-md shadow-purple-500/60"
-              style={{ background: BRAND_GRADIENT }}
-              transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-            />
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onTabChange?.('sparks')}
-          aria-pressed={activeTab === 'sparks'}
-          className={`relative min-h-[44px] px-1 text-xs sm:text-sm font-extrabold tracking-wide whitespace-nowrap shrink-0 transition-all flex items-center gap-1 ${
-            activeTab === 'sparks'
-              ? 'text-yellow-300 scale-105 drop-shadow-[0_0_8px_rgba(253,224,71,0.6)]'
-              : 'text-white/75 hover:text-yellow-200'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5 fill-current text-yellow-400" aria-hidden="true" />
-          <span>Sparks</span>
-          {activeTab === 'sparks' && (
-            <motion.div
-              layoutId="videoTabIndicator"
-              className="absolute bottom-1 left-0 right-0 h-1 rounded-full bg-gradient-to-r from-amber-400 via-rose-500 to-yellow-400 shadow-md shadow-yellow-500/80"
-              transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-            />
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onTabChange?.('for_you')}
-          aria-pressed={activeTab === 'for_you'}
-          className={`relative min-h-[44px] px-1 text-xs sm:text-sm font-extrabold tracking-wide whitespace-nowrap shrink-0 transition-all ${
-            activeTab === 'for_you'
-              ? 'text-white scale-105 drop-shadow-md'
-              : 'text-white/65 hover:text-white/90'
-          }`}
-        >
-          For You
-          {activeTab === 'for_you' && (
-            <motion.div
-              layoutId="videoTabIndicator"
-              className="absolute bottom-1 left-1 right-1 h-1 rounded-full shadow-md shadow-purple-500/60"
-              style={{ background: BRAND_GRADIENT }}
-              transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-            />
-          )}
-        </button>
+      {/* Center: Channel Tabs (Following | Friends | Sparks | For You) */}
+      <nav
+        aria-label="Sparks feed channels"
+        className="flex items-center gap-1 sm:gap-2 px-1.5 py-0.5 rounded-full bg-black/40 backdrop-blur-2xl border border-white/15 shadow-lg overflow-x-auto no-scrollbar min-w-0"
+      >
+        {CHANNELS.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onTabChange?.(tab.id)}
+              aria-pressed={isActive}
+              className={`relative min-h-[40px] px-2.5 sm:px-3.5 text-xs sm:text-sm font-extrabold tracking-wide whitespace-nowrap shrink-0 transition-all flex items-center gap-1 rounded-full ${
+                isActive
+                  ? 'text-white'
+                  : 'text-white/65 hover:text-white/95'
+              }`}
+            >
+              {tab.featured && (
+                <Sparkles
+                  className={`w-3.5 h-3.5 ${isActive ? 'text-amber-300 fill-amber-300' : 'text-amber-300/80'}`}
+                  aria-hidden="true"
+                />
+              )}
+              <span>{tab.label}</span>
+              {isActive && (
+                <motion.div
+                  layoutId="videoTabIndicator"
+                  className="absolute bottom-1 left-2.5 right-2.5 h-0.5 rounded-full"
+                  style={{
+                    background: BRAND_GRADIENT,
+                    boxShadow: `0 0 10px ${brandRgba(0.75)}`,
+                  }}
+                  transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                />
+              )}
+            </button>
+          );
+        })}
       </nav>
 
       {/* Right: View Switch, Reels, Search & Camera Shortcuts */}
@@ -121,7 +104,7 @@ const VideoTopBar = memo(({
             whileTap={{ scale: 0.9 }}
             whileHover={{ scale: 1.05 }}
             onClick={onToggleViewMode}
-            className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/45 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white/90 hover:text-white hover:bg-white/15 transition-all shadow-lg"
+            className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white/90 hover:text-white hover:bg-white/15 transition-all shadow-lg"
             title={viewMode === 'feed' ? 'Explore Grid View' : 'Sparks Feed'}
             aria-label={viewMode === 'feed' ? 'Switch to Grid view' : 'Switch to Sparks feed'}
           >
@@ -139,7 +122,7 @@ const VideoTopBar = memo(({
             whileTap={{ scale: 0.9 }}
             whileHover={{ scale: 1.05 }}
             onClick={onOpenReels}
-            className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/45 backdrop-blur-xl border border-white/20 flex items-center justify-center text-pink-300 hover:text-pink-200 hover:bg-white/15 transition-all shadow-lg"
+            className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-xl border border-white/20 flex items-center justify-center text-amber-300 hover:text-amber-200 hover:bg-white/15 transition-all shadow-lg"
             title="Open Fullscreen Reels"
             aria-label="Open Fullscreen Reels"
           >
@@ -152,9 +135,9 @@ const VideoTopBar = memo(({
           whileTap={{ scale: 0.9 }}
           whileHover={{ scale: 1.05 }}
           onClick={onOpenSearch || (() => navigate('/search'))}
-          className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/45 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white/90 hover:text-white hover:bg-white/15 transition-all shadow-lg"
-          title="Search Videos"
-          aria-label="Search Videos"
+          className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white/90 hover:text-white hover:bg-white/15 transition-all shadow-lg"
+          title="Search Sparks"
+          aria-label="Search Sparks"
         >
           <Search className="w-4 h-4" />
         </motion.button>
@@ -163,11 +146,14 @@ const VideoTopBar = memo(({
           type="button"
           whileTap={{ scale: 0.9 }}
           whileHover={{ scale: 1.05 }}
-          onClick={onCreateVideo || (() => navigate('/create-post'))}
-          className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full border border-white/30 flex items-center justify-center text-white shadow-xl shadow-purple-500/30 transition-transform"
-          style={{ background: BRAND_GRADIENT }}
-          title="Create Video"
-          aria-label="Create Video"
+          onClick={onCreateVideo || (() => navigate('/create-post?type=video'))}
+          className="relative w-11 h-11 rounded-full border border-white/30 flex items-center justify-center text-white shadow-xl transition-transform"
+          style={{
+            background: BRAND_GRADIENT,
+            boxShadow: `0 6px 20px ${brandRgba(0.4)}`,
+          }}
+          title="Create Spark"
+          aria-label="Create Spark"
         >
           <Camera className="w-4 h-4" />
           <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-cyan-400 text-black flex items-center justify-center text-[10px] font-black border border-black shadow-sm">

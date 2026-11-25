@@ -42,6 +42,7 @@ async function incrementShardedCounter(docPath, field, amount = 1) {
   await shardRef(docPath, field, shardIndex)
     .set({ value: FieldValue.increment(amount) }, { merge: true });
 }
+exports.incrementShardedCounter = incrementShardedCounter;
 
 exports.trackProfileView = functions.https.onCall(async (data, context) => {
   const viewerId = getUserIdFromContext(context);

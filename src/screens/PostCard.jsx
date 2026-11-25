@@ -1007,6 +1007,10 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     setUi(prev => ({ ...prev, showShareSheet: true }));
   }, [currentUser]);
 
+  const handleOpenSparks = useCallback(() => {
+    if (navigate) navigate(`/sparks/${post.canonicalPostId || post.id}`);
+  }, [navigate, post.canonicalPostId, post.id]);
+
   const handleSendGift = useCallback(async (giftType = 'rose') => {
     if (!currentUser) return toast.error('Sign in');
     if (ui.giftLoading) return;
@@ -1223,7 +1227,11 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isVideo && (
         <VideoCard
           src={post.media?.[0]?.url || post.videoUrl || post.video?.url}
-          poster={post.media?.[0]?.thumbnail || post.thumbnailUrl || post.video?.thumbnail}
+          poster={post.media?.[0]?.thumbnailUrl || post.media?.[0]?.thumbnail || post.thumbnailUrl || post.video?.thumbnail}
+          muxPlaybackId={post.muxPlaybackId || post.media?.[0]?.muxPlaybackId || null}
+          playbackPolicy={post.playbackPolicy || post.media?.[0]?.playbackPolicy || null}
+          canonicalPostId={post.canonicalPostId || post.id}
+          onOpenSparks={navigate ? handleOpenSparks : undefined}
           isVisible={isVisible}
           onDoubleTap={handleLikeClick}
           postId={post.id}
@@ -1406,7 +1414,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       <AnimatePresence>
         {ui.showHeartBurst && <DoubleTapHeart position={ui.tapPosition} onFinish={() => setUi(prev => ({ ...prev, showHeartBurst: false }))} prefersReducedMotion={prefersReducedMotion} />}
         {ui.showReactionsPicker && <CardReactionsPicker onSelect={handleReactionSelect} onClose={closeReactionsPicker} tokens={tokens} targetRect={reactionsTargetRect} />}
-        {ui.showShareSheet && <CardShareSheet url={`${typeof window !== 'undefined' ? window.location.origin : ''}/post/${post.id}`} content={post.content?.substring(0, 100) || 'Check out this post'} onClose={() => setUi(prev => ({ ...prev, showShareSheet: false }))} tokens={tokens} postId={post.id} postData={post} isCreator={isCreator} hasMedia={hasMedia} navigate={navigate} currentUser={currentUser} />}
+        {ui.showShareSheet && <CardShareSheet url={`${typeof window !== 'undefined' ? window.location.origin : ''}${isVideo ? `/sparks/${post.canonicalPostId || post.id}` : `/post/${post.id}`}`} content={post.content?.substring(0, 100) || 'Check out this post'} onClose={() => setUi(prev => ({ ...prev, showShareSheet: false }))} tokens={tokens} postId={post.id} postData={post} isCreator={isCreator} hasMedia={hasMedia} navigate={navigate} currentUser={currentUser} />}
         {ui.showGiftPicker && (
           <CardGiftPicker
             tokens={tokens}

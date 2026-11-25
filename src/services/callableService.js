@@ -168,6 +168,9 @@ export const FUNCTIONS = {
   PROCESS_VIDEO_EVENT: 'processVideoEvent',
   WATERMARK_VIDEO: 'watermarkVideo',
   MODERATE_VIDEO: 'moderateVideo',
+  DELETE_VIDEO: 'deleteVideo',
+  MIGRATE_LEGACY_VIDEOS_TO_POSTS: 'migrateLegacyVideosToPosts',
+  ROLLBACK_LEGACY_VIDEO_MIGRATION: 'rollbackLegacyVideoMigration',
 
   // Stories / Vibes
   GENERATE_CAPTION_FOR_IMAGE: 'generateCaptionForImage',

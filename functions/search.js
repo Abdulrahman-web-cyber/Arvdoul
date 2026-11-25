@@ -102,26 +102,37 @@ function isPostIndexable(data) {
 }
 
 function buildPostRecord(postId, data) {
-  let thumbnail = null;
-  if (Array.isArray(data.media) && data.media.length > 0) {
+  let thumbnail = data.thumbnailUrl || null;
+  if (!thumbnail && Array.isArray(data.media) && data.media.length > 0) {
     const first = data.media[0];
-    thumbnail = typeof first === 'string' ? first : first?.url || first?.path || null;
+    thumbnail = typeof first === 'string'
+      ? first
+      : first?.thumbnailUrl || first?.url || first?.path || null;
   }
   const likeCount = data.stats?.likes || 0;
   const commentCount = data.stats?.comments || 0;
+  const viewCount = data.stats?.views || 0;
   return {
     objectID: postId,
-    content: data.content || '',
+    content: data.content || data.description || data.title || '',
+    title: data.title || null,
     type: data.type || 'post',
+    subType: data.subType || null,
     mediaThumbnail: thumbnail,
+    thumbnailUrl: thumbnail,
+    muxPlaybackId: data.muxPlaybackId || null,
+    duration: Number(data.duration) || 0,
+    aspectRatio: data.aspectRatio || null,
     authorId: data.authorId || '',
     authorName: data.authorName || '',
     hashtags: data.hashtags || [],
     tags: data.tags || [],
     likeCount,
     commentCount,
-    engagementScore: likeCount * 2 + commentCount * 3,
+    viewCount,
+    engagementScore: likeCount * 2 + commentCount * 3 + viewCount * 0.2,
     personalizationScore: data.personalizationScore || 0,
+    rankingScore: data.rankingScore || 0,
     createdAt: toUnixTimestamp(data.createdAt),
     updatedAt: toUnixTimestamp(data.updatedAt || data.createdAt),
   };

@@ -2,6 +2,8 @@
 //
 // Comprehensive utilities for video formatting, validation, and manipulation
 
+import videoConfig from '../shared/videoConfig.cjs';
+
 /**
  * Format video duration from seconds to MM:SS or HH:MM:SS
  * @param {number} seconds - Duration in seconds
@@ -214,7 +216,7 @@ export const formatFileSize = (bytes) => {
  */
 export const generateShareUrl = (videoId, baseUrl = window.location.origin) => {
   if (!videoId) return baseUrl;
-  return `${baseUrl}/video/${videoId}`;
+  return `${baseUrl}/sparks/${videoId}`;
 };
 
 /**
@@ -253,10 +255,10 @@ function readVideoDuration(file) {
 export const validateVideoFile = async (file, options = {}) => {
   const errors = [];
   const {
-    maxSize = 200 * 1024 * 1024, // 200MB default
-    allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'],
-    maxDuration = 3600, // 1 hour
-    minDuration = 3, // 3 seconds
+    maxSize = videoConfig.MAX_FILE_SIZE_BYTES,
+    allowedTypes = videoConfig.ALLOWED_VIDEO_MIME_TYPES,
+    maxDuration = videoConfig.MAX_DURATION_SEC,
+    minDuration = videoConfig.MIN_DURATION_SEC,
   } = options;
 
   if (!file) {
@@ -266,7 +268,7 @@ export const validateVideoFile = async (file, options = {}) => {
 
   // Check file type
   const fileExt = file.name.split('.').pop()?.toLowerCase();
-  const validExtensions = ['mp4', 'webm', 'mov', 'avi', 'mkv'];
+  const validExtensions = videoConfig.ALLOWED_VIDEO_EXTENSIONS;
   const isValidType = allowedTypes.includes(file.type) || validExtensions.includes(fileExt);
   
   if (!isValidType) {

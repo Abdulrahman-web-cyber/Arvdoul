@@ -26,7 +26,7 @@ const VideosScreen = () => {
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || 'sparks';
 
-  const { theme, isDark, spring, gradient } = useTheme();
+  const { isDark } = useTheme();
   const { user } = useAuth();
   const {
     videos,
@@ -42,10 +42,7 @@ const VideosScreen = () => {
     setNextCursor,
     feedType,
     setFeedType,
-    currentIndex,
     setCurrentIndex,
-    updateVideo,
-    addToWatchLater,
   } = useVideoStore();
 
   const [error, setError] = useState(null);
@@ -166,7 +163,7 @@ const VideosScreen = () => {
           feedType={feedType}
           onFeedTypeChange={handleTabChange}
           onOpenSearch={() => navigate('/search')}
-          onCreateVideo={() => navigate('/create-post')}
+          onCreateVideo={() => navigate('/create-post?type=video')}
           viewMode={viewMode}
           onToggleViewMode={() => setViewMode('grid')}
           onOpenReels={() => navigate('/reels')}
@@ -187,7 +184,7 @@ const VideosScreen = () => {
             setCurrentIndex(index);
             setViewMode('feed');
           }}
-          onCreateVideo={() => navigate('/create-post')}
+          onCreateVideo={() => navigate('/create-post?type=video')}
         />
       )}
     </div>
@@ -294,6 +291,7 @@ const GridView = memo(({
         <div className="flex items-center gap-1.5 p-1 rounded-2xl w-fit max-w-full overflow-x-auto bg-slate-200/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 backdrop-blur-xl">
           {[
             { id: 'sparks', label: 'Sparks', icon: Sparkles },
+            { id: 'friends', label: 'Friends' },
             { id: 'for_you', label: 'For You' },
             { id: 'trending', label: 'Trending' },
             { id: 'following', label: 'Following' },

@@ -21,14 +21,24 @@
     },
     "Post": {
       "title": "Post",
-      "description": "User posts including text, video reels, polls, events, and multimedia.",
+      "description": "Canonical publication record across posts and Sparks (text, image, video/spark/reel, poll, event, audio, link).",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
         "authorId": { "type": "string", "maxLength": 128 },
         "author": { "type": "object" },
         "content": { "type": "string", "maxLength": 5000 },
+        "title": { "type": "string", "maxLength": 200 },
         "type": { "type": "string", "enum": ["text", "image", "video", "poll", "event", "audio", "link"] },
+        "subType": { "type": "string", "enum": ["spark", "reel", "video", "live"] },
+        "mediaAssetId": { "type": "string", "maxLength": 128 },
+        "muxAssetId": { "type": "string", "maxLength": 128 },
+        "muxPlaybackId": { "type": "string", "maxLength": 128 },
+        "playbackPolicy": { "type": "string", "enum": ["signed", "public"] },
+        "processingState": { "type": "string", "maxLength": 64 },
+        "duration": { "type": "number" },
+        "aspectRatio": { "type": "string", "maxLength": 32 },
+        "thumbnailUrl": { "type": "string", "maxLength": 1000 },
         "mediaUrl": { "type": "string", "maxLength": 1000 },
         "likesCount": { "type": "number" },
         "commentsCount": { "type": "number" },
@@ -449,6 +459,43 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "reporterId", "targetId", "targetType", "reason", "status"]
+    },
+    "VideoMigrationMap": {
+      "title": "VideoMigrationMap",
+      "description": "Mapping from legacy videos/{legacyId} document to canonical posts/{canonicalPostId}.",
+      "type": "object",
+      "properties": {
+        "legacyVideoId": { "type": "string", "maxLength": 128 },
+        "canonicalPostId": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["migrated", "rolled_back"] },
+        "migratedAt": { "type": "string" }
+      },
+      "required": ["legacyVideoId", "canonicalPostId", "ownerId", "status"]
+    },
+    "MuxWebhookEvent": {
+      "title": "MuxWebhookEvent",
+      "description": "Server-only transactional replay-protection record for Mux webhooks.",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "maxLength": 100 },
+        "assetId": { "type": "string", "maxLength": 128 },
+        "processedAt": { "type": "string" }
+      },
+      "required": ["eventId", "type"]
+    },
+    "MigrationCheckpoint": {
+      "title": "MigrationCheckpoint",
+      "description": "Admin-only resumable cursor checkpoint for background data migrations.",
+      "type": "object",
+      "properties": {
+        "jobId": { "type": "string", "maxLength": 128 },
+        "lastDocId": { "type": "string", "maxLength": 128 },
+        "completed": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["jobId"]
     }
   },
   "firestore": {
@@ -575,6 +622,18 @@
     "/call_reports/{reportId}": {
       "schema": "ModerationReport",
       "description": "Moderation reports for voice and video calls"
+    },
+    "/video_migration_map/{legacyId}": {
+      "schema": "VideoMigrationMap",
+      "description": "Canonical post ID resolution map for legacy videos"
+    },
+    "/mux_events/{eventId}": {
+      "schema": "MuxWebhookEvent",
+      "description": "Server-only Mux webhook idempotency ledger"
+    },
+    "/migration_checkpoints/{jobId}": {
+      "schema": "MigrationCheckpoint",
+      "description": "Server-only cursor checkpoints for resumable migrations"
     }
   }
 }

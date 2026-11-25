@@ -1,0 +1,2478 @@
+### MASTER IMPLEMENTATION INSTRUCTIONS — ARVDOUL SPARKS
+
+### Architecture 1: Canonical Posts Architecture
+
+Repository: `Abdulrahman-web-cyber/Arvdoul` Target branch: `main` Architecture decision: `posts/{postId}` is the single authoritative social publication record. Video infrastructure becomes the media-processing and delivery layer for video publications, not a competing social-content system.
+
+### 1\. YOUR ASSIGNMENT
+
+Implement the complete Arvdoul Sparks system by integrating it properly into the existing Arvdoul architecture.
+
+This is an architectural consolidation and product implementation assignment, not permission to create another independent video application inside Arvdoul.
+
+Your responsibilities are to:
+
+* Read and understand the existing repository thoroughly before modifying anything.
+
+* Establish the actual source of truth for every relevant feature and data domain.
+
+* Consolidate duplicate implementations.
+
+* Integrate Sparks with existing Arvdoul systems.
+
+* Migrate existing video functionality safely into Architecture 1.
+
+* Remove genuinely obsolete implementations after proving they are no longer needed.
+
+* Implement the complete Sparks experience using Arvdoul's established design DNA.
+
+* Preserve every existing working feature outside the intended architecture changes.
+
+* Add appropriate tests, migration safeguards and regression protection.
+
+* Verify that every feature works across the application, not merely inside the Sparks screen.
+
+Do not build a parallel architecture. Do not introduce duplicate business logic. Do not sacrifice existing functionality to achieve architectural simplicity.
+
+The completed implementation must feel like a native, fully integrated Arvdoul product.
+
+### 2\. REPOSITORY INVESTIGATION — MANDATORY BEFORE IMPLEMENTATION
+
+Do not rely exclusively on the previous investigation, this instruction document, existing audit reports or comments inside source files.
+
+Read the actual current repository.
+
+The previous investigation identified HEAD as:
+
+```text
+14af8185647b4e5e70695a59dda8ab1ad27edd87
+```
+
+Verify the current branch, HEAD and working-tree state before doing anything.
+
+### 2.1 Read the repository instructions and architecture documentation
+
+Read the relevant contents of:
+
+```text
+AGENTS.md
+README.md
+ARVDOUL_STATUS.md
+ARVDOUL_NEXT_PLAN.md
+ARVDOUL_REMAINING_ISSUES.md
+MASTER_BUILD_PLAN.md
+MASTER_REVIEW_v4.md
+REPO_AUDIT_REPORT.md
+docs/ENGINEERING_READINESS.md
+docs/audits/AUDIT_V3.md
+docs/engineering/implementation-backlog.md
+docs/engineering/implementation-plan-30.md
+docs/engineering/money-model.md
+docs/engineering/production-readiness.md
+docs/engineering/firestore-query-index-map.md
+```
+
+Also inspect relevant project architecture documentation discovered in the repository.
+
+Do not blindly trust historical documentation. Verify its claims against the code that currently exists.
+
+### 2.2 Read the entire relevant implementation
+
+Read the complete contents of the following files and their actual dependencies.
+
+Sparks and video experience
+
+```text
+src/screens/ReelsScreen.jsx
+src/screens/VideosScreen.jsx
+src/screens/VideoDetailScreen.jsx
+src/screens/VideoAnalyticsScreen.jsx
+
+src/components/Videos/
+src/store/videoStore.js
+src/data/videoData.js
+src/utils/videoUtils.js
+```
+
+Video publishing and editing
+
+```text
+src/screens/CreatePost.jsx
+src/screens/CreatePost/
+src/screens/VideoEditor/
+src/screens/AudioEditor/
+
+src/screens/CreatePost/CreateVideo.jsx
+src/screens/CreatePost/CreatePostContext.jsx
+src/screens/CreatePost/postMediaPipeline.js
+src/screens/CreatePost/postPublishPipeline.js
+src/screens/CreatePost/createPostConstants.js
+src/screens/CreatePost/createPostReducer.js
+src/screens/CreatePost/createPostStorage.js
+```
+
+Services
+
+```text
+src/services/videoService.js
+src/services/postService.js
+src/services/firestoreService.js
+src/services/storageService.js
+src/services/feedService.js
+src/services/commentService.js
+src/services/socialGraphService.js
+src/services/userService.js
+src/services/monetizationService.js
+src/services/walletService.js
+src/services/analyticsService.js
+src/services/notificationsService.js
+src/services/profileReadModel.js
+src/services/callableService.js
+```
+
+Read the actual filenames if the repository has renamed or moved any of these modules.
+
+Backend
+
+```text
+functions/video.js
+functions/feed.js
+functions/monetization.js
+functions/analytics.js
+functions/comments.js
+functions/moderation.js
+functions/notifications.js
+functions/index.js
+functions/auth.js
+functions/coinBalance.js
+```
+
+Inspect all other backend modules that write to or read from these systems.
+
+Infrastructure
+
+```text
+firestore.rules
+firestore.indexes.json
+storage.rules
+firebase.json
+functions/package.json
+package.json
+src/routes/AppRoutes.jsx
+src/layouts/MainLayout.jsx
+```
+
+Inspect the theme provider, design tokens, navigation components, profile integration, feature flags, error boundaries and offline infrastructure.
+
+### 2.3 Search for every implementation and reference
+
+Do not stop after reading the obvious files.
+
+Search the whole repository for:
+
+```text
+collection('videos')
+collection("videos")
+collection('posts')
+collection("posts")
+
+videos/
+posts/
+
+videoService
+getVideoFeed
+uploadVideo
+getVideo
+likeVideo
+saveVideo
+unsaveVideo
+shareVideo
+recordVideoView
+sendTip
+payPerView
+createMuxUpload
+getMuxPlaybackUrl
+handleMuxWebhook
+getVideoRecommendations
+
+reel
+reels
+spark
+sparks
+video_feed
+
+video_gift
+reel_gift
+boostPost
+boosted_posts
+sponsored_posts
+
+saved_videos
+coin_transactions
+comments
+video_purchases
+
+VideoFeed
+VideoCard
+VideoActionRail
+VideoComments
+VideoGiftModal
+VideoBottomSheet
+VideoAnalyticsScreen
+```
+
+Also find:
+
+* Every route opening Reels.
+
+* Every route opening Videos.
+
+* Every route opening VideoDetail.
+
+* Every Home feed video-opening interaction.
+
+* Every profile video-grid interaction.
+
+* Every saved-video entry point.
+
+* Every notification linking to a video.
+
+* Every search result linking to a video.
+
+* Every place creating a video document.
+
+* Every place updating video statistics.
+
+* Every function that changes Coins because of a video.
+
+* Every function that changes video visibility or publication status.
+
+* Every trigger that processes video uploads or deletes video content.
+
+Trace all callers, writers, readers, subscribers, scheduled functions, Cloud Functions exports, tests and rules.
+
+Read relevant files completely. Do not make architectural decisions based on isolated snippets.
+
+### 2.4 Establish a baseline
+
+Before changes:
+
+* Run the existing build.
+
+* Run lint.
+
+* Run relevant video, post, feed, monetization, comments, profile, social graph and security tests.
+
+* Record existing failures separately from failures introduced by your changes.
+
+* Record existing routes and feature behaviour.
+
+* Record current Firestore document shapes and field names.
+
+* Record the current deployed Cloud Function export contracts.
+
+* Identify existing production data dependencies.
+
+Do not reset the repository, overwrite user changes, delete dependencies, force-push or perform unrelated cleanup.
+
+### 3\. NON-NEGOTIABLE ARCHITECTURE DECISION
+
+### 3.1 One canonical content publication system
+
+The authoritative content entity is:
+
+```text
+posts/{postId}
+```
+
+Every social video publication must have exactly one canonical publication identity.
+
+A video published through Create Post and distributed in Sparks must not become two separate publications.
+
+The same publication must be discoverable through the relevant Arvdoul surfaces:
+
+* Home.
+
+* Sparks.
+
+* Following.
+
+* Friends.
+
+* Explore.
+
+* Search.
+
+* Creator profiles.
+
+* Saved content.
+
+* Notifications.
+
+* Shared links.
+
+* Analytics.
+
+* Sponsored distribution.
+
+* Paid promotion.
+
+The same `postId` must identify that publication across all these surfaces.
+
+The canonical post owns:
+
+* Author identity.
+
+* Caption and description.
+
+* Publication type.
+
+* Audience and visibility.
+
+* Publication status.
+
+* Hashtags and topics.
+
+* Location.
+
+* Creation and publication timestamps.
+
+* Scheduling metadata.
+
+* Content permissions.
+
+* Publication lifecycle.
+
+* Moderation status.
+
+* Distribution eligibility.
+
+* Post-level engagement summary.
+
+* Relevant monetization configuration.
+
+* Relationships to attached media.
+
+Do not create a second social publication under `videos/{videoId}` for the same video.
+
+### 3.2 Separate content ownership from media ownership
+
+A media asset is not a social publication.
+
+Keep the domains separate:
+
+Canonical publication — `posts/{postId}`
+
+One author, caption, audience, publication lifecycle, distribution identity and engagement ownership
+
+Canonical media asset
+
+One media asset identity and authoritative processing state, linked to its publicationMux asset ID · playback ID · duration · thumbnail · renditions · processing status
+
+Sparks
+
+Video discovery and playback
+
+Other surfaces
+
+Home, profiles, search and sharing
+
+Inspect the existing media-storage abstraction before deciding where media asset records belong.
+
+Reuse an existing suitable media entity where possible. If the current `videos` collection must be transformed to own only media-asset information, do so safely and document that ownership boundary.
+
+Do not create another media system merely because it has a different name.
+
+A media asset must not independently own the social publication's comments, likes, followers, author identity, visibility or distribution ranking.
+
+The canonical post references its media assets. Media processing updates the asset's authoritative state and communicates the appropriate publication-state transition.
+
+### 4\. ESTABLISH ONE SOURCE OF TRUTH FOR EVERY DOMAIN
+
+Use the following ownership model. Verify the existing services and contracts before choosing their final APIs.
+
+| Domain                        | Authoritative owner                                                 | Must not be duplicated                                       |
+| ----------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Social publication            | Canonical post service and posts                                    | No second video publication                                  |
+| Media assets                  | Existing or consolidated media pipeline                             | No independent upload lifecycle per screen                   |
+| Video processing              | Mux integration and its authoritative processing state              | No duplicate processing pipeline                             |
+| Video playback                | Shared video playback infrastructure                                | No separate players with independent business state          |
+| Feed distribution             | Existing feedService                                                | No competing Sparks ranking engine                           |
+| Recommendation signals        | Existing feed/profile preference infrastructure, extended as needed | No independent recommendation database without justification |
+| Friend/follower relationships | Existing social graph                                               | No Sparks-specific relationship records                      |
+| Likes/reactions               | Canonical existing engagement operations                            | No second like system                                        |
+| Saves/collections             | Canonical saved-content operations                                  | No competing saved-video implementation                      |
+| Comments/replies              | Existing commentService and comments                                | No video_comments system                                     |
+| Shares                        | Canonical engagement/share operation                                | No independent counter                                       |
+| Views/watch events            | Canonical server-authoritative analytics ingestion                  | No client-authoritative counters                             |
+| Coins/wallet                  | Existing central monetary architecture and ledger                   | No video wallet                                              |
+| Gifts/tips                    | Central monetization transactions                                   | No duplicate gifting transactions                            |
+| Boosts/promotions             | Existing monetization campaign and boost infrastructure             | No separate Spark boost economy                              |
+| Sponsored campaigns           | Existing ad/sponsorship infrastructure                              | No independent sponsor billing                               |
+| Platform ads                  | Existing advertising service                                        | No separate ad inventory                                     |
+| Creator earnings              | Existing monetization and ledger                                    | No locally calculated earnings                               |
+| Creator analytics             | Existing analytics service and server-owned aggregates              | No independently fabricated statistics                       |
+| Notifications                 | Existing notification writer and delivery infrastructure            | No duplicate notification engine                             |
+| Moderation                    | Existing moderation infrastructure                                  | No video-only unconnected reporting system                   |
+| Profiles                      | Existing profile read model                                         | No alternative creator identity                              |
+| Playback preferences          | Existing settings infrastructure                                    | No separate persistent preference source                     |
+
+Every domain must have:
+
+* One authoritative writer.
+
+* One authoritative data contract.
+
+* One clear service boundary.
+
+* Explicit ownership rules.
+
+* Appropriate readers and derived read models.
+
+* Tests protecting the contract.
+
+Denormalized fields are allowed when required for performance, but there must be one authoritative writer and a clearly defined reconciliation mechanism.
+
+Never allow two independent implementations to update the same financial balance, engagement count, publication status or media-processing state.
+
+### 5\. CONSOLIDATE THE EXISTING VIDEO ARCHITECTURE
+
+The repository currently has two publishing paths:
+
+Create Post video publishing
+
+```text
+CreateVideo.jsx
+    ↓
+postMediaPipeline.js
+    ↓
+postPublishPipeline.js
+    ↓
+posts/{postId}
+```
+
+Dedicated video publishing
+
+```text
+videoService.uploadVideo()
+    ↓
+createMuxUpload
+    ↓
+Mux
+    ↓
+videos/{videoId}
+```
+
+These must be consolidated without losing Mux functionality.
+
+### 5.1 Create Post becomes the canonical publishing entry point
+
+All video publications must use the Create Post publishing system.
+
+Do not build a second independent Sparks composer.
+
+Sparks can open Create Post with the video destination or publishing mode already selected.
+
+The author should be able to publish one video publication and select the applicable distribution surfaces.
+
+The publication must retain one identity regardless of how many eligible surfaces display it.
+
+### 5.2 Preserve and consolidate Mux
+
+Do not replace Mux with a simpler upload that loses adaptive streaming or video processing capabilities.
+
+Retain and consolidate the genuinely useful existing infrastructure:
+
+* Direct uploads.
+
+* Mux asset creation.
+
+* Upload authorization.
+
+* Webhook verification.
+
+* Asset-ready handling.
+
+* Playback ID management.
+
+* Adaptive streaming.
+
+* Signed playback.
+
+* Watermarking.
+
+* Video moderation.
+
+* Audio fingerprinting where applicable.
+
+* Processing failure handling.
+
+* Retry and cleanup.
+
+* Download authorization.
+
+Use one canonical video-media upload pipeline.
+
+Images, audio and other media must continue to use their appropriate existing media pipeline.
+
+Do not upload the same video independently to Firebase Storage and Mux unless a proven, necessary product requirement justifies both copies.
+
+Prevent duplicate thumbnails and redundant media uploads.
+
+### 5.3 Use the canonical post identity through the video lifecycle
+
+The video upload and publication workflows must correlate their processing with the canonical post and its media asset.
+
+Mux webhook events must resolve to the correct media asset and associated canonical publication.
+
+The webhook must never depend on a second social publication document.
+
+Use stable identifiers and metadata; never depend on a filename or client-generated value as proof of ownership.
+
+Handle these lifecycle states using a consistent, server-authoritative transition model compatible with existing post contracts:
+
+```text
+DRAFT
+  ↓
+UPLOAD_RESERVED
+  ↓
+UPLOADING
+  ↓
+PROCESSING
+  ↓
+MODERATION
+  ↓
+READY_TO_PUBLISH
+  ↓
+PUBLISHED
+```
+
+Failure paths must support:
+
+```text
+UPLOAD_FAILED
+PROCESSING_FAILED
+MODERATION_REJECTED
+PUBLICATION_FAILED
+CANCELLED
+```
+
+Do not make partially uploaded, unprocessed, rejected or unauthorized videos publicly discoverable.
+
+Account for the case where a Mux webhook arrives before the final publication operation. Make this race safe using the existing draft/upload reservation infrastructure or a minimal, justified extension.
+
+All transitions must be idempotent.
+
+### 5.4 Duration and publishing rules
+
+Align duration validation across:
+
+* Create Post UI.
+
+* Video editor.
+
+* Client validation.
+
+* Upload service.
+
+* Backend callable.
+
+* Mux processing.
+
+* Sparks feed eligibility.
+
+* Video detail.
+
+* Firestore rules where applicable.
+
+For Sparks, preserve the previously established product requirement of supporting approximately 1-second to 10-minute videos.
+
+The existing dedicated-video configuration contains a 90-second Reel limit, a three-second minimum and a separate longer-video limit.
+
+Do not retain conflicting limits that prevent the intended Sparks experience.
+
+Different publication formats may have different eligibility constraints, but each must have one authoritative validation contract enforced on both client and server.
+
+Do not weaken file size, account-tier, daily upload or abuse protections.
+
+### 6\. LEGACY VIDEO DATA MIGRATION
+
+This is a high-risk part of the implementation.
+
+Do not immediately delete `videos/{videoId}` or its associated subcollections.
+
+First establish every existing dependency.
+
+### 6.1 Inventory existing video data
+
+Identify all existing:
+
+* Video documents.
+
+* Mux asset IDs.
+
+* Playback IDs.
+
+* Likes.
+
+* Saves.
+
+* Viewers.
+
+* Share records.
+
+* Gifts.
+
+* Tips.
+
+* Pay-per-view purchases.
+
+* Video comments.
+
+* Chapters.
+
+* Music references.
+
+* Effects.
+
+* Duet and Stitch references.
+
+* Analytics.
+
+* Notifications.
+
+* Deep links.
+
+* Media URLs.
+
+* Ownership and visibility records.
+
+Map each item to the appropriate canonical domain.
+
+Do not migrate publication metadata into media fields or media-processing data into social engagement fields.
+
+### 6.2 Preserve existing identities
+
+Where possible, preserve the existing video ID as the canonical post ID when no conflicting post exists.
+
+This minimizes broken links, existing interaction references and migration complexity.
+
+If an ID conflict exists, establish a deterministic mapping and maintain backwards compatibility.
+
+Preserve:
+
+* Existing video publications.
+
+* Creator ownership.
+
+* Published timestamps.
+
+* Visibility.
+
+* Media URLs and playback references.
+
+* Existing engagement.
+
+* Existing comments.
+
+* Saved-video relationships.
+
+* Valid monetary transaction references.
+
+* Existing deep links.
+
+Never charge a user again, pay a creator twice, duplicate a gift or duplicate an interaction because of migration.
+
+### 6.3 Migration safety
+
+Implement migration as a controlled, idempotent, resumable process.
+
+Required:
+
+* Dry-run mode.
+
+* Migration checkpoints.
+
+* Deterministic document mapping.
+
+* Bounded batches.
+
+* Retry handling.
+
+* Duplicate detection.
+
+* Conflict detection.
+
+* Integrity verification.
+
+* Detailed migration logs.
+
+* Before-and-after counts.
+
+* Orphan detection.
+
+* Rollback or recovery procedure.
+
+Do not silently overwrite a conflicting post.
+
+Do not perform destructive cleanup during the first migration.
+
+### 6.4 Retire legacy architecture only when safe
+
+After all canonical readers and writers have been migrated:
+
+* Verify no active feature still depends on video documents as social publications.
+
+* Verify Mux processing still works.
+
+* Verify all old links resolve.
+
+* Verify all interactions still resolve.
+
+* Verify all monetary references remain valid.
+
+* Verify all moderation and privacy rules work.
+
+* Verify all migration counts and integrity checks pass.
+
+* Remove obsolete code and tests only after identifying and replacing their required coverage.
+
+* Retain compatibility or archival data only where justified by real dependencies or retention requirements.
+
+No permanent dual-write architecture.
+
+No indefinite parallel reads that make two collections competing authorities.
+
+### 7\. CONSOLIDATE VIDEO ENGAGEMENT
+
+The existing implementation must be examined carefully because the video-specific backend currently has its own like, save, share, view, tip and pay-per-view operations.
+
+Move social engagement ownership to the canonical post architecture.
+
+### 7.1 Likes and reactions
+
+Use one canonical engagement system.
+
+Requirements:
+
+* Like and unlike.
+
+* Correct viewer-specific state.
+
+* Correct aggregate counts.
+
+* Idempotent operations where applicable.
+
+* Optimistic UI with server-confirmed reconciliation.
+
+* Rollback on failure.
+
+* Rate limits.
+
+* Abuse protection.
+
+* Privacy enforcement.
+
+A video shown in Home and the same video shown in Sparks must have identical like state.
+
+Liking it in one place must immediately be reflected everywhere.
+
+Do not maintain separate like records for a post and its video media asset.
+
+### 7.2 Saves and collections
+
+Use existing saved-content functionality.
+
+Support:
+
+* Save.
+
+* Remove save.
+
+* Saved-video display.
+
+* Collections where already supported.
+
+* Correct owner/viewer authorization.
+
+* Cross-surface synchronization.
+
+Do not let Zustand's local `watchLater` array become the authoritative saved-content database.
+
+Use it as a local presentation or cache where appropriate.
+
+### 7.3 Comments and replies
+
+Keep the existing canonical comments infrastructure.
+
+Comments must target the canonical `postId`.
+
+Preserve:
+
+* Nested replies.
+
+* Reactions.
+
+* Mentions.
+
+* Pagination.
+
+* Moderation.
+
+* Block and mute filtering.
+
+* Notifications.
+
+* Editing.
+
+* Deletion.
+
+* Pinned comments where supported.
+
+Do not create video-specific comments.
+
+### 7.4 Sharing
+
+One canonical sharing operation must track actual shares.
+
+Support:
+
+* Native sharing.
+
+* Internal Arvdoul sharing.
+
+* Copy link.
+
+* External destinations.
+
+* Correct link previews.
+
+* Share attribution.
+
+Do not count a share merely because someone opened the share sheet.
+
+Preserve the distinction between an attempted share and a completed share where the platform can determine it.
+
+### 7.5 Views
+
+Do not record view counts from arbitrary screen mounts or navigation events.
+
+Define canonical view qualification and watch-event rules.
+
+Distinguish:
+
+* Feed impression.
+
+* Playback start.
+
+* Qualified view.
+
+* Watch duration.
+
+* Completion.
+
+* Replay.
+
+* Abandonment.
+
+Use actual active playback measurement rather than simply measuring elapsed wall-clock time.
+
+Investigate and correct the existing client/server mismatch:
+
+```js
+recordVideoView(videoId, { duration: seconds });
+```
+
+versus:
+
+```js
+const { videoId, watchDuration } = data;
+```
+
+The canonical post must receive the appropriate server-authoritative analytics updates.
+
+### 8\. CONSOLIDATE FINANCIAL AND CREATOR MONETIZATION
+
+Use the existing central monetization architecture.
+
+The video backend's `transferCoinsInternal()` must be assessed and removed or refactored if it duplicates financial operations.
+
+Do not delete it before migrating and testing its PPV and tipping callers.
+
+Every financial operation must ultimately use the same authoritative ledger and balance ownership.
+
+### 8.1 Gifts and tips
+
+Integrate:
+
+* Video gifts.
+
+* Creator tips.
+
+* Creator earnings.
+
+* Gift history.
+
+* Sender history.
+
+* Recipient notifications.
+
+* Relevant refunds and reversals.
+
+Use server-authoritative transactions.
+
+Requirements:
+
+* Idempotency.
+
+* Integer Coin validation.
+
+* Sufficient-balance validation.
+
+* Fraud limits.
+
+* Self-gifting protection.
+
+* Block/privacy authorization.
+
+* Ownership validation.
+
+* Atomic debit and credit.
+
+* Ledger consistency.
+
+* Correct creator earnings attribution.
+
+The client must never create Coins, authorize earnings or determine the final balance.
+
+Do not optimistically announce a successful financial transaction before the server confirms it.
+
+### 8.2 Pay-per-view
+
+Inspect the existing pay-per-view functionality before deciding whether to retain it.
+
+If retained:
+
+* Use the central monetary transaction architecture.
+
+* Keep one authoritative purchase entitlement.
+
+* Enforce playback authorization.
+
+* Handle retries and duplicate purchases.
+
+* Preserve creator revenue attribution.
+
+* Preserve existing purchase references during migration.
+
+Do not implement another payment or purchase system.
+
+### 8.3 Creator Dashboard
+
+Integrate Sparks performance and earnings into the existing Creator Dashboard.
+
+Do not build another independent Creator Dashboard.
+
+Creators should be able to manage their video publications and understand their genuine performance and earnings.
+
+### 9\. SPARKS PROMOTIONS AND ADVERTISING
+
+Use the existing monetization and advertising infrastructure.
+
+The repository already has sponsored posts, boosted posts, Coins-based post promotion and ad retrieval.
+
+Extend them to support eligible video publications.
+
+Do not create a separate Sparks financial system or an isolated ad-management service.
+
+Keep these distribution types distinct:
+
+| Content type          | Meaning                                 | Required disclosure            |
+| --------------------- | --------------------------------------- | ------------------------------ |
+| Organic Spark         | Normal distribution                     | No paid label                  |
+| Promoted Spark        | Creator paid for increased distribution | Clearly label paid promotion   |
+| Sponsored Spark       | Paid creator/brand partnership          | Clearly identify sponsorship   |
+| Arvdoul advertisement | Platform-managed campaign               | Clearly identify advertisement |
+
+### 9.1 Promotions
+
+A creator must be able to promote an eligible canonical video publication using the existing boost infrastructure.
+
+Requirements:
+
+* Ownership.
+
+* Eligibility.
+
+* Audience targeting.
+
+* Campaign duration.
+
+* Coin cost.
+
+* Budget validation.
+
+* Campaign status.
+
+* Expiration.
+
+* Billing.
+
+* Impression tracking.
+
+* Click tracking.
+
+* Reach reporting.
+
+* Fraud prevention.
+
+* Campaign history.
+
+* Cancellation and refund rules where applicable.
+
+A video boost must resolve to the canonical `postId`.
+
+Do not create `boosted_videos` if the existing `boosted_posts` domain can correctly handle the publication.
+
+### 9.2 Sponsored Sparks
+
+Support eligible sponsored video publications through the existing campaign architecture.
+
+Preserve:
+
+* Advertiser identity.
+
+* Creator partnership information.
+
+* Campaign budget.
+
+* Campaign schedule.
+
+* Paid disclosures.
+
+* Eligibility.
+
+* Targeting.
+
+* Impression tracking.
+
+* Conversion attribution.
+
+* Billing.
+
+* Campaign analytics.
+
+### 9.3 Arvdoul advertisements
+
+Extend the existing ad retrieval architecture to support video-feed placement.
+
+Ensure an advertisement intended for Sparks has the correct video creative and rendering contract.
+
+The existing generic feed monetization insertion must not accidentally remove advertisements when video filtering is applied.
+
+Do not fetch a mixed feed, inject advertisements and then discard legitimate video ad entries through an inappropriate video-only filter.
+
+The Sparks distribution pipeline must preserve valid video ad inventory.
+
+Enforce reasonable frequency caps, campaign budgets and user eligibility.
+
+Paid distribution must never masquerade as organic ranking.
+
+### 10\. BUILD THE COMPLETE SPARKS PRODUCT EXPERIENCE
+
+Sparks must feel like a native Arvdoul experience.
+
+It must not look like a copied TikTok, Instagram Reels or generic video template.
+
+### 10.1 Main Sparks viewer
+
+Build a premium immersive vertical experience.
+
+Core presentation:
+
+* One primary active video.
+
+* Full-height mobile-first playback.
+
+* Vertical navigation.
+
+* Smooth transitions.
+
+* Correct safe-area handling.
+
+* Readable creator information.
+
+* Caption and hashtag information.
+
+* Audio attribution.
+
+* Engagement actions.
+
+* Contextual controls.
+
+* Proper loading and failure states.
+
+Use the existing video and profile data contracts.
+
+Do not create fake creators, engagement counts, videos or media URLs.
+
+### 10.2 Feed channels
+
+Provide:
+
+For You
+
+Personalized video discovery using real signals and the existing feed infrastructure.
+
+Following
+
+Videos from creators the viewer follows.
+
+Friends
+
+Videos from eligible friends, using Arvdoul's actual social graph definitions.
+
+Do not treat friends as another name for followers.
+
+Inspect the relationship service and its rules before defining friend eligibility.
+
+### 10.3 Viewer layout
+
+The layout should have deliberate visual hierarchy.
+
+Top region
+
+* Feed channel selector.
+
+* Search entry point.
+
+* Relevant creation entry point.
+
+* Additional compact controls where justified.
+
+Right-side interaction rail
+
+* Creator avatar and follow action.
+
+* Like.
+
+* Comments.
+
+* Gifts.
+
+* Share.
+
+* Save.
+
+* More actions.
+
+Lower-left information region
+
+* Creator identity.
+
+* Verification where applicable.
+
+* Caption.
+
+* Hashtags.
+
+* Audio or original sound attribution.
+
+* Sponsored or promoted disclosure.
+
+* Relevant contextual information.
+
+Playback region
+
+* Video progress.
+
+* Playback state.
+
+* Mute/unmute.
+
+* Captions.
+
+* Quality controls where appropriate.
+
+Do not overload the viewer with every possible feature.
+
+Place secondary functions in contextual sheets and menus.
+
+Do not create a second conventional app header or duplicate navigation bars.
+
+Respect the existing Arvdoul `MainLayout` and navigation contracts. Determine which navigation elements should be visible on this immersive route and implement the correct shell behaviour.
+
+### 10.4 Interaction and gestures
+
+Implement and test:
+
+| Interaction         | Expected behaviour                      |
+| ------------------- | --------------------------------------- |
+| Single tap          | Pause/play                              |
+| Double tap          | Like and display the reaction animation |
+| Vertical swipe up   | Next Spark                              |
+| Vertical swipe down | Previous Spark                          |
+| Long press          | Contextual viewing controls             |
+| Mute control        | Toggle sound                            |
+| Captions control    | Toggle available captions               |
+| Creator avatar      | Open canonical profile                  |
+| Creator follow      | Use existing social graph operation     |
+| Comment             | Open shared comment interface           |
+| Gift                | Open shared gifting interface           |
+| Share               | Open the canonical share flow           |
+| Save                | Use canonical saved-content operation   |
+| More                | Open reporting and content options      |
+
+Gesture handlers must not interfere with:
+
+* Buttons.
+
+* Sliders.
+
+* Comment input.
+
+* Text selection.
+
+* Accessibility actions.
+
+* System back navigation.
+
+* Browser navigation.
+
+Avoid double-tap race conditions and duplicate likes.
+
+Provide accessible alternatives for gestures.
+
+### 10.5 Comments and contextual sheets
+
+Reuse existing components and service contracts wherever possible.
+
+Implement proper presentation for:
+
+* Comments.
+
+* Nested replies.
+
+* Share sheet.
+
+* Gift modal.
+
+* Report sheet.
+
+* Creator actions.
+
+* Audio information.
+
+* Captions.
+
+* Video settings.
+
+Do not introduce separate modal systems for the same business operation.
+
+### 10.6 Discovery and related content
+
+Integrate:
+
+* Hashtags.
+
+* Audio and sounds.
+
+* Creator discovery.
+
+* Trending video topics.
+
+* Search.
+
+* Challenges.
+
+* Duet.
+
+* Stitch.
+
+* Remixing and collaboration where the existing infrastructure supports it.
+
+Use existing sound, search, collaboration and video-editor infrastructure.
+
+Do not add a separate search engine or social graph for Sparks.
+
+### 11\. SPARKS PERSONALIZATION AND RECOMMENDATION SYSTEM
+
+Extend the existing `feedService`.
+
+Do not create a competing feed engine.
+
+Implement video-aware source selection and ranking while preserving the established generic feed architecture.
+
+### 11.1 Recommendation signals
+
+Use genuine, permission-appropriate signals:
+
+* User interests.
+
+* Languages.
+
+* Followed creators.
+
+* Friends.
+
+* Video watch duration.
+
+* Completion.
+
+* Replay.
+
+* Likes.
+
+* Comments.
+
+* Saves.
+
+* Shares.
+
+* Audio interests.
+
+* Topic interests.
+
+* Explicit Not Interested feedback.
+
+* Hidden creators.
+
+* Muted accounts.
+
+* Content freshness.
+
+* Creator diversity.
+
+* Content quality.
+
+* New creator exploration.
+
+Do not make popularity alone the ranking algorithm.
+
+Do not repeatedly recommend the same creators or nearly identical videos.
+
+### 11.2 Negative feedback
+
+Support:
+
+* Not Interested.
+
+* Hide creator.
+
+* Mute creator.
+
+* Block account.
+
+* Report video.
+
+* Hide topic where supported.
+
+Apply explicit negative feedback promptly.
+
+Blocking must suppress content in both directions according to Arvdoul's existing social graph rules.
+
+A privacy or hidden-author lookup failure must not silently cause protected content to become eligible.
+
+Use safe, server-enforced feed eligibility.
+
+### 11.3 Cold-start behaviour
+
+New users and new creators must not receive an empty or permanently repetitive feed.
+
+Use available locale, declared interests, content quality, freshness and controlled exploration.
+
+Do not require existing watch history to discover Sparks.
+
+### 11.4 Feed pagination
+
+Correctly preserve the existing feed engine's pagination contract.
+
+Do not convert a generic feed cursor into an unrelated `videos/{id}` cursor.
+
+Do not repeatedly load the first page.
+
+Do not lose feed-source pagination state when multiple feeds are merged.
+
+Implement:
+
+* Deduplication.
+
+* Stable cursors.
+
+* Refresh.
+
+* Retry.
+
+* Empty states.
+
+* Loading more.
+
+* Background refresh.
+
+* Feed position restoration.
+
+### 11.5 AI constraints
+
+Do not introduce generative AI into Arvdoul's core Sparks experience.
+
+Use the existing deterministic ranking, rules, moderation and analytics architecture unless an explicitly approved existing platform capability provides a justified reason otherwise.
+
+Do not add an unnecessary AI dependency or new model costs.
+
+### 12\. HOME, PROFILE, SEARCH AND NOTIFICATION INTEGRATION
+
+Sparks is part of the Arvdoul content ecosystem.
+
+It must not become an isolated feature.
+
+### Home
+
+When a user opens a video from Home:
+
+* Open the appropriate immersive playback experience.
+
+* Preserve the canonical post ID.
+
+* Preserve the viewer context.
+
+* Restore the Home feed position when returning.
+
+* Keep likes, saves and comments synchronized.
+
+* Apply the same privacy and media authorization.
+
+### Profiles
+
+Use the existing profile system.
+
+Creator profiles must show eligible video publications through the existing profile content architecture.
+
+Maintain:
+
+* Public visibility.
+
+* Private visibility.
+
+* Owner-only visibility.
+
+* Audience restrictions.
+
+* Saved-content privacy.
+
+* Creator presentation.
+
+* Existing profile-level distinctions.
+
+Do not create a second creator profile or another video profile tab system.
+
+### Search and Explore
+
+Integrate video results with the existing search and discovery infrastructure.
+
+Opening a search result must resolve to the canonical post.
+
+Preserve correct authorship, availability and visibility.
+
+### Notifications
+
+Use existing notification types and writers.
+
+Support relevant actions such as:
+
+* Likes.
+
+* Comments.
+
+* Replies.
+
+* Mentions.
+
+* Follows.
+
+* Gifts.
+
+* Creator earnings events where appropriate.
+
+* Sponsored campaign events where appropriate.
+
+* Collaboration activity.
+
+Notifications must resolve to canonical post IDs.
+
+Do not introduce duplicate notifications when one event is processed more than once.
+
+### 13\. CREATOR ANALYTICS — REAL DATA ONLY
+
+Extend the existing analytics architecture and Creator Dashboard.
+
+Do not build another analytics database or another dashboard service.
+
+Capture appropriate server-authoritative events:
+
+* Impressions.
+
+* Qualified views.
+
+* Playback starts.
+
+* Watch duration.
+
+* Completion.
+
+* Replays.
+
+* Abandonment.
+
+* Likes.
+
+* Comments.
+
+* Shares.
+
+* Saves.
+
+* Profile visits.
+
+* Follows attributed to content.
+
+* Gifts.
+
+* Tips.
+
+* Earnings.
+
+* Promotion results.
+
+* Sponsored campaign results.
+
+* Ad impressions.
+
+* Ad clicks.
+
+* Conversions where measurable.
+
+### Analytics requirements
+
+Creators should see genuine:
+
+* Total video views.
+
+* Qualified views.
+
+* Watch time.
+
+* Average watch duration.
+
+* Completion rate.
+
+* Retention.
+
+* Replay rate.
+
+* Engagement.
+
+* Audience trends.
+
+* Creator growth.
+
+* Video performance comparison.
+
+* Coin earnings.
+
+* Gift earnings.
+
+* Promotional performance.
+
+* Sponsored-content performance where authorized.
+
+Distinguish unavailable metrics from measured zero.
+
+Do not fabricate data to make a dashboard look complete.
+
+### Event ingestion
+
+Use a bounded, secure analytics ingestion mechanism.
+
+Do not create a Firestore write every second of playback.
+
+Use event batching, rate limits, deduplication, server timestamps and suitable aggregate read models.
+
+Maintain clear separation between:
+
+* Organic reach.
+
+* Paid reach.
+
+* Sponsored impressions.
+
+* Platform-ad impressions.
+
+* Creator earnings.
+
+* Platform revenue.
+
+Advertising reports must be auditable and must not inflate organic performance.
+
+### 14\. PERFORMANCE, LOW-END DEVICES AND NETWORK RESILIENCE
+
+Arvdoul must remain usable on lower-end Android devices and unreliable mobile networks.
+
+### Playback
+
+Implement:
+
+* Adaptive streaming.
+
+* Appropriate startup quality.
+
+* Data Saver mode.
+
+* Playback settings integration.
+
+* Efficient poster loading.
+
+* Bounded preloading.
+
+* Proper media cleanup.
+
+* Smooth transitions.
+
+* Recovery from playback failure.
+
+Only the active video and a small, bounded number of adjacent videos should consume significant media resources.
+
+Release detached video elements, network buffers and object URLs when no longer needed.
+
+Do not preload an entire feed.
+
+Do not keep unlimited video buffers in memory.
+
+### Offline behaviour
+
+Support:
+
+* Cached feed metadata.
+
+* Cached thumbnails.
+
+* Draft recovery.
+
+* Upload retry.
+
+* Cancelled uploads.
+
+* Network failure feedback.
+
+* Feed position restoration.
+
+* Appropriate interaction retry.
+
+Do not queue financial transactions in a way that can result in duplicate debits or credits.
+
+Financial operations must remain server-authoritative.
+
+### Cost control
+
+Optimize:
+
+* Firestore reads.
+
+* Pagination.
+
+* Aggregate counters.
+
+* Feed caching.
+
+* Mux playback delivery.
+
+* Video rendition selection.
+
+* Background jobs.
+
+* Analytics writes.
+
+* Advertisement prefetching.
+
+* Media retention and cleanup.
+
+Do not reduce video quality indiscriminately to reduce infrastructure cost.
+
+### 15\. SECURITY AND MODERATION
+
+Inspect and update Firestore rules, Storage rules and Cloud Functions together.
+
+Never treat client-side filtering as authorization.
+
+Required protections:
+
+* Authenticated media upload.
+
+* Upload ownership validation.
+
+* Signed playback for restricted media.
+
+* Server-side media authorization.
+
+* Correct private/follower/friend visibility.
+
+* Both-direction block enforcement.
+
+* Mute and restriction enforcement.
+
+* Admin authorization.
+
+* Callable rate limiting.
+
+* Idempotent operations.
+
+* Webhook signature verification.
+
+* Webhook replay protection.
+
+* Moderation enforcement before publication.
+
+* Download permission enforcement.
+
+* Reporting and appeal support where present.
+
+* Safe deletion.
+
+* Data retention.
+
+* Abuse prevention.
+
+Critical existing issue to resolve: inspect the Mux configuration that creates public playback policies and the fallback that returns unsigned playback URLs when signed URLs are disabled.
+
+Private or otherwise restricted media must not become publicly accessible simply because a user possesses its media URL.
+
+Signed playback and authorization must be enforced consistently.
+
+Do not make every Mux asset public by default.
+
+Ensure the webhook can update only the media asset and publication it is authorized to process.
+
+Ensure video removal propagates to all relevant distribution surfaces without destroying unrelated shared media.
+
+### 16\. CONSOLIDATION AND REMOVAL — NO DUPLICATE LOGIC
+
+You are explicitly required to remove obsolete code where safe.
+
+However, deletion must be evidence-based, not based on filenames or assumptions.
+
+### 16.1 Remove or consolidate obsolete paths
+
+Assess and eliminate duplicated responsibilities across:
+
+* `ReelsScreen`.
+
+* `VideosScreen`.
+
+* `VideoFeed`.
+
+* `VideoCard`.
+
+* `VideoDetailScreen`.
+
+* `videoStore`.
+
+* `videoService`.
+
+* `functions/video.js`.
+
+* The canonical post service.
+
+* Duplicate engagement operations.
+
+* Duplicate video publishing operations.
+
+* Duplicate Coin transfer operations.
+
+* Duplicate media processing.
+
+* Duplicate analytics writers.
+
+Do not keep two competing implementations just because both currently render.
+
+### 16.2 Viewer consolidation
+
+Establish one shared playback and viewer architecture.
+
+The immersive Sparks screen should be the primary vertical video experience.
+
+The video browsing screen may remain as a separate discovery/grid surface if it serves a distinct purpose.
+
+Video detail deep links must continue working.
+
+Avoid three separate implementations of playback, playback state and action handlers.
+
+Use reusable components and hooks with explicit ownership.
+
+### 16.3 Store consolidation
+
+Inspect every consumer of `videoStore`.
+
+If the store duplicates feed state owned elsewhere, remove or simplify the duplicate state.
+
+Use the store for appropriate client-side playback state and preferences, not a second server-data authority.
+
+Do not delete functionality used by video editing, saved content or other features.
+
+### 16.4 Service consolidation
+
+There must not be two services independently owning:
+
+* Video publication.
+
+* Likes.
+
+* Saves.
+
+* Comments.
+
+* Financial transfers.
+
+* Video analytics.
+
+* Promotion.
+
+* Video visibility.
+
+Use existing canonical services, extending their APIs where necessary.
+
+### 16.5 Backend cleanup
+
+Inspect every `functions/video.js` export and its callers.
+
+Migrate required operations before removing obsolete functions.
+
+Check `functions/index.js` carefully: it merges Cloud Function exports from feature modules.
+
+Ensure retained functions are deployed and obsolete functions are deliberately retired.
+
+Do not accidentally remove required callable exports or scheduled jobs.
+
+Do not leave duplicate triggers processing the same event.
+
+### 16.6 Dead files
+
+Before deleting any file:
+
+* Search all imports.
+
+* Search all dynamic imports.
+
+* Search route references.
+
+* Search tests.
+
+* Search backend exports.
+
+* Search feature-flag references.
+
+* Search runtime event references.
+
+* Verify that the actual feature no longer depends on it.
+
+Remove genuinely dead files, obsolete adapters and redundant implementations.
+
+Do not preserve redundant architecture merely to avoid deletion.
+
+Do not delete files that provide unique functionality simply because another component has a similar name.
+
+### 17\. ARVDOUL VISUAL IDENTITY — STRICT DESIGN REQUIREMENT
+
+Use the actual existing Arvdoul design system.
+
+Do not invent a different visual identity for Sparks.
+
+Do not create a generic TikTok clone with Arvdoul branding added afterward.
+
+### 17.1 Established design tokens
+
+Core surfaces
+
+### Dark
+
+#03071B
+
+### Light
+
+#F6F8FC
+
+Arvdoul gradient
+
+#8B1EF3 → #4431F7 → #055BFB
+
+Glows
+
+#C82BFF · #0088FF
+
+Semantic colours
+
+Success — #10B981
+
+Error — #EF4444
+
+Warning — #F59E0B
+
+Use the actual design-token exports rather than hardcoding new token copies.
+
+Existing Arvdoul surfaces include:
+
+* Glassmorphism.
+
+* Premium liquid-glass treatment.
+
+* Frosted translucent surfaces.
+
+* Controlled gradients.
+
+* Subtle glows.
+
+* Layered depth.
+
+* Refined borders.
+
+* Smooth transitions.
+
+* Consistent light and dark themes.
+
+### 17.2 Sparks visual requirements
+
+Design a distinctive immersive viewing experience featuring:
+
+* Full-bleed media.
+
+* Carefully controlled glass overlays.
+
+* Premium translucent action surfaces where appropriate.
+
+* Consistent brand gradient accents.
+
+* Sophisticated typography.
+
+* Strong caption readability.
+
+* Refined icon treatment.
+
+* Elegant creator identity presentation.
+
+* Smooth gesture feedback.
+
+* Subtle, purposeful motion.
+
+* Proper light/dark treatment.
+
+Use existing Arvdoul logo components.
+
+Use the existing icon library.
+
+Do not use emojis as substitutes for interface icons.
+
+Avoid:
+
+* Generic purple-and-orange styling.
+
+* Unnecessary glowing borders around every control.
+
+* Excessive glass layers that obscure video.
+
+* Oversized UI elements.
+
+* Cluttered control rails.
+
+* Inconsistent corner radii.
+
+* Arbitrary colours.
+
+* Fake 3D effects.
+
+* Duplicate headers and navigation.
+
+* Design-token duplication.
+
+The result must look and behave as an Arvdoul feature.
+
+### 17.3 Responsive behaviour
+
+Implement and verify:
+
+* Small Android screens.
+
+* Large Android screens.
+
+* Tablets.
+
+* Desktop.
+
+* Portrait.
+
+* Landscape.
+
+* Safe areas.
+
+* Keyboard and accessibility navigation.
+
+Do not assume that a desktop 430px video container is the correct presentation for all screen sizes.
+
+### 18\. TESTING — REQUIRED BEFORE COMPLETION
+
+Do not declare Sparks complete because the page renders.
+
+Test the entire integrated product.
+
+### 18.1 Architecture tests
+
+Verify:
+
+* A video publication creates one canonical post.
+
+* A post is not duplicated in a video publication collection.
+
+* Every video media asset references the correct canonical publication.
+
+* Mux webhooks update the correct media asset.
+
+* Publishing works after processing.
+
+* Failed uploads can be retried.
+
+* Duplicate webhooks do not duplicate state transitions.
+
+* Old video links continue resolving.
+
+* Migration is idempotent.
+
+* No financial records are duplicated.
+
+### 18.2 Engagement tests
+
+Verify:
+
+* Like and unlike.
+
+* Viewer-specific like state.
+
+* Cross-surface reaction consistency.
+
+* Save and unsave.
+
+* Collections.
+
+* Comments.
+
+* Replies.
+
+* Comment reactions.
+
+* Share attribution.
+
+* View qualification.
+
+* Watch duration.
+
+* Creator follow.
+
+* Friend eligibility.
+
+* Block and mute filtering.
+
+* Report submission.
+
+### 18.3 Financial tests
+
+Verify:
+
+* Gift purchase.
+
+* Gift receipt.
+
+* Tips.
+
+* Coin deductions.
+
+* Coin credits.
+
+* Transaction history.
+
+* Idempotent retries.
+
+* Insufficient balance.
+
+* Self-gifting rejection.
+
+* Restricted recipients.
+
+* Double-submission protection.
+
+* Creator revenue attribution.
+
+* Boost campaign purchase.
+
+* Promotion expiration.
+
+* Withdrawal and payout references remain intact.
+
+Never use fabricated balances or test shortcuts that bypass financial validation.
+
+### 18.4 Feed tests
+
+Verify:
+
+* For You.
+
+* Following.
+
+* Friends.
+
+* Pagination.
+
+* Refresh.
+
+* Feed position restoration.
+
+* Cold start.
+
+* New creator distribution.
+
+* Not Interested.
+
+* Hidden creators.
+
+* Blocked creators.
+
+* Muted creators.
+
+* Private publications.
+
+* Sponsored Sparks.
+
+* Promoted Sparks.
+
+* Platform advertisements.
+
+* Correct ad frequency.
+
+* No duplicate publications.
+
+* No advertisements disappearing during video filtering.
+
+### 18.5 Security tests
+
+Use the Firebase Emulator or the established project test infrastructure.
+
+Verify:
+
+* Unauthorized media access.
+
+* Private publication access.
+
+* Followers-only access.
+
+* Friend-only access where applicable.
+
+* Blocked users.
+
+* Invalid upload ownership.
+
+* Invalid Mux webhook signatures.
+
+* Webhook replay attempts.
+
+* Unauthorized media deletion.
+
+* Unauthorized financial actions.
+
+* Cross-user wallet access.
+
+* Rate limits.
+
+* Admin-only actions.
+
+### 18.6 UI tests
+
+Verify:
+
+* Playback.
+
+* Autoplay preference.
+
+* Data Saver.
+
+* Mute/unmute.
+
+* Captions.
+
+* Gestures.
+
+* Buttons.
+
+* Comments.
+
+* Gifts.
+
+* Sharing.
+
+* Save.
+
+* Reporting.
+
+* Loading.
+
+* Empty.
+
+* Error.
+
+* Retry.
+
+* Offline.
+
+* Slow network.
+
+* Low-end device behaviour.
+
+* Light theme.
+
+* Dark theme.
+
+* Responsive behaviour.
+
+* Accessibility.
+
+### 18.7 Regression tests
+
+Retest all relevant existing systems:
+
+* Authentication.
+
+* Home.
+
+* Create Post.
+
+* Profiles.
+
+* Stories/Vibes.
+
+* Comments.
+
+* Messaging.
+
+* Notifications.
+
+* Coins.
+
+* Wallet.
+
+* Creator Dashboard.
+
+* Search.
+
+* Feed ranking.
+
+* Moderation.
+
+* Analytics.
+
+* Admin.
+
+* LIVE.
+
+* Collaboration.
+
+Do not break the wider Arvdoul platform while consolidating video architecture.
+
+### 19\. IMPLEMENTATION ORDER
+
+Complete this work in the following sequence. Do not skip architectural dependencies.
+
+| Phase | Work                       | Completion requirement                                                 |
+| ----- | -------------------------- | ---------------------------------------------------------------------- |
+| 1     | Repository investigation   | All relevant code and dependencies understood                          |
+| 2     | Source-of-truth mapping    | Every domain has one authoritative owner                               |
+| 3     | Architecture consolidation | Canonical post and media ownership established                         |
+| 4     | Legacy data migration      | Existing video publications and references preserved                   |
+| 5     | Publishing integration     | Create Post is the canonical video publishing entry                    |
+| 6     | Processing integration     | Mux updates the correct media asset and publication                    |
+| 7     | Engagement consolidation   | All surfaces use the same engagement authority                         |
+| 8     | Feed integration           | For You, Following and Friends operate correctly                       |
+| 9     | Sparks viewer              | Complete premium immersive experience                                  |
+| 10    | Monetization integration   | Gifts, earnings, boosts and advertisements use existing infrastructure |
+| 11    | Analytics integration      | Real watch, engagement and revenue metrics                             |
+| 12    | Platform integration       | Home, profiles, search, Explore and notifications                      |
+| 13    | Security and performance   | Authorization, privacy, caching and device performance                 |
+| 14    | Cleanup                    | Obsolete implementations safely removed                                |
+| 15    | Verification               | Tests, build, lint and regression checks pass                          |
+
+Do not build new UI on top of an unresolved content identity architecture.
+
+Do not perform irreversible data cleanup before completing migration verification.
+
+### 20\. STRICT ACCEPTANCE CRITERIA
+
+The implementation is not complete until every condition below is satisfied.
+
+### Architecture
+
+* `posts/{postId}` is the single authoritative social publication.
+
+* Video publications are not duplicated under an independent social-content identity.
+
+* Media assets have a clear, single processing authority.
+
+* Every service has a defined ownership boundary.
+
+* No duplicate business logic remains for the same domain.
+
+* Legacy publications and links remain valid.
+
+* Existing interactions and financial records remain consistent.
+
+* No permanent dual-write architecture remains.
+
+* All Cloud Function exports are correctly registered and deployed through the project's established process.
+
+### Product
+
+* Sparks is a complete immersive vertical video experience.
+
+* For You, Following and Friends work correctly.
+
+* Video publishing uses Create Post.
+
+* Existing video editing functionality remains available.
+
+* Engagement works consistently across Arvdoul.
+
+* Creator profiles and Home show the same canonical publication.
+
+* Search and notifications resolve the same publication.
+
+* Video gifts and creator earnings work.
+
+* Boosts and sponsored videos work.
+
+* Video advertisements work.
+
+* Creator analytics report actual measured data.
+
+### Quality
+
+* Dark and light themes use Arvdoul's actual design tokens.
+
+* The interface looks native to Arvdoul.
+
+* Playback works on lower-end Android devices.
+
+* Data Saver and offline behaviour work appropriately.
+
+* Privacy and authorization tests pass.
+
+* Migration checks pass.
+
+* No duplicate billing, gifts, interactions or notifications.
+
+* No new regression in existing application features.
+
+* Build passes.
+
+* Lint passes.
+
+* Relevant tests pass.
+
+* Existing failures are clearly distinguished from newly introduced failures.
+
+### 21\. FINAL DELIVERY REQUIREMENTS
+
+After implementation, provide a precise engineering report containing:
+
+* Repository HEAD before and after implementation.
+
+* Files read and systems traced.
+
+* Original architecture discovered.
+
+* Final canonical architecture.
+
+* Source-of-truth ownership table.
+
+* Duplicate implementations identified.
+
+* Duplicate implementations removed or consolidated.
+
+* Files created.
+
+* Files modified.
+
+* Files removed and the evidence supporting each removal.
+
+* Collections and schema changes.
+
+* Migration implementation and verification results.
+
+* Cloud Functions added, changed, retained or retired.
+
+* Security rules and index changes.
+
+* Sparks UI and interaction features completed.
+
+* Home, profile, Create Post, Coins, advertising and analytics integrations.
+
+* Tests executed and exact results.
+
+* Build and lint results.
+
+* Remaining defects or incomplete functionality.
+
+* Any deployment or configuration requirements.
+
+Clearly separate:
+
+* Completed.
+
+* Tested.
+
+* Migrated.
+
+* Not yet deployed.
+
+* Blocked.
+
+* Outstanding.
+
+Do not claim that a feature works simply because code for it exists.
+
+Do not claim successful migration without actual integrity verification.
+
+Do not claim all tests pass if they were not run.
+
+Do not hide unresolved issues behind a successful build.
+
+### FINAL ENGINEERING DIRECTIVE
+
+Treat Arvdoul as one integrated, production-grade platform.
+
+Architecture 1 must become the actual architecture, not another layer placed over the existing duplication.
+
+One canonical publication identity. One media-processing authority. One feed authority. One engagement authority. One social graph. One financial ledger. One advertising and promotion authority. One analytics authority. One notification authority. One moderation authority.
+
+Every screen must consume the appropriate shared systems.
+
+Every write must have an identifiable owner.
+
+Every counter must have an authoritative source.
+
+Every financial transaction must have one authoritative execution path.
+
+Every privacy decision must be enforced consistently.
+
+Every obsolete implementation must be removed when its responsibilities have been safely migrated.
+
+Preserve all functionality that belongs in Arvdoul. Remove duplication, not capabilities.
+
+Do not turn Sparks into a standalone application. Do not create a generic short-video clone. Do not redesign Arvdoul using an unrelated design language.
+
+Build Sparks as an integrated entertainment, discovery, social interaction, creator-economy and advertising experience using Arvdoul's existing liquid-glass design DNA, dark/light themes, brand gradient, premium surfaces, visual hierarchy and interaction language.
+
+Read. Understand. Map. Consolidate. Migrate. Integrate. Implement. Test. Verify.
+
+Do not stop at an audit, a proposal, a mockup or a partially working screen. Complete the implementation without compromising the rest of Arvdoul.

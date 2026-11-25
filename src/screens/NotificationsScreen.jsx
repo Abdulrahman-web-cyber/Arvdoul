@@ -485,6 +485,7 @@ export default function NotificationsScreen() {
             ? `${fn.metadata?.fromUserId || fn.senderId}_${user.uid}`
             : null),
         postId: fn.metadata?.postId || null,
+        videoId: fn.metadata?.videoId || null,
         storyId: fn.metadata?.storyId || null,
         actionUrl: fn.actionUrl || fn.metadata?.actionUrl || null,
         conversationId: fn.metadata?.conversationId || null,
@@ -614,6 +615,14 @@ export default function NotificationsScreen() {
     handleMarkRead(notif.id);
     if (notif.type === 'message' || notif.type === 'group_message' || notif.type === 'story_reply') {
       navigate(notif.conversationId ? `/messages/${notif.conversationId}` : '/messages');
+      return;
+    }
+    if (notif.actionUrl && (String(notif.actionUrl).startsWith('/sparks/') || String(notif.actionUrl).startsWith('/video/'))) {
+      navigate(notif.actionUrl);
+      return;
+    }
+    if (notif.videoId || notif.type?.includes('video') || notif.type?.includes('spark')) {
+      navigate(`/sparks/${notif.postId || notif.videoId || notif.id}`);
       return;
     }
     if (notif.postId) {
@@ -1776,7 +1785,15 @@ export default function NotificationsScreen() {
                                     if (item.type === 'coin_gift') setGiftModal(item);
                                     else if (item.type?.includes('story')) {
                                       navigate('/stories', item.user?.id ? { state: { vibeUserId: item.user.id } } : undefined);
-                                    } else navigate('/reels');
+                                    } else if (item.actionUrl && String(item.actionUrl).startsWith('/sparks/')) {
+                                      navigate(item.actionUrl);
+                                    } else if (item.videoId || item.type?.includes('video') || item.type?.includes('spark')) {
+                                      navigate(`/sparks/${item.postId || item.videoId}`);
+                                    } else if (item.postId) {
+                                      navigate(`/post/${item.postId}`);
+                                    } else {
+                                      navigate('/sparks');
+                                    }
                                   }}
                                   className="w-12 h-12 rounded-xl overflow-hidden ring-1 ring-white/10 cursor-pointer shrink-0 relative group/thumb"
                                 >

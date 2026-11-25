@@ -245,13 +245,11 @@ class UltimateCommentService {
       const docRef = await this.firestoreMethods.addDoc(commentsRef, commentData);
       const commentId = docRef.id;
 
-      // The post-comment counter is a sharded counter on `posts/{postId}`. A
-      // video comment is submitted with the video id as the target (the
-      // `comments` doc carries `postId: <videoId>`), so incrementing here would
-      // create a phantom `posts/{videoId}` counter document that no reader ever
-      // sees — `videos/{id}.stats.comments` is maintained server-side by
-      // `aggregateVideoComments` from the `comments` collection instead (N435).
-      if (options.targetType !== 'video') {
+      // The post-comment counter is a sharded counter on `posts/{postId}`.
+      // Canonical Sparks live on `posts/{postId}` so their comments increment the
+      // post shard directly; only un-migrated legacy `videos/{id}` items pass
+      // `targetType: 'legacy_video'` (which are tallied by `aggregateVideoComments`).
+      if (options.targetType !== 'legacy_video' && options.targetType !== 'video') {
         await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments' });
       }
 

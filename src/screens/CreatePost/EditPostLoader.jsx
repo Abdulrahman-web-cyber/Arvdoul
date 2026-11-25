@@ -1,5 +1,5 @@
 // src/screens/CreatePost/EditPostLoader.jsx
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import * as Icons from 'lucide-react';
 import { useCreatePostState } from './CreatePostContext.jsx';
@@ -57,6 +57,8 @@ export default function EditPostLoader() {
     lastLocationKeyRef.current = handoffKey;
 
     if (file || url) {
+      const exportDuration = Number(location.state?.duration) || 0;
+      const exportSubType = location.state?.subType || 'spark';
       dispatch({
         type: 'SET_MEDIA_ITEMS',
         payload: [
@@ -68,9 +70,23 @@ export default function EditPostLoader() {
             preview: url || '',
             name: title || 'video',
             alt: '',
+            duration: exportDuration,
           },
         ],
       });
+      if (mediaType !== 'photo' && mediaType !== 'audio') {
+        dispatch({
+          type: 'SET_TYPE_DATA',
+          payload: {
+            video: {
+              file: file || null,
+              url: file ? '' : url || '',
+              duration: exportDuration,
+              subType: exportSubType,
+            },
+          },
+        });
+      }
       if (title) dispatch({ type: 'SET_CONTENT', payload: `${title} ` });
       dispatch({
         type: 'SET_POST_TYPE',
@@ -279,7 +295,12 @@ export default function EditPostLoader() {
             video: {
               file: null,
               url: p.video?.url || p.videoUrl || '',
-              duration: p.video?.duration || 0,
+              duration: p.duration || p.video?.duration || 0,
+              subType: p.subType || 'spark',
+              allowDownload: p.allowDownload ?? true,
+              duetEnabled: p.duetEnabled ?? true,
+              stitchEnabled: p.stitchEnabled ?? true,
+              chapters: Array.isArray(p.chapters) ? p.chapters : [],
             },
           },
           draftId: null,

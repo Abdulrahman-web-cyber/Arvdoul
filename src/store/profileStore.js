@@ -1405,6 +1405,33 @@ export const useProfileStore = create(
     },
 
     /**
+     * Adjust optimistic like tally for a single post in the loaded profile grid
+     * and roll the delta into `postsLikesCount` / `profile.likesReceived`.
+     * @param {string} postId
+     * @param {number} delta
+     */
+    adjustPostLikes: (postId, delta) => {
+      if (!postId || !Number.isFinite(Number(delta))) return;
+      const numericDelta = Number(delta);
+      set((state) => {
+        const post = state.posts.find((p) => p && p.id === postId);
+        if (post) {
+          const currentLikes = Number(post.stats?.likes ?? post.likes ?? post.likesCount ?? 0) || 0;
+          const nextLikes = Math.max(0, currentLikes + numericDelta);
+          post.likes = nextLikes;
+          post.likesCount = nextLikes;
+          post.stats = { ...(post.stats || {}), likes: nextLikes };
+        }
+        if (typeof state.postsLikesCount === 'number' && Number.isFinite(state.postsLikesCount)) {
+          state.postsLikesCount = Math.max(0, state.postsLikesCount + numericDelta);
+        }
+        if (state.profile && typeof state.profile.likesReceived === 'number' && Number.isFinite(state.profile.likesReceived)) {
+          state.profile.likesReceived = Math.max(0, state.profile.likesReceived + numericDelta);
+        }
+      });
+    },
+
+    /**
      * Set active tab
      * @param {string} tab - Tab name
      */

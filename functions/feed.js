@@ -494,7 +494,8 @@ exports.getPersonalizedFeed = functions.https.onCall(async (data, context) => {
   const userId = context.auth.uid;
   await checkFeedRateLimit(userId);
 
-  const { feedType = 'for_you', pageSize = 20, lastPostId } = data;
+  const { feedType = 'for_you', pageSize = 20, lastPostId, type = null } = data || {};
+  const allowedType = typeof type === 'string' && ['video', 'post', 'image', 'poll', 'question', 'link'].includes(type) ? type : null;
 
   try {
     let experimentGroup = 'control';
@@ -518,10 +519,58 @@ exports.getPersonalizedFeed = functions.https.onCall(async (data, context) => {
 
     const blockedIds = await resolveHiddenAuthorIds(userId);
 
+    // Friends feed resolves mutual follows (following intersect followers)
+    if (feedType === 'friends') {
+      const [followingSnap, followersSnap] = await Promise.all([
+        db.collection('follows').where('followerId', '==', userId).select('followingId').limit(300).get(),
+        db.collection('follows').where('followingId', '==', userId).select('followerId').limit(300).get(),
+      ]);
+      const followingSet = new Set(followingSnap.docs.map((d) => d.data().followingId));
+      const friendIds = followersSnap.docs
+        .map((d) => d.data().followerId)
+        .filter((fid) => followingSet.has(fid) && !blockedIds.has(fid));
+
+      if (friendIds.length === 0) {
+        return { feed: [], hasMore: false, feedType, experimentGroup, generatedAt: new Date().toISOString(), latencyMs: Date.now() - startTime };
+      }
+
+      const friendPosts = [];
+      for (let i = 0; i < friendIds.length; i += 30) {
+        const chunk = friendIds.slice(i, i + 30);
+        let fq = db.collection('posts')
+          .where('authorId', 'in', chunk)
+          .where('status', '==', 'published')
+          .where('isDeleted', '==', false);
+        if (allowedType) fq = fq.where('type', '==', allowedType);
+        fq = fq.orderBy('createdAt', 'desc').limit(15);
+        const fSnap = await fq.get();
+        fSnap.forEach((doc) => {
+          const d = doc.data();
+          if (['public', 'followers', 'friends', 'connections'].includes(d.visibility || 'public')) {
+            friendPosts.push({ id: doc.id, ...d });
+          }
+        });
+      }
+      friendPosts.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+      const feed = friendPosts.slice(0, pageSize);
+      return {
+        feed,
+        hasMore: friendPosts.length > pageSize,
+        feedType,
+        experimentGroup,
+        generatedAt: new Date().toISOString(),
+        latencyMs: Date.now() - startTime,
+      };
+    }
+
     let query = db.collection('posts')
       .where('status', '==', 'published')
       .where('visibility', '==', 'public')
-      .where('isDeleted', '==', false)
+      .where('isDeleted', '==', false);
+    if (allowedType) {
+      query = query.where('type', '==', allowedType);
+    }
+    query = query
       .orderBy('personalizationScore', 'desc')
       .orderBy('createdAt', 'desc');
 
@@ -541,11 +590,9 @@ exports.getPersonalizedFeed = functions.https.onCall(async (data, context) => {
 
     posts = posts.map(p => {
       if (p.personalizationScore == null) {
-        // Engagement lives under `stats`; the top-level aliases are never
-        // written (same defect class as N433/N444).
         const s = p.stats || {};
         const engagement = (s.likes || 0) + (s.comments || 0) * 2 + (s.shares || 0) * 3;
-        const ageHours = p.createdAt ? (Date.now() - p.createdAt.toDate().getTime())/3600000 : 0;
+        const ageHours = p.createdAt ? (Date.now() - p.createdAt.toDate().getTime()) / 3600000 : 0;
         p.personalizationScore = engagement * Math.exp(-ageHours / 48);
       }
       if (userTopics.size > 0 && p.topics) {
@@ -556,10 +603,14 @@ exports.getPersonalizedFeed = functions.https.onCall(async (data, context) => {
     });
 
     if (experimentGroup === 'exploration_boost') {
-      const exploreSnap = await db.collection('posts')
+      let exploreQ = db.collection('posts')
         .where('status', '==', 'published')
         .where('visibility', '==', 'public')
-        .where('isDeleted', '==', false)
+        .where('isDeleted', '==', false);
+      if (allowedType) {
+        exploreQ = exploreQ.where('type', '==', allowedType);
+      }
+      const exploreSnap = await exploreQ
         .orderBy('createdAt', 'desc')
         .limit(5)
         .get();

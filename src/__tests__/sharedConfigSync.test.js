@@ -14,7 +14,7 @@ const root = process.cwd();
  * copies src/shared/*.cjs into functions/, and these tests are the guardrail
  * that the copy never silently drifts from the canonical source.
  */
-const SHARED_MODULES = ['levelConfig.cjs', 'featureFlagRegistry.cjs'];
+const SHARED_MODULES = ['levelConfig.cjs', 'featureFlagRegistry.cjs', 'videoConfig.cjs'];
 
 describe('shared config single source of truth', () => {
   test.each(SHARED_MODULES)('%s is byte-identical in src/shared and functions', (name) => {

@@ -857,53 +857,101 @@ class UltimateSearchService {
   }
 
   async _firestoreSearchVideos(queryStr, limitCount, cursorSnapshot) {
+    const postsRef = collection(this.firestore, 'posts');
     const videosRef = collection(this.firestore, 'videos');
     const cleanQ = String(queryStr || '').trim().toLowerCase().replace(/^#/, '');
     const tokens = cleanQ.split(/\s+/).filter(t => t.length > 0).slice(0, SEARCH_CONFIG.FIRESTORE_FALLBACK.MAX_TOKENS);
-    let docs = [];
+    let postDocs = [];
+    let legacyDocs = [];
     let lastSnapshot = null;
 
-    // The videos list rule (videoListableByViewer) requires the QUERY to prove a
-    // public shape — rules are not filters — so search must constrain
-    // visibility/status/deletion or every query is denied (an empty result that
-    // looks like "no matches").
     if (tokens.length > 0) {
       try {
-        let tokenQ = firestoreQuery(videosRef, where('isDeleted', '==', false), where('status', '==', 'ready'), where('visibility', '==', 'public'), where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount));
-        if (cursorSnapshot) tokenQ = firestoreQuery(tokenQ, startAfter(cursorSnapshot));
-        const tokenSnap = await getDocs(tokenQ);
-        if (!tokenSnap.empty) {
-          docs = tokenSnap.docs;
-          lastSnapshot = docs[docs.length - 1];
+        let tokenPostQ = firestoreQuery(
+          postsRef,
+          where('authorIsPrivate', '==', false),
+          where('visibility', '==', 'public'),
+          where('status', '==', 'published'),
+          where('isDeleted', '==', false),
+          where('type', '==', 'video'),
+          where('searchTokens', 'array-contains', tokens[0]),
+          firestoreLimit(limitCount)
+        );
+        if (cursorSnapshot) tokenPostQ = firestoreQuery(tokenPostQ, startAfter(cursorSnapshot));
+        const tokenPostSnap = await getDocs(tokenPostQ);
+        if (!tokenPostSnap.empty) {
+          postDocs = tokenPostSnap.docs;
+          lastSnapshot = postDocs[postDocs.length - 1];
         }
       } catch (_e) {
-        logger.debug('[Search] token query failed; falling back to unfiltered page', { error: _e?.message });
+        logger.debug('[Search] canonical video token query note:', { error: _e?.message });
       }
     }
 
-    if (docs.length === 0) {
+    if (postDocs.length === 0) {
       try {
-        let q = firestoreQuery(videosRef, where('isDeleted', '==', false), where('status', '==', 'ready'), where('visibility', '==', 'public'), firestoreLimit(limitCount));
-        if (cursorSnapshot) q = firestoreQuery(q, startAfter(cursorSnapshot));
-        const snap = await getDocs(q);
-        docs = snap.docs;
-        lastSnapshot = docs.length === limitCount ? docs[docs.length - 1] : null;
+        let fallbackPostQ = firestoreQuery(
+          postsRef,
+          where('authorIsPrivate', '==', false),
+          where('visibility', '==', 'public'),
+          where('status', '==', 'published'),
+          where('isDeleted', '==', false),
+          where('type', '==', 'video'),
+          firestoreLimit(limitCount)
+        );
+        if (cursorSnapshot) fallbackPostQ = firestoreQuery(fallbackPostQ, startAfter(cursorSnapshot));
+        const fallbackSnap = await getDocs(fallbackPostQ);
+        postDocs = fallbackSnap.docs;
+        lastSnapshot = postDocs.length === limitCount ? postDocs[postDocs.length - 1] : null;
       } catch (_e) {
-        logger.debug('[Search] fallback page query failed; returning empty', { error: _e?.message });
-        docs = [];
+        logger.debug('[Search] canonical video page query note:', { error: _e?.message });
+        postDocs = [];
       }
     }
 
-    const hits = docs.map(doc => {
-      const data = doc.data();
+    if (postDocs.length < limitCount) {
+      try {
+        const legacyQ = tokens.length > 0
+          ? firestoreQuery(videosRef, where('isDeleted', '==', false), where('status', '==', 'ready'), where('visibility', '==', 'public'), where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount))
+          : firestoreQuery(videosRef, where('isDeleted', '==', false), where('status', '==', 'ready'), where('visibility', '==', 'public'), firestoreLimit(limitCount));
+        const legacySnap = await getDocs(legacyQ);
+        legacyDocs = legacySnap.docs;
+      } catch (_e) {
+        legacyDocs = [];
+      }
+    }
+
+    const seenIds = new Set();
+    const docs = [];
+    for (const d of postDocs) {
+      seenIds.add(d.id);
+      docs.push(d);
+    }
+    for (const d of legacyDocs) {
+      const data = d.data() || {};
+      const canonicalId = data.canonicalPostId || data.postId || d.id;
+      if (!seenIds.has(canonicalId) && !seenIds.has(d.id)) {
+        seenIds.add(canonicalId);
+        docs.push(d);
+      }
+    }
+
+    const hits = docs.map(d => {
+      const data = d.data();
       let score = 0;
-      const text = `${data.title || ''} ${data.description || ''} ${(data.tags || []).join(' ')}`.toLowerCase();
+      const text = `${data.title || ''} ${data.description || data.content || ''} ${(data.tags || data.hashtags || []).join(' ')}`.toLowerCase();
       if (cleanQ && text.includes(cleanQ)) score += 5;
       for (const token of tokens) {
         if (text.includes(token)) score += 1;
       }
       if (tokens.length === 0) score = 1;
-      return { objectID: doc.id, id: doc.id, ...data, _score: score };
+      const canonicalId = data.canonicalPostId || data.postId || d.id;
+      return {
+        objectID: canonicalId,
+        id: canonicalId,
+        ...data,
+        _score: score,
+      };
     });
 
     if (tokens.length > 0) {

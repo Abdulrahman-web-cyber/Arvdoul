@@ -12,10 +12,12 @@ import { featureFlagService } from './featureFlagService.js';
 const FEED_CONFIG = {
   FEED_TYPES: {
     FOLLOWING: 'following',
+    FRIENDS: 'friends',
     FOR_YOU: 'for_you',
     TRENDING: 'trending',
     DISCOVER: 'discover',
     VIDEOS: 'videos',
+    SPARKS: 'sparks',
     AUDIO: 'audio',
     NEARBY: 'nearby',
     PREMIUM: 'premium',
@@ -514,6 +516,72 @@ class UltimateFeedService {
     }
   }
 
+  async _getFriendsFeedEfficient(userId, options = {}) {
+    if (this.offlineMode) return [];
+    const { limit = 20, lastDoc } = options || {};
+    try {
+      const hiddenAuthorsPromise = this._getHiddenAuthorsCached(userId);
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const graph = getSocialGraphService();
+      const [followingRes, followersRes] = await Promise.all([
+        graph.listEdges(userId, 'following', { limit: 120 }).catch(() => ({ ids: [] })),
+        graph.listEdges(userId, 'followers', { limit: 120 }).catch(() => ({ ids: [] })),
+      ]);
+      const followerSet = new Set(Array.isArray(followersRes?.ids) ? followersRes.ids : []);
+      const hiddenAuthors = await hiddenAuthorsPromise;
+      const friendIds = (Array.isArray(followingRes?.ids) ? followingRes.ids : [])
+        .filter((id) => id && followerSet.has(id) && !hiddenAuthors.has(id));
+      if (friendIds.length === 0) return [];
+
+      const posts = [];
+      const chunkSize = 30;
+      const chunks = [];
+      for (let i = 0; i < friendIds.length; i += chunkSize) {
+        chunks.push(friendIds.slice(i, i + chunkSize));
+      }
+      const chunkResults = await Promise.all(
+        chunks.map((chunk) => {
+          const q = this.firestoreMethods.query(
+            this.firestoreMethods.collection(this.firestore, 'posts'),
+            this.firestoreMethods.where('authorId', 'in', chunk),
+            ...this._publicPostFilters(),
+            this.firestoreMethods.orderBy('createdAt', 'desc'),
+            this.firestoreMethods.limit(10)
+          );
+          return this.firestoreMethods.getDocs(q);
+        })
+      );
+      chunkResults.forEach((snap) => {
+        snap.forEach((doc) => {
+          const data = doc.data();
+          if (!hiddenAuthors.has(data.authorId)) {
+            posts.push({
+              id: doc.id,
+              ...data,
+              _source: 'friends',
+              createdAt: data.createdAt?.toDate?.() || new Date(),
+            });
+          }
+        });
+      });
+
+      posts.sort((a, b) => b.createdAt - a.createdAt);
+      let startIndex = 0;
+      if (lastDoc && lastDoc.lastCreatedAt) {
+        const lastDate = new Date(lastDoc.lastCreatedAt);
+        startIndex = posts.findIndex(p => p.createdAt <= lastDate);
+        if (startIndex === -1) startIndex = posts.length;
+      }
+      const paginated = posts.slice(startIndex, startIndex + limit);
+      const nextCursor = paginated.length > 0 ? { lastCreatedAt: paginated[paginated.length - 1].createdAt.toISOString() } : null;
+      paginated._nextCursor = nextCursor;
+      return paginated;
+    } catch (error) {
+      logger.warn('Friends feed source failed', { userId, error: error?.message });
+      return [];
+    }
+  }
+
   async _getForYouFeedFromServer(userId, options) {
     if (this.offlineMode) return [];
     // Directly use paginated client-side query for instant speed
@@ -710,19 +778,34 @@ class UltimateFeedService {
       const { limit = 20 } = options;
       const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      
+
       let snapshot;
       try {
-        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 4)));
+        snapshot = await getDocs(
+          query(
+            postsRef,
+            ...this._publicPostFilters(),
+            where('type', '==', 'video'),
+            orderBy('createdAt', 'desc'),
+            firestoreLimit(limit * 2)
+          )
+        );
       } catch {
-        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 4)));
+        snapshot = await getDocs(
+          query(
+            postsRef,
+            ...this._publicPostFilters(),
+            where('type', '==', 'video'),
+            firestoreLimit(limit * 2)
+          )
+        );
       }
-      
+
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
         if (data.isDeleted === true || hiddenAuthors.has(data.authorId)) return;
-        const isVideo = data.type === 'video' || data.videoUrl || data.mediaType === 'video' || data.media?.some?.(m => m.type === 'video');
+        const isVideo = data.type === 'video' || data.muxPlaybackId || data.videoUrl || data.mediaType === 'video' || data.media?.some?.(m => m.type === 'video');
         if (isVideo) {
           posts.push({
             id: doc.id,
@@ -736,7 +819,7 @@ class UltimateFeedService {
       });
       return posts.slice(0, limit);
     } catch (error) {
-      logger.warn('Discover feed source failed', { userId, error: error?.message });
+      logger.warn('Sparks video feed source failed', { userId, error: error?.message });
       return [];
     }
   }
@@ -1138,6 +1221,10 @@ class UltimateFeedService {
 
     if (feedType === 'following') {
       addSource('following', this._getFollowingFeedEfficient(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.following }));
+    } else if (feedType === 'friends') {
+      addSource('friends', this._getFriendsFeedEfficient(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.friends }));
+    } else if (feedType === 'videos' || feedType === 'sparks') {
+      addSource('videos', this._getVideoFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.videos }));
     } else {
       if (weights.following > 0.1) {
         addSource('following', this._getFollowingFeedEfficient(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.following }));

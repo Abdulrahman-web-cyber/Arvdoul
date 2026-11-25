@@ -50,17 +50,19 @@ describe('video comment counter has a real writer (N435)', () => {
     expect(videoSrc).toMatch(/const comments = stats\.comments \|\| 0;/);
   });
 
-  test('a video comment does not increment the phantom posts/{videoId} counter', () => {
-    // The increment is guarded so only non-video (post) comments touch the
-    // posts counter.
-    expect(commentServiceSrc).toMatch(/if \(options\.targetType !== 'video'\) \{/);
+  test('legacy un-migrated video comments do not increment a phantom posts/{videoId} counter, while canonical Sparks do', () => {
+    // Only legacy un-migrated `videos/{id}` items (`legacy_video` / `video`)
+    // skip the posts shard counter; canonical Sparks live on `posts/{postId}`
+    // and maintain `posts/{postId}` comment shards directly.
+    expect(commentServiceSrc).toMatch(/if \(options\.targetType !== 'legacy_video' && options\.targetType !== 'video'\) \{/);
     expect(commentServiceSrc).toMatch(/countersManager\.increment\(\{ docPath: `posts\/\$\{postId\}`, field: 'comments' \}\)/);
   });
 
-  test('the video comment UI tags its writes as video-targeted', () => {
+  test('the video comment UI routes canonical Sparks to post targetType and legacy videos to legacy_video', () => {
+    expect(videoCommentsSrc).toMatch(/const targetType = video\?\._sourceCollection === 'videos' && !video\?\.canonicalPostId\s*\?\s*'legacy_video'\s*:\s*'post'/);
     const calls = videoCommentsSrc.match(/createComment\(|replyToComment\(/g) || [];
     expect(calls.length).toBeGreaterThanOrEqual(2);
-    const targetTypePasses = videoCommentsSrc.match(/targetType: 'video'/g) || [];
-    expect(targetTypePasses.length).toBe(calls.length);
+    const targetTypePasses = videoCommentsSrc.match(/\btargetType\b/g) || [];
+    expect(targetTypePasses.length).toBeGreaterThanOrEqual(calls.length + 1);
   });
 });

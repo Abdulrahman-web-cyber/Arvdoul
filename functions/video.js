@@ -1,16 +1,19 @@
-// functions/video.js — video processing and delivery
+// functions/video.js — Arvdoul Sparks (Video) processing, playback, engagement, and lifecycle
 //
-// Implemented internals: watermarkVideoInternal, moderateVideoInternal,
-// generateAudioFingerprintInternal, updateViralScoreInternal. The pipeline
-// internals are called in-process (the Mux webhook) and by owner-or-admin /
-// admin-only callables; they are never fetched over HTTP. FFmpeg commands
-// escape their arguments. Mux is the transcoding/CDN provider.
+// Canonical Posts Architecture:
+//   - `posts/{postId}` (`type: 'video'`, `subType: 'spark' | 'reel' | 'video'`) is
+//     the single authoritative social publication document.
+//   - `videos/{mediaId}` stores media-processing / Mux telemetry bound to `canonicalPostId`.
+//   - `video_migration_map/{legacyId}` maps any legacy `videos/{id}` to its canonical `postId`.
+//   - Signed Mux playback URLs fail closed when signing keys are absent.
+//   - Likes, saves, shares, views, and gifts write to canonical `posts/{postId}`
+//     and `counter_shards` via `incrementShardedCounter` (keeping Home, Sparks,
+//     Profiles, Saved, Search, and Analytics 100% unified).
+
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { Mux } = require('@mux/mux-node');
-const { Storage } = require('@google-cloud/storage');
 const { VideoIntelligenceServiceClient } = require('@google-cloud/video-intelligence');
-const { SpeechClient } = require('@google-cloud/speech');
 const { execFile } = require('child_process');
 const util = require('util');
 const execFilePromise = util.promisify(execFile);
@@ -25,37 +28,44 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
-const { readCoinBalance, writeCoinBalance } = require('./coinBalance');
 const Timestamp = admin.firestore.Timestamp;
-
-const storage = new Storage();
 const videoIntelligenceClient = new VideoIntelligenceServiceClient();
-const speechClient = new SpeechClient();
 
 const { onCall, onRequest } = functions.https;
 const { pubsub } = functions;
 const logger = functions.logger;
+
+const { readCoinBalance, writeCoinBalance } = require('./coinBalance');
 const { checkRateLimit } = require('./rateLimit');
 const { assertAdmin, checkIsAdmin, getUserIdFromContext } = require('./auth');
 const { awardXpSafe } = require('./xpAward');
 const { writeAudit } = require('./admin');
+const { enqueuePush } = require('./pushQueue');
+const { writeNotification } = require('./notificationWriter');
+const { incrementShardedCounter } = require('./analytics');
+const {
+  MIN_DURATION_SEC,
+  MAX_DURATION_SEC,
+  SPARK_PROCESSING_STATES,
+  canTransitionProcessingState,
+  getDailyUploadLimit,
+  normalizeSparkVisibility,
+  validateSparkDuration,
+  validateSparkFileSize,
+  validateSparkMimeOrExtension,
+} = require('./videoConfig.cjs');
 
 // ----------------------------------------------------------------------
-//  MUX CLIENTS
+//  MUX CLIENT
 // ----------------------------------------------------------------------
 const mux = new Mux({
   tokenId: process.env.MUX_TOKEN_ID,
   tokenSecret: process.env.MUX_TOKEN_SECRET,
 });
-const Video = mux.Video;
+const Video = mux.Video || mux.video;
 
 // ----------------------------------------------------------------------
-//  ASYNC NOTIFICATIONS
-// ----------------------------------------------------------------------
-const { enqueuePush } = require('./pushQueue');
-
-// ----------------------------------------------------------------------
-//  HELPER: AUTHENTICATED USER
+//  AUTH & CANONICAL TARGET HELPERS
 // ----------------------------------------------------------------------
 function validateAuth(context) {
   if (!context.auth || !context.auth.uid) {
@@ -64,30 +74,179 @@ function validateAuth(context) {
   return context.auth.uid;
 }
 
-/**
- * The per-video pipeline endpoints (watermark, moderation) act on a video the
- * caller must own — or an admin may act on any video. The export first
- * authenticates via `getUserIdFromContext`, then this gate authorises
- * ownership. Without it any signed-in user could re-run moderation /
- * watermarking on someone else's video (an availability + storage-cost lever).
- */
-async function assertVideoOwnerOrAdmin(video, uid, context) {
-  if (video.userId === uid) return uid;
+async function assertVideoOwnerOrAdmin(record, uid, context) {
+  const ownerId = record?.authorId || record?.userId;
+  if (ownerId && ownerId === uid) return uid;
   if (await checkIsAdmin(context)) return uid;
   throw new functions.https.HttpsError('permission-denied', 'Only the video owner can perform this action.');
 }
 
-// ----------------------------------------------------------------------
-//  SHARDED RATE LIMITER — shared implementation in ./rateLimit.js.
-//  This module previously carried its own copy; the shared limiter keeps a
-//  single shard algorithm and error contract across every endpoint.
-// ----------------------------------------------------------------------
+async function resolveSparkTarget(targetId) {
+  if (!targetId || typeof targetId !== 'string') return null;
+
+  const postRef = db.collection('posts').doc(targetId);
+  const postSnap = await postRef.get();
+  if (postSnap.exists) {
+    const postData = postSnap.data() || {};
+    const mediaId = postData.mediaAssetId || postData.migratedFromVideoId || targetId;
+    const mediaRef = db.collection('videos').doc(mediaId);
+    const mediaSnap = mediaId === targetId
+      ? await mediaRef.get().catch(() => null)
+      : await mediaRef.get().catch(() => null);
+    return {
+      targetId,
+      postId: postSnap.id,
+      postRef,
+      postData,
+      mediaId,
+      mediaRef,
+      videoData: mediaSnap && mediaSnap.exists ? mediaSnap.data() : null,
+      ownerId: postData.authorId || postData.userId || mediaSnap?.data()?.userId || null,
+    };
+  }
+
+  const mapSnap = await db.collection('video_migration_map').doc(targetId).get().catch(() => null);
+  if (mapSnap && mapSnap.exists && mapSnap.data()?.canonicalPostId) {
+    const canonicalPostId = mapSnap.data().canonicalPostId;
+    const [mappedPostSnap, mediaSnap] = await Promise.all([
+      db.collection('posts').doc(canonicalPostId).get(),
+      db.collection('videos').doc(targetId).get(),
+    ]);
+    if (mappedPostSnap.exists) {
+      const postData = mappedPostSnap.data() || {};
+      return {
+        targetId,
+        postId: canonicalPostId,
+        postRef: mappedPostSnap.ref,
+        postData,
+        mediaId: targetId,
+        mediaRef: db.collection('videos').doc(targetId),
+        videoData: mediaSnap.exists ? mediaSnap.data() : null,
+        ownerId: postData.authorId || postData.userId || mediaSnap.data()?.userId || null,
+      };
+    }
+  }
+
+  const videoRef = db.collection('videos').doc(targetId);
+  const videoSnap = await videoRef.get();
+  if (!videoSnap.exists) return null;
+  const videoData = videoSnap.data() || {};
+  const linkedPostId = videoData.canonicalPostId || videoData.postId || null;
+  if (linkedPostId) {
+    const linkedSnap = await db.collection('posts').doc(linkedPostId).get().catch(() => null);
+    if (linkedSnap && linkedSnap.exists) {
+      const postData = linkedSnap.data() || {};
+      return {
+        targetId,
+        postId: linkedPostId,
+        postRef: linkedSnap.ref,
+        postData,
+        mediaId: targetId,
+        mediaRef: videoRef,
+        videoData,
+        ownerId: postData.authorId || postData.userId || videoData.userId || null,
+      };
+    }
+  }
+
+  return {
+    targetId,
+    postId: null,
+    postRef: null,
+    postData: null,
+    mediaId: targetId,
+    mediaRef: videoRef,
+    videoData,
+    ownerId: videoData.userId || videoData.authorId || null,
+  };
+}
+
+async function isMutuallyBlocked(uidA, uidB) {
+  if (!uidA || !uidB || uidA === uidB) return false;
+  const [outSnap, inSnap] = await Promise.all([
+    db.doc(`blocks/${uidA}_${uidB}`).get(),
+    db.doc(`blocks/${uidB}_${uidA}`).get(),
+  ]);
+  return outSnap.exists || inSnap.exists;
+}
+
+async function evaluateSparkAccess(resolved, uid, isAdmin, options = {}) {
+  if (!resolved) return { allowed: false, reason: 'not-found' };
+  if (isAdmin) return { allowed: true, reason: 'admin' };
+
+  const primary = resolved.postData || resolved.videoData || {};
+  const ownerId = resolved.ownerId || primary.authorId || primary.userId;
+  if (ownerId && ownerId === uid) return { allowed: true, reason: 'owner' };
+
+  if (primary.isDeleted === true || resolved.videoData?.isDeleted === true) {
+    return { allowed: false, reason: 'deleted' };
+  }
+
+  const isPublished = resolved.postData
+    ? (resolved.postData.status === 'published' || resolved.postData.status === 'live')
+    : (resolved.videoData?.status === 'ready' || resolved.videoData?.status === 'live');
+  if (!isPublished) {
+    return { allowed: false, reason: 'not-ready' };
+  }
+
+  if (ownerId && (await isMutuallyBlocked(uid, ownerId))) {
+    return { allowed: false, reason: 'blocked' };
+  }
+
+  const visibility = normalizeSparkVisibility(primary.visibility || 'public');
+  if (visibility === 'private') {
+    return { allowed: false, reason: 'private' };
+  }
+
+  if (visibility === 'followers') {
+    const edge = ownerId ? await db.doc(`follows/${uid}_${ownerId}`).get() : null;
+    if (!edge || !edge.exists) return { allowed: false, reason: 'followers-only' };
+  } else if (visibility === 'friends') {
+    const [outEdge, inEdge] = ownerId
+      ? await Promise.all([
+        db.doc(`follows/${uid}_${ownerId}`).get(),
+        db.doc(`follows/${ownerId}_${uid}`).get(),
+      ])
+      : [null, null];
+    if (!outEdge?.exists || !inEdge?.exists) {
+      return { allowed: false, reason: 'friends-only' };
+    }
+  } else if (visibility === 'community' && primary.communityId) {
+    const communitySnap = await db.doc(`communities/${primary.communityId}`).get().catch(() => null);
+    const commData = communitySnap?.exists ? communitySnap.data() : {};
+    const isMember = Boolean(commData?.members?.[uid]);
+    if (!isMember) return { allowed: false, reason: 'community-only' };
+  } else if (visibility === 'public' && primary.authorIsPrivate === true && ownerId) {
+    const edge = await db.doc(`follows/${uid}_${ownerId}`).get();
+    if (!edge.exists) return { allowed: false, reason: 'private-account' };
+  }
+
+  if (options.checkPurchase) {
+    const monetization = primary.monetization || resolved.videoData?.monetization || {};
+    const price = Number(monetization.price) || 0;
+    if (monetization.type === 'ppv' && price > 0) {
+      const candidateKeys = [
+        resolved.postId ? `${uid}_${resolved.postId}` : null,
+        resolved.mediaId ? `${uid}_${resolved.mediaId}` : null,
+      ].filter(Boolean);
+      const uniqueKeys = [...new Set(candidateKeys)];
+      const snaps = await Promise.all(
+        uniqueKeys.map((k) => db.collection('video_purchases').doc(k).get()),
+      );
+      if (!snaps.some((s) => s.exists)) {
+        return { allowed: false, reason: 'ppv-required', price };
+      }
+    }
+  }
+
+  return { allowed: true, reason: 'ok' };
+}
 
 // ----------------------------------------------------------------------
 //  DOUBLE-ENTRY COIN TRANSFER (idempotent, maintains system supply)
 // ----------------------------------------------------------------------
 async function transferCoinsInternal(fromUid, toUid, amount, reason, metadata = {}) {
-  const idempotencyKey = metadata.idempotencyKey || `transfer_${fromUid}_${toUid}_${Date.now()}`;
+  const idempotencyKey = metadata.idempotencyKey || `transfer_${fromUid}_${toUid}_${crypto.randomUUID()}`;
   const ledgerRef = db.collection('coin_transactions').doc(idempotencyKey);
 
   return db.runTransaction(async (t) => {
@@ -98,17 +257,17 @@ async function transferCoinsInternal(fromUid, toUid, amount, reason, metadata = 
     const toRef = db.collection('users').doc(toUid);
     const supplyRef = db.collection('system').doc('coin_supply');
 
-    // Sequential gets – mandatory inside transaction
     const fromDoc = await t.get(fromRef);
     const toDoc = await t.get(toRef);
-    const supplyDoc = await t.get(supplyRef);
+    await t.get(supplyRef);
 
     if (!fromDoc.exists) throw new functions.https.HttpsError('not-found', 'Sender not found.');
     if (!toDoc.exists) throw new functions.https.HttpsError('not-found', 'Recipient not found.');
 
-    // Balances live on users_private/{uid} (N324), never the world-readable doc.
     const fromBal = await readCoinBalance(t, fromUid, { fallbackToPublic: true });
-    if (fromBal.coins < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient coins.');
+    if (fromBal.coins < amount) {
+      throw new functions.https.HttpsError('failed-precondition', 'Insufficient coins.');
+    }
 
     const toBal = await readCoinBalance(t, toUid, { fallbackToPublic: true });
     const newFromBalance = fromBal.coins - amount;
@@ -144,7 +303,6 @@ async function transferCoinsInternal(fromUid, toUid, amount, reason, metadata = 
       transactionId: txId,
     });
 
-    // System supply unchanged for transfers
     t.set(supplyRef, { totalCoins: FieldValue.increment(0) }, { merge: true });
 
     const result = { success: true, newFromBalance, newToBalance, transactionId: txId };
@@ -154,138 +312,375 @@ async function transferCoinsInternal(fromUid, toUid, amount, reason, metadata = 
 }
 
 // ======================================================================
-//  1. createMuxUpload (cold start optimised)
+//  1. createMuxUpload (canonical post + media reservation + quota + validation)
 // ======================================================================
 exports.createMuxUpload = onCall({
   memory: '512MB',
   timeoutSeconds: 30,
 }, async (data, context) => {
   const uid = validateAuth(context);
-  const { fileName, fileSize, mimeType, visibility, isReel } = data;
+  const {
+    fileName,
+    fileSize,
+    mimeType,
+    duration = null,
+    visibility = 'public',
+    isReel = false,
+    subType = null,
+    title = '',
+    description = '',
+    tags = [],
+    allowDownload = true,
+    duetEnabled = true,
+    stitchEnabled = true,
+    monetization = null,
+    communityId = null,
+    chapters = [],
+    music = null,
+    effects = null,
+  } = data || {};
 
   if (!fileName || !fileSize || !mimeType) {
     throw new functions.https.HttpsError('invalid-argument', 'fileName, fileSize, and mimeType are required.');
   }
 
+  const sizeCheck = validateSparkFileSize(fileSize);
+  if (!sizeCheck.valid) {
+    throw new functions.https.HttpsError('invalid-argument', sizeCheck.reason);
+  }
+  const typeCheck = validateSparkMimeOrExtension(mimeType, fileName);
+  if (!typeCheck.valid) {
+    throw new functions.https.HttpsError('invalid-argument', typeCheck.reason);
+  }
+  if (duration !== null && duration !== undefined) {
+    const durCheck = validateSparkDuration(duration);
+    if (!durCheck.valid) {
+      throw new functions.https.HttpsError('invalid-argument', durCheck.reason);
+    }
+  }
+
+  await checkRateLimit(uid, 'createMuxUpload', 15, 60000);
+
+  const userSnap = await db.collection('users').doc(uid).get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+  const dailyLimit = getDailyUploadLimit(userData);
+  const today = new Date().toISOString().slice(0, 10);
+  const quotaRef = db.collection('daily_upload_counters').doc(`${uid}_${today}`);
+
+  // Enforce atomic per-day upload quota before creating a Mux direct upload.
+  await db.runTransaction(async (t) => {
+    const quotaSnap = await t.get(quotaRef);
+    const currentCount = quotaSnap.exists ? (Number(quotaSnap.data().count) || 0) : 0;
+    if (currentCount >= dailyLimit) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        `Daily Spark upload limit (${dailyLimit}) reached for your tier.`,
+      );
+    }
+    t.set(quotaRef, {
+      userId: uid,
+      date: today,
+      count: currentCount + 1,
+      limit: dailyLimit,
+      updatedAt: FieldValue.serverTimestamp(),
+      expireAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+    }, { merge: true });
+  });
+
   try {
-    const videoRef = db.collection('videos').doc();
-    const videoId = videoRef.id;
+    const postRef = db.collection('posts').doc();
+    const postId = postRef.id;
+    const videoRef = db.collection('videos').doc(postId);
+    const normalizedVis = normalizeSparkVisibility(visibility);
+    const resolvedSubType = subType || (isReel ? 'reel' : 'spark');
+    const cleanTags = Array.isArray(tags)
+      ? tags.slice(0, 20).map((t) => String(t).trim().replace(/^#/, '').toLowerCase()).filter(Boolean)
+      : [];
+    const safeTitle = typeof title === 'string' && title.trim() ? title.trim().slice(0, 140) : 'Untitled Spark';
+    const safeDesc = typeof description === 'string' ? description.trim().slice(0, 2200) : '';
+    const safeMonetization = monetization && typeof monetization === 'object' && monetization.type === 'ppv'
+      ? { type: 'ppv', price: Math.max(1, Math.min(100000, Number(monetization.price) || 1)) }
+      : { type: 'none' };
 
     const upload = await Video.Uploads.create({
       cors_origin: '*',
       new_asset_settings: {
-        playback_policy: ['public'],
+        playback_policy: ['signed'],
         mp4_support: 'standard',
-        passthrough: videoId,
+        passthrough: JSON.stringify({ postId, mediaAssetId: postId }),
       },
     });
 
-    await videoRef.set({
+    const baseStats = {
+      views: 0,
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      saves: 0,
+      totalWatchTime: 0,
+      viewerCount: 0,
+      gifts: 0,
+      giftValue: 0,
+    };
+
+    const batch = db.batch();
+    batch.set(postRef, {
+      authorId: uid,
       userId: uid,
-      title: 'Untitled',
-      description: '',
-      tags: [],
-      visibility: visibility || 'public',
-      allowDownload: true,
-      status: 'uploading',
+      authorName: userData.displayName || userData.username || '',
+      authorPhoto: userData.photoURL || null,
+      authorIsPrivate: Boolean(userData.isPrivate),
+      type: 'video',
+      subType: resolvedSubType,
+      title: safeTitle,
+      content: safeDesc || safeTitle,
+      description: safeDesc,
+      tags: cleanTags,
+      hashtags: cleanTags,
+      visibility: normalizedVis,
+      communityId: normalizedVis === 'community' ? (communityId || null) : null,
+      status: 'processing',
+      processingState: SPARK_PROCESSING_STATES.UPLOAD_RESERVED,
+      mediaAssetId: postId,
+      canonicalPostId: postId,
+      muxUploadId: upload.id || null,
       muxAssetId: null,
       muxPlaybackId: null,
-      stats: {
-        views: 0, likes: 0, comments: 0, shares: 0, saves: 0,
-        totalWatchTime: 0, viewerCount: 0,
-      },
-      type: isReel ? 'reel' : 'video',
-      music: null,
-      effects: null,
-      chapters: [],
-      duetEnabled: true,
-      stitchEnabled: true,
+      playbackPolicy: 'signed',
+      duration: Number(duration) || 0,
+      allowDownload: allowDownload !== false,
+      duetEnabled: duetEnabled !== false,
+      stitchEnabled: stitchEnabled !== false,
+      music: music || null,
+      effects: effects || null,
+      chapters: Array.isArray(chapters) ? chapters : [],
+      monetization: safeMonetization,
+      media: [],
+      stats: baseStats,
       rankingScore: 0,
       viralScore: 0,
+      personalizationScore: 0,
+      audioFingerprint: null,
+      audioFingerprintStatus: 'pending',
+      isDeleted: false,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-      monetization: { type: 'none' },
-      isDeleted: false,
-      audioFingerprint: null,
+      scoreUpdatedAt: FieldValue.serverTimestamp(),
     });
 
-    logger.info(`Upload prepared: ${videoId} for user ${uid}`);
-    return { uploadUrl: upload.url, assetId: videoId, playbackId: null };
+    batch.set(videoRef, {
+      userId: uid,
+      authorId: uid,
+      canonicalPostId: postId,
+      postId,
+      title: safeTitle,
+      description: safeDesc,
+      tags: cleanTags,
+      visibility: normalizedVis,
+      allowDownload: allowDownload !== false,
+      status: 'uploading',
+      processingState: SPARK_PROCESSING_STATES.UPLOAD_RESERVED,
+      muxUploadId: upload.id || null,
+      muxAssetId: null,
+      muxPlaybackId: null,
+      playbackPolicy: 'signed',
+      duration: Number(duration) || 0,
+      stats: baseStats,
+      type: resolvedSubType === 'reel' ? 'reel' : 'video',
+      subType: resolvedSubType,
+      music: music || null,
+      effects: effects || null,
+      chapters: Array.isArray(chapters) ? chapters : [],
+      duetEnabled: duetEnabled !== false,
+      stitchEnabled: stitchEnabled !== false,
+      rankingScore: 0,
+      viralScore: 0,
+      monetization: safeMonetization,
+      isDeleted: false,
+      audioFingerprint: null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    logger.info('Spark upload reserved', { postId, uploadId: upload.id, uid });
+    return {
+      uploadUrl: upload.url,
+      uploadId: upload.id || null,
+      postId,
+      assetId: postId,
+      mediaAssetId: postId,
+      playbackId: null,
+      processingState: SPARK_PROCESSING_STATES.UPLOAD_RESERVED,
+    };
   } catch (error) {
     logger.error('createMuxUpload', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', error.message || 'Upload creation failed');
   }
 });
 
 // ======================================================================
-//  2. getMuxPlaybackUrl (rate limited)
+//  2. getMuxPlaybackUrl (canonical access + PPV + fail-closed JWT signing)
 // ======================================================================
-// A signed playback URL is a bearer credential for the media, so signing one
-// for an arbitrary client-supplied `playbackId` was an IDOR: a stranger could
-// stream a PRIVATE / `followers` / still-processing video by id even after the
-// `videos` read rule was tightened. Re-apply the same visibility gate the
-// Firestore rule enforces before signing.
-async function canViewVideo(videoId, uid, isAdmin) {
-  if (!videoId) return false;
-  const snap = await db.collection('videos').doc(videoId).get();
-  if (!snap.exists) return false;
-  const v = snap.data();
-  if (isAdmin) return true;
-  if (v.userId === uid || v.authorId === uid) return true;
-  if (v.isDeleted === true) return false;
-  if (v.status !== 'ready' && v.status !== 'live') return false;
-  if (v.visibility === 'public' || v.visibility === 'unlisted') return true;
-  if (v.visibility === 'followers') {
-    const edge = await db.doc(`follows/${uid}_${v.userId}`).get();
-    return edge.exists;
-  }
-  return false;
+async function canViewVideo(targetId, uid, isAdmin) {
+  const resolved = await resolveSparkTarget(targetId);
+  const access = await evaluateSparkAccess(resolved, uid, isAdmin, { checkPurchase: true });
+  return access.allowed;
 }
 
 exports.getMuxPlaybackUrl = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { playbackId, videoId, quality, watermarked } = data;
-  if (!playbackId || !videoId) throw new functions.https.HttpsError('invalid-argument', 'playbackId and videoId required');
+  const { playbackId: requestedPlaybackId, videoId, postId, watermarked = false } = data || {};
+  const targetId = postId || videoId;
+  if (!targetId) {
+    throw new functions.https.HttpsError('invalid-argument', 'postId or videoId required');
+  }
 
-  await checkRateLimit(uid, 'getPlayback', 30, 60000);
+  await checkRateLimit(uid, 'getPlayback', 60, 60000);
+
+  const resolved = await resolveSparkTarget(targetId);
+  if (!resolved) {
+    throw new functions.https.HttpsError('not-found', 'Spark not found');
+  }
 
   const isAdmin = await checkIsAdmin(uid);
-  if (!(await canViewVideo(videoId, uid, isAdmin))) {
-    throw new functions.https.HttpsError('permission-denied', 'You do not have access to this video');
+  const access = await evaluateSparkAccess(resolved, uid, isAdmin, { checkPurchase: true });
+  if (!access.allowed) {
+    if (access.reason === 'ppv-required') {
+      throw new functions.https.HttpsError('failed-precondition', 'Purchase required to watch this Spark.');
+    }
+    throw new functions.https.HttpsError('permission-denied', 'You do not have access to this Spark.');
+  }
+
+  const storedPlaybackId =
+    resolved.postData?.muxPlaybackId ||
+    resolved.videoData?.muxPlaybackId ||
+    resolved.videoData?.playbackId ||
+    null;
+
+  const playbackId = requestedPlaybackId || storedPlaybackId;
+  if (!playbackId) {
+    throw new functions.https.HttpsError('failed-precondition', 'Playback is not ready yet.');
+  }
+  if (storedPlaybackId && requestedPlaybackId && storedPlaybackId !== requestedPlaybackId) {
+    throw new functions.https.HttpsError('permission-denied', 'Playback ID mismatch.');
+  }
+
+  if (watermarked) {
+    if (!process.env.WATERMARK_BUCKET) {
+      throw new functions.https.HttpsError('failed-precondition', 'Watermarked bucket is not configured.');
+    }
+    const bucket = admin.storage().bucket(process.env.WATERMARK_BUCKET);
+    const wmId = resolved.mediaId || resolved.postId || targetId;
+    const [signedWatermarkedUrl] = await bucket.file(`watermarked/${wmId}.mp4`).getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 3600 * 1000,
+    });
+    return { url: signedWatermarkedUrl, expiresIn: 3600 };
+  }
+
+  const keyId = process.env.MUX_SIGNING_KEY_ID;
+  const keySecret = process.env.MUX_SIGNING_KEY_SECRET;
+  const playbackPolicy = resolved.postData?.playbackPolicy || resolved.videoData?.playbackPolicy || 'signed';
+
+  // Fail closed for signed assets (and whenever signing keys are expected).
+  if (!keyId || !keySecret) {
+    if (playbackPolicy === 'public' && process.env.ALLOW_PUBLIC_MUX_FALLBACK === 'true') {
+      return {
+        url: `https://stream.mux.com/${playbackId}.m3u8`,
+        thumbnailUrl: `https://image.mux.com/${playbackId}/thumbnail.jpg`,
+        storyboardUrl: `https://image.mux.com/${playbackId}/storyboard.vtt`,
+        expiresIn: 3600,
+        signed: false,
+      };
+    }
+    throw new functions.https.HttpsError('failed-precondition', 'Mux playback signing keys are not configured.');
   }
 
   try {
-    let url;
-    if (watermarked) {
-      url = `https://storage.googleapis.com/${process.env.WATERMARK_BUCKET}/watermarked/${videoId}.mp4`;
-    } else if (process.env.ENABLE_SIGNED_URLS === 'true') {
-      const token = Mux.JWT.sign(playbackId, {
-        keyId: process.env.MUX_SIGNING_KEY_ID,
-        keySecret: process.env.MUX_SIGNING_KEY_SECRET,
-        expiration: '1h',
-        type: 'video',
-      });
-      url = `https://stream.mux.com/${playbackId}.m3u8?token=${token}`;
-    } else {
-      url = `https://stream.mux.com/${playbackId}.m3u8`;
-    }
-    return { url };
+    const signToken = (type) => Mux.JWT.sign(playbackId, {
+      keyId,
+      keySecret,
+      expiration: '1h',
+      type,
+    });
+
+    const streamToken = signToken('video');
+    const thumbToken = signToken('thumbnail');
+    const storyboardToken = signToken('storyboard');
+
+    return {
+      url: `https://stream.mux.com/${playbackId}.m3u8?token=${streamToken}`,
+      thumbnailUrl: `https://image.mux.com/${playbackId}/thumbnail.jpg?token=${thumbToken}`,
+      storyboardUrl: `https://image.mux.com/${playbackId}/storyboard.vtt?token=${storyboardToken}`,
+      expiresIn: 3600,
+      signed: true,
+    };
   } catch (error) {
     logger.error('getMuxPlaybackUrl', error);
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functions.https.HttpsError('internal', error.message || 'Could not sign playback URL');
   }
 });
 
 // ======================================================================
-//  3. handleMuxWebhook (with fan-out)
+//  3. handleMuxWebhook (transactional idempotency + monotonic states)
 // ======================================================================
+function parsePassthrough(raw) {
+  if (!raw || typeof raw !== 'string') return { postId: null, mediaAssetId: null };
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return {
+        postId: parsed.postId || parsed.canonicalPostId || null,
+        mediaAssetId: parsed.mediaAssetId || parsed.videoId || parsed.postId || null,
+      };
+    }
+  } catch {
+    // plain id passthrough
+  }
+  return { postId: raw, mediaAssetId: raw };
+}
+
+async function resolveWebhookTargetRefs(asset) {
+  const { postId, mediaAssetId } = parsePassthrough(asset?.passthrough);
+  let resolvedPostRef = postId ? db.collection('posts').doc(postId) : null;
+  let resolvedVideoRef = mediaAssetId ? db.collection('videos').doc(mediaAssetId) : null;
+
+  if (!resolvedPostRef && asset?.upload_id) {
+    const postByUpload = await db.collection('posts')
+      .where('muxUploadId', '==', asset.upload_id)
+      .limit(1)
+      .get();
+    if (!postByUpload.empty) {
+      resolvedPostRef = postByUpload.docs[0].ref;
+      resolvedVideoRef = db.collection('videos').doc(postByUpload.docs[0].data().mediaAssetId || postByUpload.docs[0].id);
+    }
+  }
+
+  if (!resolvedVideoRef && asset?.id) {
+    const videoByAsset = await db.collection('videos')
+      .where('muxAssetId', '==', asset.id)
+      .limit(1)
+      .get();
+    if (!videoByAsset.empty) {
+      resolvedVideoRef = videoByAsset.docs[0].ref;
+      const cid = videoByAsset.docs[0].data().canonicalPostId || videoByAsset.docs[0].id;
+      resolvedPostRef = db.collection('posts').doc(cid);
+    }
+  }
+
+  return { resolvedPostRef, resolvedVideoRef };
+}
+
 exports.handleMuxWebhook = onRequest(async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).send('Method Not Allowed');
     return;
   }
 
-  const rawBody = req.rawBody ? req.rawBody.toString() : req.body.toString();
+  const rawBody = req.rawBody ? req.rawBody.toString() : (typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {}));
   const signature = req.headers['mux-signature'];
   const secret = process.env.MUX_WEBHOOK_SECRET;
 
@@ -304,80 +699,195 @@ exports.handleMuxWebhook = onRequest(async (req, res) => {
     return;
   }
 
-  // Replay protection
-  const eventRef = db.collection('mux_events').doc(event.id);
-  const exists = await eventRef.get();
-  if (exists.exists) {
-    res.status(200).send('Duplicate event ignored');
-    return;
-  }
-  await eventRef.set({ eventId: event.id, createdAt: FieldValue.serverTimestamp() });
-
-  logger.info(`Webhook event: ${event.type}`);
+  const eventId = event.id || crypto.createHash('sha256').update(rawBody).digest('hex');
+  const eventRef = db.collection('mux_events').doc(eventId);
+  const asset = event.data || {};
 
   try {
-    if (event.type === 'video.asset.ready') {
-      const asset = event.data;
-      const passthrough = asset.passthrough;
-      if (!passthrough) {
-        res.status(200).send('Missing passthrough');
-        return;
+    let postPublishContext = null;
+
+    const outcome = await db.runTransaction(async (t) => {
+      const existingEvent = await t.get(eventRef);
+      if (existingEvent.exists) {
+        return { duplicate: true };
       }
 
-      const videoRef = db.collection('videos').doc(passthrough);
-      const doc = await videoRef.get();
-      if (!doc.exists) {
-        res.status(200).send('Video doc not found');
-        return;
+      const { resolvedPostRef, resolvedVideoRef } = await resolveWebhookTargetRefs(asset);
+      const postSnap = resolvedPostRef ? await t.get(resolvedPostRef) : null;
+      const videoSnap = resolvedVideoRef ? await t.get(resolvedVideoRef) : null;
+
+      t.set(eventRef, {
+        eventId,
+        type: event.type || 'unknown',
+        assetId: asset.id || null,
+        processedAt: FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+
+      if ((!postSnap || !postSnap.exists) && (!videoSnap || !videoSnap.exists)) {
+        return { missingTarget: true };
       }
 
-      const video = doc.data();
-      const playbackId = asset.playback_ids[0].id;
+      const postData = postSnap?.exists ? postSnap.data() : null;
+      const videoData = videoSnap?.exists ? videoSnap.data() : null;
+      const currentState = postData?.processingState || videoData?.processingState || SPARK_PROCESSING_STATES.UPLOAD_RESERVED;
 
-      await videoRef.update({
-        muxAssetId: asset.id,
-        muxPlaybackId: playbackId,
-        status: 'ready',
-        duration: asset.duration || 0,
-        aspectRatio: asset.aspect_ratio || null,
-        thumbnailUrl: `https://image.mux.com/${playbackId}/thumbnail.jpg`,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+      if (event.type === 'video.upload.asset_created' || event.type === 'video.asset.created') {
+        if (canTransitionProcessingState(currentState, SPARK_PROCESSING_STATES.PROCESSING)) {
+          const patch = {
+            muxAssetId: asset.asset_id || asset.id || null,
+            processingState: SPARK_PROCESSING_STATES.PROCESSING,
+            updatedAt: FieldValue.serverTimestamp(),
+          };
+          if (postSnap?.exists) t.update(resolvedPostRef, { ...patch, status: 'processing' });
+          if (videoSnap?.exists) t.update(resolvedVideoRef, { ...patch, status: 'processing' });
+        }
+        return { handled: true };
+      }
 
-      // Fan‑out to followers
-      await db.collection('fanout_tasks').doc(`${passthrough}_${video.userId}`).set({
-        postId: passthrough,
-        authorId: video.userId,
-        snapshot: {
-          type: 'video',
-          content: video.title || 'New video',
-          media: [playbackId],
-          tags: video.tags || [],
-        },
-        status: 'pending',
-        createdAt: FieldValue.serverTimestamp(),
-      });
+      if (event.type === 'video.upload.errored' || event.type === 'video.asset.errored') {
+        const nextFailure = event.type === 'video.upload.errored'
+          ? SPARK_PROCESSING_STATES.UPLOAD_FAILED
+          : SPARK_PROCESSING_STATES.PROCESSING_FAILED;
+        if (canTransitionProcessingState(currentState, nextFailure)) {
+          const errorMessage = Array.isArray(asset.errors?.messages)
+            ? asset.errors.messages.join(', ')
+            : (asset.error?.message || 'Mux processing failed');
+          const failPatch = {
+            processingState: nextFailure,
+            status: 'failed',
+            error: String(errorMessage).slice(0, 500),
+            updatedAt: FieldValue.serverTimestamp(),
+          };
+          if (postSnap?.exists) t.update(resolvedPostRef, failPatch);
+          if (videoSnap?.exists) t.update(resolvedVideoRef, failPatch);
+        }
+        return { handled: true };
+      }
 
-      // Trigger audio fingerprinting and viral scoring. These are internal
-      // functions, not callables: enqueuing them as Cloud Tasks POSTed to the
-      // callable endpoint with no auth header, so the request could never be
-      // authorised (a callable requires the Firebase callable protocol) and the
-      // pipeline silently no-opped. Call them in-process instead.
-      await Promise.allSettled([
-        generateAudioFingerprintInternal(passthrough),
-        updateViralScoreInternal(passthrough),
-      ]);
-    } else if (event.type === 'video.asset.errored') {
-      const asset = event.data;
-      const passthrough = asset.passthrough;
-      if (passthrough) {
-        await db.collection('videos').doc(passthrough).update({
-          status: 'failed',
-          error: event.data?.errors?.join(', ') || 'Processing failed',
+      if (event.type === 'video.asset.ready') {
+        const durCheck = asset.duration ? validateSparkDuration(asset.duration) : { valid: true };
+        if (!durCheck.valid) {
+          const rejectPatch = {
+            processingState: SPARK_PROCESSING_STATES.MODERATION_REJECTED,
+            status: 'failed',
+            moderationStatus: 'rejected',
+            moderationNotes: durCheck.reason,
+            isDeleted: true,
+            updatedAt: FieldValue.serverTimestamp(),
+          };
+          if (postSnap?.exists) t.update(resolvedPostRef, rejectPatch);
+          if (videoSnap?.exists) t.update(resolvedVideoRef, rejectPatch);
+          return { rejectedDuration: true };
+        }
+
+        const playbackObj = Array.isArray(asset.playback_ids) && asset.playback_ids[0] ? asset.playback_ids[0] : null;
+        const playbackId = playbackObj?.id || null;
+        const playbackPolicy = playbackObj?.policy || 'signed';
+        if (!playbackId) {
+          return { missingPlaybackId: true };
+        }
+
+        if (!canTransitionProcessingState(currentState, SPARK_PROCESSING_STATES.PUBLISHED)) {
+          return { staleSkipped: true };
+        }
+
+        const thumbBase = `https://image.mux.com/${playbackId}/thumbnail.jpg`;
+        const streamBase = `https://stream.mux.com/${playbackId}.m3u8`;
+        const durationSec = Number(asset.duration) || Number(postData?.duration) || 0;
+        const aspectRatio = asset.aspect_ratio || postData?.aspectRatio || null;
+        const ownerId = postData?.authorId || videoData?.userId || null;
+
+        const commonReady = {
+          muxAssetId: asset.id,
+          muxPlaybackId: playbackId,
+          playbackPolicy,
+          processingState: SPARK_PROCESSING_STATES.PUBLISHED,
+          duration: durationSec,
+          aspectRatio,
+          thumbnailUrl: thumbBase,
+          videoUrl: streamBase,
           updatedAt: FieldValue.serverTimestamp(),
-        });
+        };
+
+        if (postSnap?.exists) {
+          t.update(resolvedPostRef, {
+            ...commonReady,
+            status: 'published',
+            media: [
+              {
+                type: 'video',
+                mediaAssetId: resolvedVideoRef?.id || resolvedPostRef.id,
+                muxPlaybackId: playbackId,
+                playbackPolicy,
+                url: streamBase,
+                thumbnailUrl: thumbBase,
+                duration: durationSec,
+                aspectRatio,
+              },
+            ],
+          });
+        }
+        if (videoSnap?.exists) {
+          t.update(resolvedVideoRef, {
+            ...commonReady,
+            status: 'ready',
+          });
+        }
+
+        postPublishContext = {
+          postId: resolvedPostRef?.id || null,
+          mediaId: resolvedVideoRef?.id || resolvedPostRef?.id || null,
+          ownerId,
+          visibility: normalizeSparkVisibility(postData?.visibility || videoData?.visibility || 'public'),
+          isDeleted: Boolean(postData?.isDeleted || videoData?.isDeleted),
+          title: postData?.title || videoData?.title || 'New Spark',
+          tags: postData?.tags || videoData?.tags || [],
+          playbackId,
+          newlyPublished: currentState !== SPARK_PROCESSING_STATES.PUBLISHED,
+        };
+        return { published: true };
       }
+
+      return { ignoredEventType: event.type };
+    });
+
+    if (outcome?.duplicate) {
+      res.status(200).send('Duplicate event ignored');
+      return;
     }
+
+    if (postPublishContext && postPublishContext.newlyPublished) {
+      const targetId = postPublishContext.postId || postPublishContext.mediaId;
+      if (
+        postPublishContext.postId &&
+        postPublishContext.ownerId &&
+        postPublishContext.visibility === 'public' &&
+        !postPublishContext.isDeleted
+      ) {
+        await db.collection('fanout_tasks').doc(`${postPublishContext.postId}_${postPublishContext.ownerId}`).set({
+          postId: postPublishContext.postId,
+          authorId: postPublishContext.ownerId,
+          snapshot: {
+            type: 'video',
+            content: postPublishContext.title,
+            media: [postPublishContext.playbackId],
+            tags: postPublishContext.tags,
+          },
+          status: 'pending',
+          createdAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      await Promise.allSettled([
+        targetId ? generateAudioFingerprintInternal(targetId) : Promise.resolve(),
+        targetId ? updateViralScoreInternal(targetId) : Promise.resolve(),
+        postPublishContext.ownerId
+          ? awardXpSafe(postPublishContext.ownerId, 'post_created', { source: `spark_${targetId}` })
+          : Promise.resolve(),
+      ]);
+    }
+
     res.status(200).send('OK');
   } catch (error) {
     logger.error('Webhook processing error', error);
@@ -386,49 +896,103 @@ exports.handleMuxWebhook = onRequest(async (req, res) => {
 });
 
 // ======================================================================
-//  4. likeVideo (sharded, rate limited)
+//  4. likeVideo (canonical posts/{postId}/likes + sharded counters)
 // ======================================================================
 exports.likeVideo = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { videoId } = data;
-  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+  const { videoId, postId: explicitPostId } = data || {};
+  const targetId = explicitPostId || videoId;
+  if (!targetId) throw new functions.https.HttpsError('invalid-argument', 'videoId or postId required');
 
   await checkRateLimit(uid, 'likeVideo', 30, 60000);
 
+  const resolved = await resolveSparkTarget(targetId);
+  if (!resolved) throw new functions.https.HttpsError('not-found', 'Spark not found');
+
+  const isAdmin = await checkIsAdmin(uid);
+  const access = await evaluateSparkAccess(resolved, uid, isAdmin);
+  if (!access.allowed) {
+    throw new functions.https.HttpsError('permission-denied', 'Cannot like an inaccessible Spark.');
+  }
+
   try {
-    const likeRef = db.collection('videos').doc(videoId).collection('likes').doc(uid);
-    const videoRef = db.collection('videos').doc(videoId);
+    const primaryRef = resolved.postRef || resolved.mediaRef;
+    const primaryId = primaryRef.id;
+    const likeRef = primaryRef.collection('likes').doc(uid);
+    const userLikeRef = db.collection('users').doc(uid).collection('liked_posts').doc(primaryId);
+    const legacyLikeRef = resolved.mediaRef && resolved.mediaRef.path !== primaryRef.path
+      ? resolved.mediaRef.collection('likes').doc(uid)
+      : null;
+
     const shardId = Math.floor(Math.random() * 10);
-    const likeShardRef = videoRef.collection('like_shards').doc(`shard_${shardId}`);
+    const legacyShardRef = resolved.mediaRef
+      ? resolved.mediaRef.collection('like_shards').doc(`shard_${shardId}`)
+      : null;
 
-    let action, authorId;
+    let action = 'liked';
+    const ownerId = resolved.ownerId;
+
     await db.runTransaction(async (t) => {
-      const videoDoc = await t.get(videoRef);
-      if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-      authorId = videoDoc.data().userId;
-
+      const primaryDoc = await t.get(primaryRef);
+      if (!primaryDoc.exists) throw new functions.https.HttpsError('not-found', 'Spark not found');
       const likeDoc = await t.get(likeRef);
-      if (likeDoc.exists) {
+      const legacyLikeDoc = legacyLikeRef ? await t.get(legacyLikeRef) : null;
+      const alreadyLiked = likeDoc.exists || Boolean(legacyLikeDoc && legacyLikeDoc.exists);
+
+      if (alreadyLiked) {
         t.delete(likeRef);
-        t.set(likeShardRef, { count: FieldValue.increment(-1) }, { merge: true });
-        t.update(videoRef, { 'stats.likes': FieldValue.increment(-1), updatedAt: FieldValue.serverTimestamp() });
+        t.delete(userLikeRef);
+        if (legacyLikeRef) t.delete(legacyLikeRef);
+        if (legacyShardRef) t.set(legacyShardRef, { count: FieldValue.increment(-1) }, { merge: true });
+        t.update(primaryRef, { 'stats.likes': FieldValue.increment(-1), updatedAt: FieldValue.serverTimestamp() });
+        if (resolved.mediaRef && resolved.mediaRef.path !== primaryRef.path && resolved.videoData) {
+          t.update(resolved.mediaRef, { 'stats.likes': FieldValue.increment(-1), updatedAt: FieldValue.serverTimestamp() });
+        }
         action = 'unliked';
       } else {
         t.set(likeRef, { userId: uid, createdAt: FieldValue.serverTimestamp() });
-        t.set(likeShardRef, { count: FieldValue.increment(1) }, { merge: true });
-        t.update(videoRef, { 'stats.likes': FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+        t.set(userLikeRef, { postId: primaryId, createdAt: FieldValue.serverTimestamp() });
+        if (legacyLikeRef) t.set(legacyLikeRef, { userId: uid, createdAt: FieldValue.serverTimestamp() });
+        if (legacyShardRef) t.set(legacyShardRef, { count: FieldValue.increment(1) }, { merge: true });
+        t.update(primaryRef, { 'stats.likes': FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+        if (resolved.mediaRef && resolved.mediaRef.path !== primaryRef.path && resolved.videoData) {
+          t.update(resolved.mediaRef, { 'stats.likes': FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+        }
         action = 'liked';
       }
     });
 
-    if (action === 'liked' && authorId && authorId !== uid) {
-      await enqueuePush(authorId, {
-        type: 'like', senderId: uid, videoId, title: 'New like',
-      });
+    if (resolved.postId) {
+      await incrementShardedCounter(`posts/${resolved.postId}`, 'likes', action === 'liked' ? 1 : -1);
     }
-    return { success: true, action };
+
+    if (action === 'liked' && ownerId && ownerId !== uid) {
+      await Promise.allSettled([
+        enqueuePush(ownerId, {
+          type: 'like',
+          senderId: uid,
+          postId: primaryId,
+          videoId: resolved.mediaId || primaryId,
+          title: 'New Spark like',
+        }),
+        writeNotification(ownerId, {
+          type: 'like',
+          senderId: uid,
+          title: 'Liked your Spark',
+          message: 'Someone liked your Spark.',
+          metadata: {
+            postId: primaryId,
+            videoId: resolved.mediaId || primaryId,
+            actionUrl: `/sparks/${primaryId}`,
+          },
+        }),
+      ]);
+    }
+
+    return { success: true, action, postId: primaryId };
   } catch (error) {
     logger.error('likeVideo', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
@@ -438,24 +1002,41 @@ exports.likeVideo = onCall(async (data, context) => {
 // ======================================================================
 exports.shareVideo = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { videoId, platform = 'arvdoul' } = data;
-  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+  const { videoId, postId: explicitPostId, platform = 'arvdoul' } = data || {};
+  const targetId = explicitPostId || videoId;
+  if (!targetId) throw new functions.https.HttpsError('invalid-argument', 'videoId or postId required');
 
   await checkRateLimit(uid, 'shareVideo', 20, 60000);
 
+  const resolved = await resolveSparkTarget(targetId);
+  if (!resolved) throw new functions.https.HttpsError('not-found', 'Spark not found');
+
   try {
-    const videoRef = db.collection('videos').doc(videoId);
+    const primaryRef = resolved.postRef || resolved.mediaRef;
     await db.runTransaction(async (t) => {
-      const doc = await t.get(videoRef);
-      if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-      t.update(videoRef, { 'stats.shares': FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+      const snap = await t.get(primaryRef);
+      if (!snap.exists) throw new functions.https.HttpsError('not-found', 'Spark not found');
+      t.update(primaryRef, { 'stats.shares': FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+      if (resolved.mediaRef && resolved.mediaRef.path !== primaryRef.path && resolved.videoData) {
+        t.update(resolved.mediaRef, { 'stats.shares': FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+      }
     });
-    await db.collection('share_events').add({
-      videoId, userId: uid, platform, createdAt: FieldValue.serverTimestamp(),
-    });
-    return { success: true };
+
+    await Promise.all([
+      resolved.postId ? incrementShardedCounter(`posts/${resolved.postId}`, 'shares', 1) : Promise.resolve(),
+      db.collection('share_events').add({
+        postId: resolved.postId || primaryRef.id,
+        videoId: resolved.mediaId || primaryRef.id,
+        userId: uid,
+        platform,
+        createdAt: FieldValue.serverTimestamp(),
+      }),
+    ]);
+
+    return { success: true, postId: primaryRef.id };
   } catch (error) {
     logger.error('shareVideo', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
@@ -463,94 +1044,199 @@ exports.shareVideo = onCall(async (data, context) => {
 // ======================================================================
 //  5b. toggleVideoSave (authoritative saves counter)
 // ======================================================================
-// `videos/{id}.stats.saves` is seeded `0` at create and was never written: the
-// viewer's save state lives in `users/{uid}/saved_videos/{videoId}`, and the
-// video document update rule excludes `stats`, so no client could maintain the
-// aggregate. The video card and the reels screen render `stats.saves` as a real
-// count, so it was a permanent fabricated `0` (N436). The count is derived from
-// the `saved_videos` collection (a save exists iff the per-user doc exists), and
-// this callable is the only writer of the toggle — `stats` stays server-owned.
 exports.toggleVideoSave = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { videoId, save } = data;
-  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+  const { videoId, postId: explicitPostId, save } = data || {};
+  const targetId = explicitPostId || videoId;
+  if (!targetId) throw new functions.https.HttpsError('invalid-argument', 'videoId or postId required');
 
   await checkRateLimit(uid, 'toggleVideoSave', 30, 60000);
 
+  const resolved = await resolveSparkTarget(targetId);
+  if (!resolved) throw new functions.https.HttpsError('not-found', 'Spark not found');
+
+  const isAdmin = await checkIsAdmin(uid);
+  const access = await evaluateSparkAccess(resolved, uid, isAdmin);
+  if (!access.allowed) {
+    throw new functions.https.HttpsError('permission-denied', 'Cannot save an inaccessible Spark.');
+  }
+
   try {
-    const videoRef = db.collection('videos').doc(videoId);
-    const savedRef = videoRef.collection('saved_by').doc(uid);
+    const primaryRef = resolved.postRef || resolved.mediaRef;
+    const primaryId = primaryRef.id;
+    const savedRef = primaryRef.collection('saved_by').doc(uid);
+    const legacySavedRef = resolved.mediaRef && resolved.mediaRef.path !== primaryRef.path
+      ? resolved.mediaRef.collection('saved_by').doc(uid)
+      : null;
+    const userSavedRef = db.collection('users').doc(uid).collection('saved_videos').doc(primaryId);
 
     const result = await db.runTransaction(async (t) => {
-      const videoDoc = await t.get(videoRef);
-      if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
+      const primaryDoc = await t.get(primaryRef);
+      if (!primaryDoc.exists) throw new functions.https.HttpsError('not-found', 'Spark not found');
       const savedDoc = await t.get(savedRef);
-      const currentlySaved = savedDoc.exists;
+      const legacySavedDoc = legacySavedRef ? await t.get(legacySavedRef) : null;
+      const currentlySaved = savedDoc.exists || Boolean(legacySavedDoc && legacySavedDoc.exists);
       const shouldSave = typeof save === 'boolean' ? save : !currentlySaved;
 
       if (shouldSave === currentlySaved) {
         return { saved: currentlySaved, action: 'noop' };
       }
+
       if (shouldSave) {
         t.set(savedRef, { userId: uid, createdAt: FieldValue.serverTimestamp() });
-        t.update(videoRef, { 'stats.saves': FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+        if (legacySavedRef) t.set(legacySavedRef, { userId: uid, createdAt: FieldValue.serverTimestamp() });
+        t.set(userSavedRef, {
+          videoId: primaryId,
+          postId: resolved.postId || primaryId,
+          savedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+        t.update(primaryRef, { 'stats.saves': FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+        if (resolved.mediaRef && resolved.mediaRef.path !== primaryRef.path && resolved.videoData) {
+          t.update(resolved.mediaRef, { 'stats.saves': FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+        }
         return { saved: true, action: 'saved' };
       }
+
       t.delete(savedRef);
-      t.update(videoRef, { 'stats.saves': FieldValue.increment(-1), updatedAt: FieldValue.serverTimestamp() });
+      if (legacySavedRef) t.delete(legacySavedRef);
+      t.delete(userSavedRef);
+      t.update(primaryRef, { 'stats.saves': FieldValue.increment(-1), updatedAt: FieldValue.serverTimestamp() });
+      if (resolved.mediaRef && resolved.mediaRef.path !== primaryRef.path && resolved.videoData) {
+        t.update(resolved.mediaRef, { 'stats.saves': FieldValue.increment(-1), updatedAt: FieldValue.serverTimestamp() });
+      }
       return { saved: false, action: 'unsaved' };
     });
 
-    return { success: true, ...result };
+    if (resolved.postId && result.action !== 'noop') {
+      await incrementShardedCounter(`posts/${resolved.postId}`, 'saves', result.saved ? 1 : -1);
+    }
+
+    return { success: true, postId: primaryId, ...result };
   } catch (error) {
     logger.error('toggleVideoSave', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
 
 // ======================================================================
-//  6. recordVideoView (deduplicated)
+//  6. recordVideoView (unified dedupe + clamped watchDuration + sharded views)
 // ======================================================================
 exports.recordVideoView = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { videoId, watchDuration } = data;
-  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+  const { videoId, postId: explicitPostId, watchDuration = 0 } = data || {};
+  const targetId = explicitPostId || videoId;
+  if (!targetId) throw new functions.https.HttpsError('invalid-argument', 'videoId or postId required');
 
-  await checkRateLimit(uid, 'recordVideoView', 3, 1000);
+  await checkRateLimit(uid, 'recordVideoView', 10, 1000);
+
+  const resolved = await resolveSparkTarget(targetId);
+  if (!resolved) return { success: true, newView: false };
+
+  const ownerId = resolved.ownerId;
+  if (ownerId && ownerId === uid) {
+    return { success: true, newView: false, skipped: 'self' };
+  }
+  if (ownerId && (await isMutuallyBlocked(uid, ownerId))) {
+    return { success: true, newView: false, skipped: 'blocked' };
+  }
+
+  const maxWatchCap = Math.max(
+    MAX_DURATION_SEC,
+    Number(resolved.postData?.duration || resolved.videoData?.duration || 0) * 3,
+  );
+  const clampedWatch = Number.isFinite(Number(watchDuration))
+    ? Math.max(0, Math.min(maxWatchCap, Number(watchDuration)))
+    : 0;
 
   try {
-    const viewerRef = db.collection('videos').doc(videoId).collection('viewers').doc(uid);
-    const videoRef = db.collection('videos').doc(videoId);
+    const primaryRef = resolved.postRef || resolved.mediaRef;
+    const primaryId = primaryRef.id;
+    const viewerRef = primaryRef.collection('viewers').doc(uid);
+    const today = new Date().toISOString().slice(0, 10);
+    const dailyStatRef = primaryRef.collection('daily_stats').doc(today);
     const shardId = Math.floor(Math.random() * 10);
-    const viewShardRef = videoRef.collection('view_shards').doc(`shard_${shardId}`);
+    const viewShardRef = resolved.mediaRef
+      ? resolved.mediaRef.collection('view_shards').doc(`shard_${shardId}`)
+      : null;
 
     const result = await db.runTransaction(async (t) => {
-      const viewerDoc = await t.get(viewerRef);
+      const [viewerDoc, dailySnap] = await Promise.all([
+        t.get(viewerRef),
+        t.get(dailyStatRef),
+      ]);
+
       if (viewerDoc.exists) {
-        const existingData = viewerDoc.data();
-        const previousDuration = existingData.watchDuration || 0;
-        if (typeof watchDuration === 'number' && watchDuration > previousDuration) {
-          const delta = watchDuration - previousDuration;
-          t.update(viewerRef, { lastViewedAt: FieldValue.serverTimestamp(), watchDuration });
-          t.update(videoRef, { 'stats.totalWatchTime': FieldValue.increment(delta), updatedAt: FieldValue.serverTimestamp() });
+        const existingData = viewerDoc.data() || {};
+        const previousDuration = Number(existingData.watchDuration) || 0;
+        if (clampedWatch > previousDuration) {
+          const delta = clampedWatch - previousDuration;
+          t.update(viewerRef, {
+            lastViewedAt: FieldValue.serverTimestamp(),
+            watchDuration: clampedWatch,
+          });
+          t.update(primaryRef, {
+            'stats.totalWatchTime': FieldValue.increment(delta),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          if (resolved.mediaRef && resolved.mediaRef.path !== primaryRef.path && resolved.videoData) {
+            t.update(resolved.mediaRef, {
+              'stats.totalWatchTime': FieldValue.increment(delta),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          }
         }
         return { success: true, newView: false };
       }
-      t.set(viewerRef, { userId: uid, firstViewedAt: FieldValue.serverTimestamp(), lastViewedAt: FieldValue.serverTimestamp(), watchDuration: watchDuration || 0 });
-      t.set(viewShardRef, { count: FieldValue.increment(1) }, { merge: true });
-      t.update(videoRef, {
+
+      t.set(viewerRef, {
+        userId: uid,
+        firstViewedAt: FieldValue.serverTimestamp(),
+        lastViewedAt: FieldValue.serverTimestamp(),
+        viewedAt: FieldValue.serverTimestamp(),
+        watchDuration: clampedWatch,
+      });
+
+      if (!dailySnap.exists) {
+        t.set(dailyStatRef, {
+          date: today,
+          views: 1,
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        t.update(dailyStatRef, { views: FieldValue.increment(1) });
+      }
+
+      if (viewShardRef) {
+        t.set(viewShardRef, { count: FieldValue.increment(1) }, { merge: true });
+      }
+
+      t.update(primaryRef, {
         'stats.views': FieldValue.increment(1),
-        'stats.totalWatchTime': FieldValue.increment(watchDuration || 0),
+        'stats.totalWatchTime': FieldValue.increment(clampedWatch),
         'stats.viewerCount': FieldValue.increment(1),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      if (resolved.mediaRef && resolved.mediaRef.path !== primaryRef.path && resolved.videoData) {
+        t.update(resolved.mediaRef, {
+          'stats.views': FieldValue.increment(1),
+          'stats.totalWatchTime': FieldValue.increment(clampedWatch),
+          'stats.viewerCount': FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
       return { success: true, newView: true };
     });
 
-    // Watching a video grants video_watched XP (one unit per first view;
-    // best-effort, keyed on the video so a re-watch cannot farm it).
     if (result && result.newView) {
-      await awardXpSafe(uid, 'video_watched', { source: videoId });
+      await Promise.allSettled([
+        resolved.postId ? incrementShardedCounter(`posts/${resolved.postId}`, 'views', 1) : Promise.resolve(),
+        awardXpSafe(uid, 'video_watched', { source: primaryId }),
+      ]);
     }
 
     return result;
@@ -561,95 +1247,162 @@ exports.recordVideoView = onCall(async (data, context) => {
 });
 
 // ======================================================================
-//  7. payPerView (double‑entry)
+//  7. payPerView (double-entry + canonical notification)
 // ======================================================================
 exports.payPerView = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { videoId } = data;
-  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+  const { videoId, postId: explicitPostId } = data || {};
+  const targetId = explicitPostId || videoId;
+  if (!targetId) throw new functions.https.HttpsError('invalid-argument', 'videoId or postId required');
 
   await checkRateLimit(uid, 'payPerView', 5, 60000);
 
+  const resolved = await resolveSparkTarget(targetId);
+  if (!resolved) throw new functions.https.HttpsError('not-found', 'Spark not found');
+
+  const primaryData = resolved.postData || resolved.videoData || {};
+  const canonicalId = resolved.postId || resolved.mediaId;
+  const price = Number(primaryData.monetization?.price || resolved.videoData?.monetization?.price || 0);
+  const ownerId = resolved.ownerId;
+  if (!ownerId) throw new functions.https.HttpsError('failed-precondition', 'Spark owner missing.');
+  if (ownerId === uid) throw new functions.https.HttpsError('invalid-argument', 'Cannot purchase your own Spark');
+
+  const purchaseRef = db.collection('video_purchases').doc(`${uid}_${canonicalId}`);
+  const existing = await purchaseRef.get();
+  if (existing.exists) throw new functions.https.HttpsError('already-exists', 'You already have access.');
+
   try {
-    const videoRef = db.collection('videos').doc(videoId);
-    const purchaseRef = db.collection('video_purchases').doc(`${uid}_${videoId}`);
-
-    const videoDoc = await videoRef.get();
-    if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-    const video = videoDoc.data();
-    const price = video.monetization?.price || 0;
-    const ownerId = video.userId;
-    if (ownerId === uid) throw new functions.https.HttpsError('invalid-argument', 'Cannot purchase your own video');
-
-    const existing = await purchaseRef.get();
-    if (existing.exists) throw new functions.https.HttpsError('already-exists', 'You already have access.');
-
     if (price <= 0) {
-      // Claim the free entitlement in a small transaction so a concurrent
-      // duplicate cannot write two purchase rows.
       await db.runTransaction(async (t) => {
         const snap = await t.get(purchaseRef);
         if (snap.exists) return;
-        t.set(purchaseRef, { userId: uid, videoId, price: 0, grantedAt: FieldValue.serverTimestamp() });
+        t.set(purchaseRef, {
+          userId: uid,
+          videoId: canonicalId,
+          postId: canonicalId,
+          price: 0,
+          grantedAt: FieldValue.serverTimestamp(),
+        });
       });
-      return { success: true, free: true };
+      return { success: true, free: true, postId: canonicalId };
     }
 
-    // Move the coins FIRST, then record the entitlement. `transferCoinsInternal`
-    // opens its OWN transaction (Firestore forbids nesting one inside another)
-    // and is idempotent on `ppv_<uid>_<videoId>`, so a concurrent duplicate
-    // call debits at most once. The previous shape ran that transaction inside
-    // the caller's transaction — illegal, so the purchase threw every time —
-    // and awaited a push enqueue inside the callback, which would have fired
-    // once per SDK retry.
-    const transferResult = await transferCoinsInternal(uid, ownerId, price, 'pay_per_view', { videoId, idempotencyKey: `ppv_${uid}_${videoId}` });
-    await purchaseRef.set({ userId: uid, videoId, price, createdAt: FieldValue.serverTimestamp() }, { merge: true });
-    await enqueuePush(ownerId, {
-      type: 'purchase', senderId: uid, videoId, amount: price, title: 'New purchase',
+    const transferResult = await transferCoinsInternal(uid, ownerId, price, 'pay_per_view', {
+      videoId: canonicalId,
+      postId: canonicalId,
+      idempotencyKey: `ppv_${uid}_${canonicalId}`,
     });
-    return { success: true, ...transferResult };
+    await purchaseRef.set({
+      userId: uid,
+      videoId: canonicalId,
+      postId: canonicalId,
+      price,
+      createdAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await Promise.allSettled([
+      enqueuePush(ownerId, {
+        type: 'purchase',
+        senderId: uid,
+        postId: canonicalId,
+        videoId: canonicalId,
+        amount: price,
+        title: 'New Spark purchase',
+      }),
+      writeNotification(ownerId, {
+        type: 'purchase',
+        senderId: uid,
+        title: 'Spark unlocked',
+        message: `Someone unlocked your Spark for ${price} coins.`,
+        metadata: {
+          postId: canonicalId,
+          amount: price,
+          actionUrl: `/sparks/${canonicalId}`,
+        },
+      }),
+    ]);
+
+    return { success: true, postId: canonicalId, ...transferResult };
   } catch (error) {
     logger.error('payPerView', error);
-    throw error;
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
   }
 });
 
 // ======================================================================
-//  8. sendTip (double‑entry)
+//  8. sendTip (double-entry + canonical post + in-app notification)
 // ======================================================================
 exports.sendTip = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { videoId, amount, message, idempotencyKey } = data;
-  if (!videoId || !amount || amount <= 0) throw new functions.https.HttpsError('invalid-argument', 'videoId and positive amount required');
+  const { videoId, postId: explicitPostId, amount, message = '', idempotencyKey } = data || {};
+  const targetId = explicitPostId || videoId;
+  const safeAmount = Number(amount);
+  if (!targetId || !Number.isFinite(safeAmount) || safeAmount <= 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'videoId and positive amount required');
+  }
 
   await checkRateLimit(uid, 'sendTip', 10, 60000);
 
-  try {
-    const videoRef = db.collection('videos').doc(videoId);
-    const videoDoc = await videoRef.get();
-    if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-    const video = videoDoc.data();
-    const ownerId = video.userId;
-    if (ownerId === uid) throw new functions.https.HttpsError('invalid-argument', 'Cannot tip yourself');
+  const resolved = await resolveSparkTarget(targetId);
+  if (!resolved) throw new functions.https.HttpsError('not-found', 'Spark not found');
 
-    // A tip is a per-intent action: the caller supplies a stable key so an SDK
-    // retry of the same intent debits once, while a genuinely new tip gets a new
-    // key. A `Date.now()` fallback would make the key change on every retry and
-    // double-charge; a fixed key would make a legitimate second tip a silent
-    // no-op. Require the client key and generate a random one only as a last
-    // resort for direct API callers.
+  const ownerId = resolved.ownerId;
+  const canonicalId = resolved.postId || resolved.mediaId;
+  if (!ownerId) throw new functions.https.HttpsError('failed-precondition', 'Spark owner missing.');
+  if (ownerId === uid) throw new functions.https.HttpsError('invalid-argument', 'Cannot tip yourself');
+
+  try {
     const key = (typeof idempotencyKey === 'string' && idempotencyKey.length > 0)
       ? idempotencyKey
-      : `tip_${uid}_${videoId}_${crypto.randomUUID()}`;
-    const transferResult = await transferCoinsInternal(uid, ownerId, amount, 'tip', { videoId, message: message || '', idempotencyKey: key });
-    await db.collection('tips').add({ videoId, fromUserId: uid, toUserId: ownerId, amount, message: message || '', createdAt: FieldValue.serverTimestamp() });
-    await enqueuePush(ownerId, {
-      type: 'tip', senderId: uid, videoId, amount, title: 'You received a tip!',
+      : `tip_${uid}_${canonicalId}_${crypto.randomUUID()}`;
+    const safeMessage = typeof message === 'string' ? message.trim().slice(0, 300) : '';
+    const transferResult = await transferCoinsInternal(uid, ownerId, safeAmount, 'tip', {
+      videoId: canonicalId,
+      postId: canonicalId,
+      message: safeMessage,
+      idempotencyKey: key,
     });
-    return { success: true, ...transferResult };
+
+    await db.collection('tips').add({
+      videoId: canonicalId,
+      postId: canonicalId,
+      fromUserId: uid,
+      toUserId: ownerId,
+      amount: safeAmount,
+      message: safeMessage,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    await Promise.allSettled([
+      enqueuePush(ownerId, {
+        type: 'tip',
+        senderId: uid,
+        postId: canonicalId,
+        videoId: canonicalId,
+        amount: safeAmount,
+        title: 'You received a Spark tip!',
+      }),
+      writeNotification(ownerId, {
+        type: 'tip',
+        senderId: uid,
+        title: 'You received a tip!',
+        message: `Someone sent you ${safeAmount} coins on your Spark.`,
+        metadata: {
+          postId: canonicalId,
+          amount: safeAmount,
+          actionUrl: `/sparks/${canonicalId}`,
+        },
+      }),
+      awardXpSafe(uid, 'gift_sent', { source: `tip_${key}` }),
+      awardXpSafe(ownerId, 'gift_received', { source: `tip_${key}` }),
+    ]);
+
+    return { success: true, postId: canonicalId, ...transferResult };
   } catch (error) {
     logger.error('sendTip', error);
-    throw error;
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
   }
 });
 
@@ -658,104 +1411,208 @@ exports.sendTip = onCall(async (data, context) => {
 // ======================================================================
 exports.setVideoChapters = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { videoId, chapters } = data;
-  if (!videoId || !Array.isArray(chapters)) throw new functions.https.HttpsError('invalid-argument', 'videoId and chapters array required');
+  const { videoId, postId: explicitPostId, chapters } = data || {};
+  const targetId = explicitPostId || videoId;
+  if (!targetId || !Array.isArray(chapters)) {
+    throw new functions.https.HttpsError('invalid-argument', 'videoId/postId and chapters array required');
+  }
+
+  const resolved = await resolveSparkTarget(targetId);
+  if (!resolved) throw new functions.https.HttpsError('not-found', 'Spark not found');
+  if (resolved.ownerId !== uid) {
+    throw new functions.https.HttpsError('permission-denied', 'Only owner can set chapters');
+  }
+
+  const cleanChapters = chapters.slice(0, 40).map((c) => ({
+    title: String(c?.title || '').trim().slice(0, 100),
+    startSec: Math.max(0, Number(c?.startSec) || 0),
+  })).filter((c) => c.title);
 
   try {
-    const videoRef = db.collection('videos').doc(videoId);
-    const doc = await videoRef.get();
-    if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-    if (doc.data().userId !== uid) throw new functions.https.HttpsError('permission-denied', 'Only owner can set chapters');
-
-    await videoRef.update({ chapters, updatedAt: FieldValue.serverTimestamp() });
-    return { success: true };
+    const batch = db.batch();
+    if (resolved.postRef) {
+      batch.update(resolved.postRef, { chapters: cleanChapters, updatedAt: FieldValue.serverTimestamp() });
+    }
+    if (resolved.mediaRef && resolved.videoData) {
+      batch.update(resolved.mediaRef, { chapters: cleanChapters, updatedAt: FieldValue.serverTimestamp() });
+    }
+    await batch.commit();
+    return { success: true, chapters: cleanChapters };
   } catch (error) {
     logger.error('setVideoChapters', error);
-    throw error;
+    throw new functions.https.HttpsError('internal', error.message);
   }
 });
 
 // ======================================================================
 //  10. createDuet / createStitch
 // ======================================================================
-async function createRemix(originalVideoId, userId, remixType, metadata) {
+async function createRemix(originalVideoId, userId, remixType, metadata = {}) {
   await checkRateLimit(userId, 'createDuetStitch', 5, 60000);
 
-  const originalRef = db.collection('videos').doc(originalVideoId);
-  const originalDoc = await originalRef.get();
-  if (!originalDoc.exists) throw new functions.https.HttpsError('not-found', 'Original video not found');
-  const original = originalDoc.data();
+  const original = await resolveSparkTarget(originalVideoId);
+  if (!original) throw new functions.https.HttpsError('not-found', 'Original Spark not found');
+  const origData = original.postData || original.videoData || {};
 
-  if (remixType === 'duet' && !original.duetEnabled) {
-    throw new functions.https.HttpsError('failed-precondition', 'Duet not allowed for this video');
+  if (remixType === 'duet' && origData.duetEnabled === false) {
+    throw new functions.https.HttpsError('failed-precondition', 'Duet not allowed for this Spark');
   }
-  if (remixType === 'stitch' && !original.stitchEnabled) {
-    throw new functions.https.HttpsError('failed-precondition', 'Stitch not allowed for this video');
+  if (remixType === 'stitch' && origData.stitchEnabled === false) {
+    throw new functions.https.HttpsError('failed-precondition', 'Stitch not allowed for this Spark');
   }
 
-  const newRef = db.collection('videos').doc();
-  const newVideoId = newRef.id;
+  const postRef = db.collection('posts').doc();
+  const postId = postRef.id;
+  const videoRef = db.collection('videos').doc(postId);
+  const title = `${remixType === 'duet' ? 'Duet' : 'Stitch'} with ${origData.authorName || origData.title || 'Spark'}`;
+  const baseStats = { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, totalWatchTime: 0, viewerCount: 0, gifts: 0, giftValue: 0 };
 
-  await newRef.set({
+  const batch = db.batch();
+  batch.set(postRef, {
+    authorId: userId,
     userId,
-    title: `${remixType} — ${original.title || 'Video'}`,
-    description: '',
-    tags: original.tags || [],
+    type: 'video',
+    subType: 'spark',
+    title,
+    content: metadata?.caption || title,
+    tags: origData.tags || [],
+    hashtags: origData.tags || [],
     visibility: 'public',
-    status: 'uploading',
+    status: 'processing',
+    processingState: SPARK_PROCESSING_STATES.UPLOAD_RESERVED,
+    mediaAssetId: postId,
+    canonicalPostId: postId,
+    originalPostId: original.postId || original.mediaId,
+    remixType,
     muxAssetId: null,
     muxPlaybackId: null,
-    originalVideoId,
-    remixType,
-    stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, totalWatchTime: 0, viewerCount: 0 },
-    type: 'video',
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-    monetization: { type: 'none' },
+    playbackPolicy: 'signed',
+    stats: baseStats,
     duetEnabled: false,
     stitchEnabled: false,
+    monetization: { type: 'none' },
     isDeleted: false,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   });
+  batch.set(videoRef, {
+    userId,
+    authorId: userId,
+    canonicalPostId: postId,
+    postId,
+    title,
+    description: '',
+    tags: origData.tags || [],
+    visibility: 'public',
+    status: 'uploading',
+    processingState: SPARK_PROCESSING_STATES.UPLOAD_RESERVED,
+    muxAssetId: null,
+    muxPlaybackId: null,
+    originalVideoId: original.mediaId || original.postId,
+    remixType,
+    stats: baseStats,
+    type: 'video',
+    duetEnabled: false,
+    stitchEnabled: false,
+    monetization: { type: 'none' },
+    isDeleted: false,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  await batch.commit();
 
-  return { success: true, videoId: newVideoId };
+  return { success: true, videoId: postId, postId };
 }
 
 exports.createDuet = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { originalVideoId, metadata } = data;
+  const { originalVideoId, metadata } = data || {};
   if (!originalVideoId) throw new functions.https.HttpsError('invalid-argument', 'originalVideoId required');
   return createRemix(originalVideoId, uid, 'duet', metadata);
 });
 
 exports.createStitch = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { originalVideoId, metadata } = data;
+  const { originalVideoId, metadata } = data || {};
   if (!originalVideoId) throw new functions.https.HttpsError('invalid-argument', 'originalVideoId required');
   return createRemix(originalVideoId, uid, 'stitch', metadata);
 });
 
 // ======================================================================
-//  11. live stream (basic)
+//  11. live stream
 // ======================================================================
 exports.createLiveStream = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { title, visibility, tags } = data;
+  const { title, visibility = 'public', tags = [] } = data || {};
   await checkRateLimit(uid, 'createLive', 2, 3600000);
 
   try {
     const liveStream = await Video.LiveStreams.create({
-      playback_policy: 'public',
+      playback_policy: 'signed',
       reconnect_window: 30,
-      new_asset_settings: { playback_policy: 'public' },
+      new_asset_settings: { playback_policy: 'signed' },
     });
-    const videoRef = db.collection('videos').doc();
-    await videoRef.set({
-      userId: uid, title: title || 'Live Stream', description: '', tags: tags || [], visibility: visibility || 'public',
-      status: 'live', type: 'live', muxAssetId: null, muxPlaybackId: liveStream.playback_ids[0].id, liveStreamId: liveStream.id,
-      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, totalWatchTime: 0, viewerCount: 0 },
-      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), monetization: { type: 'none' }, isDeleted: false,
+    const postRef = db.collection('posts').doc();
+    const postId = postRef.id;
+    const videoRef = db.collection('videos').doc(postId);
+    const playbackId = liveStream.playback_ids[0].id;
+    const baseStats = { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, totalWatchTime: 0, viewerCount: 0 };
+
+    const batch = db.batch();
+    batch.set(postRef, {
+      authorId: uid,
+      userId: uid,
+      type: 'video',
+      subType: 'live',
+      title: title || 'Live Stream',
+      content: title || 'Live Stream',
+      tags: Array.isArray(tags) ? tags : [],
+      visibility: normalizeSparkVisibility(visibility),
+      status: 'live',
+      processingState: SPARK_PROCESSING_STATES.PUBLISHED,
+      mediaAssetId: postId,
+      canonicalPostId: postId,
+      muxAssetId: null,
+      muxPlaybackId: playbackId,
+      playbackPolicy: 'signed',
+      liveStreamId: liveStream.id,
+      stats: baseStats,
+      monetization: { type: 'none' },
+      isDeleted: false,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
-    return { success: true, videoId: videoRef.id, streamKey: liveStream.stream_key, playbackId: liveStream.playback_ids[0].id, rtmpUrl: liveStream.rtmp_url || 'rtmps://rtmp-live.mux.com:443/app' };
+    batch.set(videoRef, {
+      userId: uid,
+      authorId: uid,
+      canonicalPostId: postId,
+      postId,
+      title: title || 'Live Stream',
+      description: '',
+      tags: Array.isArray(tags) ? tags : [],
+      visibility: normalizeSparkVisibility(visibility),
+      status: 'live',
+      type: 'live',
+      muxAssetId: null,
+      muxPlaybackId: playbackId,
+      playbackPolicy: 'signed',
+      liveStreamId: liveStream.id,
+      stats: baseStats,
+      monetization: { type: 'none' },
+      isDeleted: false,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    return {
+      success: true,
+      postId,
+      videoId: postId,
+      streamKey: liveStream.stream_key,
+      playbackId,
+      rtmpUrl: liveStream.rtmp_url || 'rtmps://rtmp-live.mux.com:443/app',
+    };
   } catch (error) {
     logger.error('createLiveStream', error);
     throw new functions.https.HttpsError('internal', error.message);
@@ -764,13 +1621,23 @@ exports.createLiveStream = onCall(async (data, context) => {
 
 exports.stopLiveStream = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { liveStreamId } = data;
+  const { liveStreamId } = data || {};
   if (!liveStreamId) throw new functions.https.HttpsError('invalid-argument', 'liveStreamId required');
 
   try {
     await Video.LiveStreams.disable(liveStreamId);
-    const snapshot = await db.collection('videos').where('liveStreamId', '==', liveStreamId).where('userId', '==', uid).limit(1).get();
-    if (!snapshot.empty) await snapshot.docs[0].ref.update({ status: 'live_ended', updatedAt: FieldValue.serverTimestamp() });
+    const [postSnap, videoSnap] = await Promise.all([
+      db.collection('posts').where('liveStreamId', '==', liveStreamId).where('authorId', '==', uid).limit(1).get(),
+      db.collection('videos').where('liveStreamId', '==', liveStreamId).where('userId', '==', uid).limit(1).get(),
+    ]);
+    const batch = db.batch();
+    if (!postSnap.empty) {
+      batch.update(postSnap.docs[0].ref, { status: 'live_ended', updatedAt: FieldValue.serverTimestamp() });
+    }
+    if (!videoSnap.empty) {
+      batch.update(videoSnap.docs[0].ref, { status: 'live_ended', updatedAt: FieldValue.serverTimestamp() });
+    }
+    await batch.commit();
     return { success: true };
   } catch (error) {
     logger.error('stopLiveStream', error);
@@ -778,28 +1645,24 @@ exports.stopLiveStream = onCall(async (data, context) => {
   }
 });
 
-// reportVideo now lives in functions/moderation.js (unified reportContent path)
-// so every report type shares one validation, de-duplication and storage flow.
-
 // ======================================================================
-//  13. getVideoRecommendations (basic)
+//  13. getVideoRecommendations (canonical posts + mutual block filter)
 // ======================================================================
 exports.getVideoRecommendations = onCall(async (data, context) => {
-  validateAuth(context);
-  const { videoId } = data;
-  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+  const uid = validateAuth(context);
+  const { videoId, postId: explicitPostId } = data || {};
+  const targetId = explicitPostId || videoId;
+  if (!targetId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
 
   try {
-    const videoRef = db.collection('videos').doc(videoId);
-    const videoDoc = await videoRef.get();
-    if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-    const video = videoDoc.data();
+    const resolved = await resolveSparkTarget(targetId);
+    if (!resolved) throw new functions.https.HttpsError('not-found', 'Video not found');
+    const video = resolved.postData || resolved.videoData || {};
+    const ownerId = resolved.ownerId || video.userId || video.authorId;
 
-    // Hide recommendations from creators the viewer blocked (and who blocked the
-    // viewer). A block is a mutual denial; the recommendation read had no filter.
+    // Mutual block filter (both outgoing and incoming blocks).
     const hiddenAuthors = new Set();
     try {
-      const uid = context.auth.uid;
       const [outgoing, incoming] = await Promise.all([
         db.collection('blocks').where('blockerId', '==', uid).get(),
         db.collection('blocks').where('blockedId', '==', uid).get(),
@@ -810,25 +1673,70 @@ exports.getVideoRecommendations = onCall(async (data, context) => {
       logger.warn('getVideoRecommendations: block filter unavailable', { error: err.message });
     }
 
-    const seenIds = new Set([videoId]);
+    const seenIds = new Set([resolved.postId || targetId, targetId]);
     const recommendations = [];
 
-    if (video.userId && !hiddenAuthors.has(video.userId)) {
-      const snap = await db.collection('videos').where('userId', '==', video.userId).where('isDeleted', '==', false).orderBy('createdAt', 'desc').limit(5).get();
-      snap.forEach(doc => { if (!seenIds.has(doc.id) && doc.data().status === 'ready') { seenIds.add(doc.id); recommendations.push({ id: doc.id, ...doc.data() }); } });
+    if (ownerId && !hiddenAuthors.has(ownerId)) {
+      const snap = await db.collection('posts')
+        .where('authorId', '==', ownerId)
+        .where('type', '==', 'video')
+        .where('status', '==', 'published')
+        .where('visibility', '==', 'public')
+        .where('isDeleted', '==', false)
+        .orderBy('createdAt', 'desc')
+        .limit(6)
+        .get();
+      snap.forEach((doc) => {
+        if (!seenIds.has(doc.id)) {
+          seenIds.add(doc.id);
+          recommendations.push({ id: doc.id, postId: doc.id, ...doc.data() });
+        }
+      });
     }
 
     const tags = (video.tags || []).slice(0, 2);
     for (const tag of tags) {
       if (recommendations.length >= 10) break;
-      const snap = await db.collection('videos').where('tags', 'array-contains', tag).where('isDeleted', '==', false).orderBy('createdAt', 'desc').limit(5).get();
-      snap.forEach(doc => { if (!seenIds.has(doc.id) && doc.data().status === 'ready' && !hiddenAuthors.has(doc.data().userId)) { seenIds.add(doc.id); recommendations.push({ id: doc.id, ...doc.data() }); } });
+      const snap = await db.collection('posts')
+        .where('type', '==', 'video')
+        .where('tags', 'array-contains', tag)
+        .where('status', '==', 'published')
+        .where('visibility', '==', 'public')
+        .where('isDeleted', '==', false)
+        .orderBy('createdAt', 'desc')
+        .limit(6)
+        .get();
+      snap.forEach((doc) => {
+        const d = doc.data();
+        const author = d.authorId || d.userId;
+        if (!seenIds.has(doc.id) && !hiddenAuthors.has(author)) {
+          seenIds.add(doc.id);
+          recommendations.push({ id: doc.id, postId: doc.id, ...d });
+        }
+      });
+    }
+
+    // Legacy fallback if canonical posts returned < 4 results (guarded by !hiddenAuthors.has(doc.data().userId)).
+    if (recommendations.length < 4 && video.userId && !hiddenAuthors.has(video.userId)) {
+      const legacySnap = await db.collection('videos')
+        .where('userId', '==', video.userId)
+        .where('isDeleted', '==', false)
+        .orderBy('createdAt', 'desc')
+        .limit(5)
+        .get();
+      legacySnap.forEach((doc) => {
+        if (!seenIds.has(doc.id) && doc.data().status === 'ready' && !hiddenAuthors.has(doc.data().userId)) {
+          seenIds.add(doc.id);
+          recommendations.push({ id: doc.id, ...doc.data() });
+        }
+      });
     }
 
     recommendations.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
     return { recommendations: recommendations.slice(0, 10) };
   } catch (error) {
     logger.error('getVideoRecommendations', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
@@ -836,16 +1744,12 @@ exports.getVideoRecommendations = onCall(async (data, context) => {
 // ======================================================================
 //  14. watermarkVideo (FFmpeg, visible + invisible)
 // ======================================================================
-// The pipeline is an internal that the client invokes as a callable: an
-// onRequest endpoint would never speak the callable protocol. Owner-or-admin
-// is enforced in the export; the internal is shared so the Mux webhook can
-// watermark an asset it just received without an unauthenticated round-trip.
 async function watermarkVideoInternal(videoId) {
-  const videoRef = db.collection('videos').doc(videoId);
-  const doc = await videoRef.get();
-  if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-  const video = doc.data();
-  if (video.watermarkDisabled && video.userId !== 'system') {
+  const resolved = await resolveSparkTarget(videoId);
+  if (!resolved) throw new functions.https.HttpsError('not-found', 'Video not found');
+
+  const video = resolved.postData || resolved.videoData || {};
+  if (video.watermarkDisabled && resolved.ownerId !== 'system') {
     return { status: 'skipped' };
   }
 
@@ -867,9 +1771,8 @@ async function watermarkVideoInternal(videoId) {
     fs.writeFileSync(tempInput, Buffer.from(await sourceRes.arrayBuffer()));
     fs.writeFileSync(tempWatermark, Buffer.from(await wmRes.arrayBuffer()));
 
-    // Escape FFmpeg drawtext characters safely; never invoke a subshell.
-    const safeUserId = String(video.userId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
-    const safeVideoId = String(videoId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const safeUserId = String(resolved.ownerId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
+    const safeVideoId = String(resolved.mediaId || videoId).replace(/[^a-zA-Z0-9_-]/g, '');
     const forensicMetadata = `${safeUserId}|${safeVideoId}|${Date.now()}`;
     const watermarkFilter = `drawtext=text='Arvdoul':fontcolor=white:fontsize=24:x=w-tw-10:y=h-th-10:alpha=0.8`;
     const forensicFilter = `drawtext=text='${forensicMetadata}':fontcolor=white:fontsize=8:x=w-tw-10:y=10:alpha=0.2`;
@@ -885,24 +1788,28 @@ async function watermarkVideoInternal(videoId) {
     ]);
 
     const bucket = admin.storage().bucket(process.env.WATERMARK_BUCKET);
-    await bucket.upload(tempOutput, { destination: `watermarked/${videoId}.mp4` });
-    const signedUrl = await bucket.file(`watermarked/${videoId}.mp4`).getSignedUrl({
+    await bucket.upload(tempOutput, { destination: `watermarked/${safeVideoId}.mp4` });
+    const [signedUrl] = await bucket.file(`watermarked/${safeVideoId}.mp4`).getSignedUrl({
       action: 'read',
       expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
     });
 
-    await videoRef.update({
-      watermarkedUrl: signedUrl[0],
+    const patch = {
+      watermarkedUrl: signedUrl,
       watermarkedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    });
-    return { success: true, watermarkedUrl: signedUrl[0] };
+    };
+    const batch = db.batch();
+    if (resolved.postRef) batch.update(resolved.postRef, patch);
+    if (resolved.mediaRef && resolved.videoData) batch.update(resolved.mediaRef, patch);
+    await batch.commit();
+
+    return { success: true, watermarkedUrl: signedUrl };
   } finally {
     for (const filePath of [tempInput, tempWatermark, tempOutput]) {
       try {
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       } catch (cleanupErr) {
-        // Temp file cleanup is best-effort after upload or error.
         logger.warn('Temp watermark file cleanup skipped', { filePath, error: cleanupErr.message });
       }
     }
@@ -910,32 +1817,33 @@ async function watermarkVideoInternal(videoId) {
 }
 
 exports.watermarkVideo = onCall(async (data, context) => {
-  const { videoId } = data || {};
-  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+  const { videoId, postId: explicitPostId } = data || {};
+  const targetId = explicitPostId || videoId;
+  if (!targetId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
   try {
     const uid = getUserIdFromContext(context);
-    const doc = await db.collection('videos').doc(videoId).get();
-    if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-    await assertVideoOwnerOrAdmin(doc.data(), uid, context);
-    return await watermarkVideoInternal(videoId);
+    const resolved = await resolveSparkTarget(targetId);
+    if (!resolved) throw new functions.https.HttpsError('not-found', 'Video not found');
+    await assertVideoOwnerOrAdmin(resolved.postData || resolved.videoData, uid, context);
+    return await watermarkVideoInternal(targetId);
   } catch (error) {
     logger.error('watermarkVideo', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
 
 // ======================================================================
-//  15. moderateVideo (Google Video Intelligence + custom rules)
+//  15. moderateVideo (Google Video Intelligence + explicit policy check)
 // ======================================================================
 async function moderateVideoInternal(videoId) {
-  const videoRef = db.collection('videos').doc(videoId);
-  const doc = await videoRef.get();
-  if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-  const video = doc.data();
+  const resolved = await resolveSparkTarget(videoId);
+  if (!resolved) throw new functions.https.HttpsError('not-found', 'Video not found');
+  const video = resolved.postData || resolved.videoData || {};
   const playbackId = video.muxPlaybackId;
   if (!playbackId) throw new functions.https.HttpsError('failed-precondition', 'No playbackId');
 
-  const gcsUri = `gs://${process.env.WATERMARK_BUCKET}/source/${videoId}.mp4`;
+  const gcsUri = `gs://${process.env.WATERMARK_BUCKET}/source/${resolved.mediaId || videoId}.mp4`;
   const [operation] = await videoIntelligenceClient.annotateVideo({
     inputUri: gcsUri,
     features: ['EXPLICIT_CONTENT_DETECTION', 'LABEL_DETECTION'],
@@ -943,70 +1851,72 @@ async function moderateVideoInternal(videoId) {
   const [result] = await operation.promise();
   const explicitFrames = result.annotationResults[0]?.explicitAnnotation?.frames || [];
   const badLikelihoods = ['LIKELY', 'VERY_LIKELY', 'POSSIBLE'];
-  const hasExplicit = explicitFrames.some(f => badLikelihoods.includes(f.likelihood));
+  const hasExplicit = explicitFrames.some((f) => badLikelihoods.includes(f.likelihood));
 
-  let moderationStatus = 'approved';
-  let moderationNotes = '';
-  if (hasExplicit) {
-    moderationStatus = 'rejected';
-    moderationNotes = 'Explicit content detected';
-  }
-
-  await videoRef.update({
+  const moderationStatus = hasExplicit ? 'rejected' : 'approved';
+  const moderationNotes = hasExplicit ? 'Explicit content detected' : '';
+  const patch = {
     moderationStatus,
     moderationNotes,
     moderatedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-    ...(moderationStatus === 'rejected' && { isDeleted: true, status: 'failed' }),
-  });
+    ...(moderationStatus === 'rejected' && {
+      isDeleted: true,
+      status: 'failed',
+      processingState: SPARK_PROCESSING_STATES.MODERATION_REJECTED,
+    }),
+  };
+
+  const batch = db.batch();
+  if (resolved.postRef) batch.update(resolved.postRef, patch);
+  if (resolved.mediaRef && resolved.videoData) batch.update(resolved.mediaRef, patch);
+  await batch.commit();
+
   return { success: true, moderationStatus };
 }
 
 exports.moderateVideo = onCall(async (data, context) => {
-  const { videoId } = data || {};
-  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+  const { videoId, postId: explicitPostId } = data || {};
+  const targetId = explicitPostId || videoId;
+  if (!targetId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
   try {
     const uid = getUserIdFromContext(context);
-    const doc = await db.collection('videos').doc(videoId).get();
-    if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-    await assertVideoOwnerOrAdmin(doc.data(), uid, context);
-    return await moderateVideoInternal(videoId);
+    const resolved = await resolveSparkTarget(targetId);
+    if (!resolved) throw new functions.https.HttpsError('not-found', 'Video not found');
+    await assertVideoOwnerOrAdmin(resolved.postData || resolved.videoData, uid, context);
+    return await moderateVideoInternal(targetId);
   } catch (error) {
     logger.error('moderateVideo', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
 
 // ======================================================================
-//  16. generateAudioFingerprint
-//  Honest implementation: a real acoustic fingerprint requires
-//  ffmpeg + chromaprint. Until that pipeline is configured, the function
-//  records status 'unavailable' and NEVER stores a fabricated hash as an
-//  audio fingerprint (a sha256 of the id is not a fingerprint).
-//  Internal: invoked by the Mux webhook (and any admin tooling), never by a
-//  client, so it is not an exported callable.
+//  16. generateAudioFingerprint (honest unavailable state until chromaprint)
 // ======================================================================
 async function generateAudioFingerprintInternal(videoId) {
-  const videoRef = db.collection('videos').doc(videoId);
-  const doc = await videoRef.get();
-  if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
+  const resolved = await resolveSparkTarget(videoId);
+  if (!resolved) throw new functions.https.HttpsError('not-found', 'Video not found');
 
-  const fingerprintPipelineConfigured = false; // flip when chromaprint is wired
+  const fingerprintPipelineConfigured = false;
   if (!fingerprintPipelineConfigured) {
-    await videoRef.update({
+    const patch = {
       audioFingerprint: null,
       audioFingerprintStatus: 'unavailable',
       audioFingerprintNote: 'Acoustic fingerprinting requires the ffmpeg/chromaprint pipeline (not configured)',
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
+    const batch = db.batch();
+    if (resolved.postRef) batch.update(resolved.postRef, patch);
+    if (resolved.mediaRef && resolved.videoData) batch.update(resolved.mediaRef, patch);
+    await batch.commit();
     return { success: false, status: 'unavailable', reason: 'chromaprint pipeline not configured' };
   }
 
   return { success: true, status: 'pending' };
 }
 
-// Admin-only callable: a manual re-run lever for operators. Never exposed to
-// ordinary clients (see the Mux webhook, which calls the internal directly).
 exports.generateAudioFingerprint = onCall(async (data, context) => {
   await assertAdmin(context);
   const { videoId } = data || {};
@@ -1021,15 +1931,12 @@ exports.generateAudioFingerprint = onCall(async (data, context) => {
 });
 
 // ======================================================================
-//  17. updateViralScore (compute viralScore based on velocity)
-//  Internal: driven by the Mux webhook / Cloud Tasks, never by a client.
-//  Exposed only as an admin-only callable for a manual re-run.
+//  17. updateViralScore
 // ======================================================================
 async function updateViralScoreInternal(videoId) {
-  const videoRef = db.collection('videos').doc(videoId);
-  const doc = await videoRef.get();
-  if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-  const video = doc.data();
+  const resolved = await resolveSparkTarget(videoId);
+  if (!resolved) throw new functions.https.HttpsError('not-found', 'Video not found');
+  const video = resolved.postData || resolved.videoData || {};
   const stats = video.stats || {};
   const views = stats.views || 0;
   const likes = stats.likes || 0;
@@ -1039,11 +1946,18 @@ async function updateViralScoreInternal(videoId) {
 
   const viewsVelocity = views / ageHours;
   const sharesVelocity = shares / ageHours;
-  const likeRatio = (likes / Math.max(views, 1));
+  const likeRatio = likes / Math.max(views, 1);
   const completionRate = (stats.totalWatchTime || 0) / Math.max(views, 1) / (video.duration || 1);
 
-  const viralScore = (viewsVelocity * 0.35) + (sharesVelocity * 0.25) + (completionRate * 0.25) + (likeRatio * 0.15);
-  await videoRef.update({ viralScore: Math.min(1000, viralScore), updatedAt: FieldValue.serverTimestamp() });
+  const viralScore = Math.min(
+    1000,
+    (viewsVelocity * 0.35) + (sharesVelocity * 0.25) + (completionRate * 0.25) + (likeRatio * 0.15),
+  );
+  const patch = { viralScore, updatedAt: FieldValue.serverTimestamp() };
+  const batch = db.batch();
+  if (resolved.postRef) batch.update(resolved.postRef, patch);
+  if (resolved.mediaRef && resolved.videoData) batch.update(resolved.mediaRef, patch);
+  await batch.commit();
   return { success: true, viralScore };
 }
 
@@ -1061,7 +1975,56 @@ exports.updateViralScore = onCall(async (data, context) => {
 });
 
 // ======================================================================
-//  SCHEDULED FUNCTIONS (cursor‑based aggregation)
+//  18. deleteVideo (unified canonical soft-delete + Mux/Storage cleanup)
+// ======================================================================
+exports.deleteVideo = onCall(async (data, context) => {
+  const uid = validateAuth(context);
+  const { videoId, postId: explicitPostId } = data || {};
+  const targetId = explicitPostId || videoId;
+  if (!targetId) throw new functions.https.HttpsError('invalid-argument', 'videoId or postId required');
+
+  const resolved = await resolveSparkTarget(targetId);
+  if (!resolved) throw new functions.https.HttpsError('not-found', 'Spark not found');
+
+  await assertVideoOwnerOrAdmin(resolved.postData || resolved.videoData, uid, context);
+  const isAdminAction = resolved.ownerId !== uid;
+
+  const deletePatch = {
+    isDeleted: true,
+    status: 'deleted',
+    deletedAt: FieldValue.serverTimestamp(),
+    deletedBy: uid,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  const batch = db.batch();
+  if (resolved.postRef) batch.update(resolved.postRef, deletePatch);
+  if (resolved.mediaRef && resolved.videoData) batch.update(resolved.mediaRef, deletePatch);
+  await batch.commit();
+
+  const muxAssetId = resolved.postData?.muxAssetId || resolved.videoData?.muxAssetId;
+  if (muxAssetId && process.env.MUX_TOKEN_ID && process.env.MUX_TOKEN_SECRET) {
+    await Video.Assets.delete(muxAssetId).catch((e) =>
+      logger.warn('Mux asset cleanup failed', { muxAssetId, error: e.message }),
+    );
+  }
+
+  const storagePath = resolved.postData?.storagePath || resolved.videoData?.storagePath;
+  if (storagePath) {
+    await admin.storage().bucket().file(storagePath).delete().catch((e) =>
+      logger.warn('Storage video cleanup failed', { storagePath, error: e.message }),
+    );
+  }
+
+  if (isAdminAction) {
+    await writeAudit(uid, 'delete_spark', resolved.postId || resolved.mediaId, { ownerId: resolved.ownerId }, 'video');
+  }
+
+  return { success: true, postId: resolved.postId || resolved.mediaId };
+});
+
+// ======================================================================
+//  SCHEDULED FUNCTIONS (cursor-based aggregation)
 // ======================================================================
 async function processBatchWithCursor(collectionName, processDocFn, cursorDocName, limit = 200) {
   const cursorRef = db.collection('system').doc(cursorDocName);
@@ -1089,7 +2052,7 @@ exports.aggregateVideoViews = pubsub.schedule('every 5 minutes').onRun(async () 
   return processBatchWithCursor('videos', async (doc) => {
     const shardsSnap = await doc.ref.collection('view_shards').get();
     let totalViews = 0;
-    shardsSnap.forEach(s => totalViews += s.data().count || 0);
+    shardsSnap.forEach((s) => { totalViews += s.data().count || 0; });
     await doc.ref.update({ 'stats.views': totalViews, updatedAt: FieldValue.serverTimestamp() });
   }, 'aggregation_cursor_views');
 });
@@ -1098,19 +2061,11 @@ exports.aggregateVideoLikes = pubsub.schedule('every 5 minutes').onRun(async () 
   return processBatchWithCursor('videos', async (doc) => {
     const shardsSnap = await doc.ref.collection('like_shards').get();
     let totalLikes = 0;
-    shardsSnap.forEach(s => totalLikes += s.data().count || 0);
+    shardsSnap.forEach((s) => { totalLikes += s.data().count || 0; });
     await doc.ref.update({ 'stats.likes': totalLikes, updatedAt: FieldValue.serverTimestamp() });
   }, 'aggregation_cursor_likes');
 });
 
-// Video comments live in the shared `comments` collection keyed by `postId`
-// (the client's `VideoComments` passes the video id as the target), so unlike
-// views/likes there is no per-video shard subcollection to sum. Before this
-// mirror `videos/{id}.stats.comments` was seeded `0` and never written — the
-// client's comment counter targeted `posts/{videoId}` (a document that does
-// not exist for a video), so the count was a fabricated `0` on the video card
-// and in `updateVideoRankingScores` (N435). A bounded `.count()` per video is
-// the authoritative read (no collection scan).
 exports.aggregateVideoComments = pubsub.schedule('every 5 minutes').onRun(async () => {
   return processBatchWithCursor('videos', async (doc) => {
     const agg = await db.collection('comments')
@@ -1120,8 +2075,6 @@ exports.aggregateVideoComments = pubsub.schedule('every 5 minutes').onRun(async 
       .get();
     const totalComments = agg.data().count || 0;
     const stored = doc.data().stats?.comments;
-    // Only write when it changed, so a quiet run costs one aggregate read and
-    // no write (the Algolia `onWrite` index does not churn).
     if (stored !== totalComments) {
       await doc.ref.update({ 'stats.comments': totalComments, updatedAt: FieldValue.serverTimestamp() });
     }
@@ -1149,43 +2102,53 @@ exports.updateVideoRankingScores = pubsub.schedule('every 15 minutes').onRun(asy
     if (views > 1000 && ((likes + comments + shares) / views) > 0.1) score *= 1.5;
     const ageHours = (Date.now() - (data.createdAt?.toMillis?.() || 0)) / 3600000;
     score *= Math.exp(-ageHours / 48);
-    await doc.ref.update({ rankingScore: score, updatedAt: FieldValue.serverTimestamp() });
+
+    const updates = { rankingScore: score, updatedAt: FieldValue.serverTimestamp() };
+    await doc.ref.update(updates);
+    if (data.canonicalPostId) {
+      await db.collection('posts').doc(data.canonicalPostId).update(updates).catch(() => {});
+    }
   }, 'aggregation_cursor_ranking');
 });
 
 exports.detectStuckVideos = pubsub.schedule('every 24 hours').onRun(async () => {
   return processBatchWithCursor('videos', async (doc) => {
     const data = doc.data();
-    if (data.status !== 'uploading') return;
+    if (data.status !== 'uploading' && data.processingState !== SPARK_PROCESSING_STATES.UPLOAD_RESERVED) return;
     const createdAt = data.createdAt?.toMillis?.() || 0;
     if (Date.now() - createdAt > 24 * 60 * 60 * 1000) {
-      await doc.ref.update({ status: 'failed', error: 'Processing timed out', updatedAt: FieldValue.serverTimestamp() });
+      const failPatch = {
+        status: 'failed',
+        processingState: SPARK_PROCESSING_STATES.PROCESSING_FAILED,
+        error: 'Processing timed out',
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      await doc.ref.update(failPatch);
+      if (data.canonicalPostId) {
+        await db.collection('posts').doc(data.canonicalPostId).update(failPatch).catch(() => {});
+      }
     }
   }, 'aggregation_cursor_stuck', 200);
 });
 
 exports.cleanupOldShareEvents = pubsub.schedule('every 24 hours').onRun(async () => {
   const cutoff = Timestamp.fromDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
-  // Drain the whole 30-day backlog: re-query a bounded page until empty. A
-  // single `.limit(500)` read/day fell behind any day with >500 shares, so old
-  // events accumulated forever (the collection has no other reader).
   let deleted = 0;
   for (;;) {
     const oldEvents = await db.collection('share_events').where('createdAt', '<=', cutoff).limit(400).get();
     if (oldEvents.empty) break;
     const batch = db.batch();
-    oldEvents.forEach(doc => batch.delete(doc.ref));
+    oldEvents.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
     deleted += oldEvents.size;
     if (oldEvents.size < 400) break;
   }
   if (deleted) logger.info('share_events cleanup', { deleted });
   return null;
-});// Shared internals exposed for the emulator-backed money-path tests only. A
-// plain object export is ignored by `index.js#merge` (which deploys only
-// functions carrying `__trigger`/`__endpoint`), so nothing here ships.
-module.exports.__test__ = { transferCoinsInternal };
+});
 
-// Roadmap: video CDN / adaptive bitrate. Replace direct Storage URLs with CDN
-// edge URLs (Cloudflare / Mux / AWS CloudFront) and generate HLS/DASH manifests
-// for adaptive bitrate. Tracked work, not shipped behavior.
+module.exports.__test__ = {
+  transferCoinsInternal,
+  resolveSparkTarget,
+  evaluateSparkAccess,
+};

@@ -69,12 +69,25 @@ const REPORT_TARGETS = {
   call: { collection: 'call_reports', contentField: 'callId', contentCollection: 'calls' },
 };
 
+async function resolveContentSnapshot(type, targetId) {
+  if (type === 'video') {
+    const postSnap = await db.doc(`posts/${targetId}`).get().catch(() => null);
+    if (postSnap && postSnap.exists) return postSnap;
+    const mapSnap = await db.doc(`video_migration_map/${targetId}`).get().catch(() => null);
+    if (mapSnap && mapSnap.exists && mapSnap.data()?.canonicalPostId) {
+      const mappedPost = await db.doc(`posts/${mapSnap.data().canonicalPostId}`).get().catch(() => null);
+      if (mappedPost && mappedPost.exists) return mappedPost;
+    }
+  }
+  return db.doc(`${REPORT_TARGETS[type].contentCollection}/${targetId}`).get().catch(() => null);
+}
+
 // Exactly the field names the admin console reads (reporterName, content,
 // priority). Writing them once here keeps every report type queue-compatible.
 async function buildReportRecord(reporterId, type, targetId, reason, details) {
   const [reporterSnap, contentSnap] = await Promise.all([
     db.doc(`users/${reporterId}`).get(),
-    db.doc(`${REPORT_TARGETS[type].contentCollection}/${targetId}`).get().catch(() => null),
+    resolveContentSnapshot(type, targetId),
   ]);
   const reporter = reporterSnap.exists ? reporterSnap.data() : {};
   const content = contentSnap && contentSnap.exists ? contentSnap.data() : {};
@@ -92,7 +105,7 @@ async function buildReportRecord(reporterId, type, targetId, reason, details) {
     priority: 'normal',
     // A short, already-public excerpt so moderators can triage without opening
     // the original document. Empty for non-text targets.
-    content: stripHtml(content.content || content.text || content.caption || '').slice(0, 280),
+    content: stripHtml(content.content || content.text || content.caption || content.title || '').slice(0, 280),
     createdAt: FieldValue.serverTimestamp(),
     resolvedAt: null,
     resolvedBy: null,
@@ -139,9 +152,10 @@ async function handleReportContent(data, context) {
   // Keep a counter on the target so queues can prioritise heavily-reported
   // content. Best-effort: a missing target document is not an error.
   try {
-    await db
-      .doc(`${REPORT_TARGETS[type].contentCollection}/${targetId}`)
-      .update({ reportCount: FieldValue.increment(1) });
+    const resolvedSnap = await resolveContentSnapshot(type, targetId);
+    if (resolvedSnap && resolvedSnap.exists) {
+      await resolvedSnap.ref.update({ reportCount: FieldValue.increment(1) });
+    }
   } catch (err) {
     // Target may not exist (e.g. already deleted) — expected; a real write
     // failure (quota/permissions) is logged so it is not indistinguishable.
