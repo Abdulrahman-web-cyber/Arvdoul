@@ -411,6 +411,26 @@ export default function ProfilePublicScreen() {
     }
   }, [currentUser?.uid, profileData?.id, profileData?.uid, routeUserId]);
 
+  const handleDeclineFriendRequest = useCallback(async () => {
+    if (!currentUser?.uid || !pendingRequestId) return;
+    const friendTargetUid = profileData?.id || profileData?.uid || routeUserId;
+    setFriendRequestLoading(true);
+    try {
+      const { getUserService } = await import('../../services/userService.js');
+      await getUserService().declineFriendRequest(pendingRequestId, currentUser.uid);
+      setFriendshipStatus('none');
+      setPendingRequestId(null);
+      window.dispatchEvent(new CustomEvent('arvdoul:friend-request-changed', {
+        detail: { targetUid: friendTargetUid, action: 'declined', requestId: pendingRequestId },
+      }));
+      toast.info('Friend request declined.');
+    } catch (e) {
+      toast.error(e?.message || 'Could not decline the friend request.');
+    } finally {
+      setFriendRequestLoading(false);
+    }
+  }, [currentUser?.uid, pendingRequestId, profileData?.id, profileData?.uid, routeUserId]);
+
   // Base profile: real data only, no mock fallbacks and no privacy decisions.
   // Privacy is applied once, from the capability engine, in `effectiveProfile`
   // below: components must not re-derive fail-open privacy flags. Identity and
@@ -574,7 +594,7 @@ export default function ProfilePublicScreen() {
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
+          isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
             <ShieldAlert className="w-8 h-8" />
@@ -604,7 +624,7 @@ export default function ProfilePublicScreen() {
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
+          isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 text-red-500 flex items-center justify-center">
             <UserX className="w-8 h-8" />
@@ -642,7 +662,7 @@ export default function ProfilePublicScreen() {
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
+          isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center">
             <ShieldAlert className="w-8 h-8" />
@@ -673,7 +693,7 @@ export default function ProfilePublicScreen() {
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
+          isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
             {storeError ? <ShieldAlert className="w-8 h-8" /> : <UserX className="w-8 h-8" />}
@@ -724,7 +744,7 @@ export default function ProfilePublicScreen() {
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
+          isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center">
             <ShieldAlert className="w-8 h-8" />
@@ -811,6 +831,7 @@ export default function ProfilePublicScreen() {
             friendRequestLoading={friendRequestLoading}
             onFriendRequestToggle={handleFriendRequestToggle}
             onCancelFriendRequest={handleCancelFriendRequest}
+            onDeclineFriendRequest={handleDeclineFriendRequest}
             onOpenTipModal={() => setShowTipModal(true)}
             capabilities={capabilities}
           />
@@ -862,7 +883,7 @@ export default function ProfilePublicScreen() {
               return (
                 <div className={cn(
                   "rounded-[24px] p-8 sm:p-12 text-center border backdrop-blur-xl space-y-4 my-2",
-                  isDark ? "bg-[#0B1234]/36 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200/90 shadow-sm"
+                  isDark ? "bg-white/[0.025] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200/90 shadow-sm"
                 )}>
                   <div className="w-14 h-14 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
                     <Lock className="w-6 h-6" />
@@ -887,23 +908,38 @@ export default function ProfilePublicScreen() {
                         <span>{requestStatus === 'pending' ? 'Requested' : 'Follow to View'}</span>
                       </button>
                     ) : (
-                      <button
-                        type="button"
-                        disabled={friendRequestLoading || friendshipStatus === 'friends'}
-                        onClick={friendshipStatus === 'pending' ? handleCancelFriendRequest : handleFriendRequestToggle}
-                        className="min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
-                      >
-                        <UserPlus className="w-4 h-4" />
-                        <span>
-                          {friendshipStatus === 'received'
-                            ? 'Accept Friend Request'
-                            : friendshipStatus === 'pending'
-                              ? 'Cancel Request'
-                              : friendshipStatus === 'friends'
-                                ? 'Friends'
-                                : 'Add friend'}
-                        </span>
-                      </button>
+                      <div className="flex flex-wrap items-center justify-center gap-2.5">
+                        <button
+                          type="button"
+                          disabled={friendRequestLoading || friendshipStatus === 'friends'}
+                          onClick={friendshipStatus === 'pending' ? handleCancelFriendRequest : handleFriendRequestToggle}
+                          className="min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          <span>
+                            {friendshipStatus === 'received'
+                              ? 'Accept Friend Request'
+                              : friendshipStatus === 'pending'
+                                ? 'Cancel Request'
+                                : friendshipStatus === 'friends'
+                                  ? 'Friends'
+                                  : 'Add friend'}
+                          </span>
+                        </button>
+                        {friendshipStatus === 'received' && (
+                          <button
+                            type="button"
+                            disabled={friendRequestLoading}
+                            onClick={handleDeclineFriendRequest}
+                            className={cn(
+                              "min-h-[44px] px-5 py-2.5 rounded-xl border font-bold text-sm transition-colors cursor-pointer disabled:opacity-60",
+                              isDark ? "bg-white/[0.04] hover:bg-white/[0.09] border-white/15 text-slate-200" : "bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700"
+                            )}
+                          >
+                            Decline
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1035,7 +1071,7 @@ export default function ProfilePublicScreen() {
                       className={cn(
                         "h-full rounded-[24px] border backdrop-blur-xl px-4 py-4 sm:px-5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 transition-colors",
                         isDark
-                          ? "bg-[#0B1234]/36 border-amber-400/20 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                          ? "bg-white/[0.025] border-amber-400/20 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                           : "bg-white border-amber-200/80 text-slate-900 shadow-xs"
                       )}
                     >
@@ -1132,6 +1168,7 @@ export default function ProfilePublicScreen() {
               friendRequestLoading={friendRequestLoading}
               onFriendRequestToggle={handleFriendRequestToggle}
               onCancelFriendRequest={handleCancelFriendRequest}
+              onDeclineFriendRequest={handleDeclineFriendRequest}
               onOpenTipModal={() => setShowTipModal(true)}
               onRelationshipChange={({ type, value }) => {
                 setRelationship((prev) => ({

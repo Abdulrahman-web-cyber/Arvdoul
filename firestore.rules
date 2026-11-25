@@ -680,10 +680,10 @@ service cloud.firestore {
           (request.auth.uid == resource.data.authorId &&
             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
               'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore', 'reportCount',
-              'poll', 'gifts', 'boostData',
               'muxAssetId', 'muxPlaybackId', 'muxUploadId', 'mediaAssetId',
               'processingState', 'playbackPolicy', 'audioFingerprint',
-              'audioFingerprintStatus', 'viralScore', 'rankingScore', 'videoStats'
+              'audioFingerprintStatus', 'viralScore', 'rankingScore', 'videoStats',
+              'poll', 'gifts', 'boostData'
             ])) ||
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'stats', 'updatedAt'

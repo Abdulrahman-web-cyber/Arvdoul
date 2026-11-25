@@ -44,11 +44,11 @@ import { resolveCreatorFlag } from '../../services/profileReadModel.js';
  * ----------------------------------------------------------------------------------------- */
 const STYLES = `
 .pmg-root{
-  --pmg-blur:blur(12px) saturate(165%);
+  --pmg-blur:blur(22px) saturate(190%);
   position:relative;
   box-sizing:border-box;
   width:100%;
-  max-width:600px;
+  max-width:100%;
   margin-inline:auto;
   container-type:inline-size;
   -webkit-text-size-adjust:100%;
@@ -56,39 +56,37 @@ const STYLES = `
 .pmg-root *,.pmg-root *::before,.pmg-root *::after{box-sizing:border-box}
 .pmg-root.pmg-has-trend{padding-top:6px}
 
-/* ---------- Dark: deep navy liquid glass, balanced contrast matching ProfileTabsBar ---------- */
+/* ---------- Dark: zero-contrast transparent liquid glass over #03071B ---------- */
 .pmg-root[data-theme="dark"]{
-  --pmg-base:rgba(14,20,60,0.28);
+  --pmg-base:rgba(255,255,255,0.025);
   --pmg-layers:
-    radial-gradient(120% 78% at 50% -24%,rgba(124,108,255,0.14),transparent 62%),
-    radial-gradient(85% 70% at 108% 112%,rgba(40,125,255,0.12),transparent 64%),
-    radial-gradient(70% 60% at -8% 105%,rgba(150,60,240,0.09),transparent 66%),
-    linear-gradient(165deg,rgba(22,30,78,0.34),rgba(10,14,46,0.36) 58%,rgba(6,10,38,0.40));
-  --pmg-border:rgba(165,175,255,0.14);
+    radial-gradient(125% 85% at 22% -20%,rgba(255,255,255,0.14),transparent 60%),
+    radial-gradient(85% 70% at 105% 112%,rgba(0,136,255,0.14),transparent 64%),
+    radial-gradient(75% 65% at -8% 108%,rgba(200,43,255,0.10),transparent 64%),
+    linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.01));
+  --pmg-border:rgba(255,255,255,0.12);
   --pmg-shadow:
-    0 10px 22px -16px rgba(0,0,0,0.52),
-    0 2px 6px rgba(2,4,20,0.24),
-    inset 0 1px 0 rgba(255,255,255,0.12),
-    inset 0 -1px 0 rgba(90,110,255,0.09),
-    inset 1px 0 0 rgba(160,140,255,0.07),
-    inset -1px 0 0 rgba(60,140,255,0.07),
-    inset 0 0 16px rgba(80,90,230,0.05);
+    0 12px 24px -18px rgba(0,0,0,0.55),
+    0 2px 6px -3px rgba(0,0,0,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.16),
+    inset 0 -1px 0 rgba(150,170,255,0.10),
+    inset 0 0 16px rgba(130,110,255,0.05);
   --pmg-shadow-hover:
-    0 12px 24px -16px rgba(0,0,0,0.60),
-    0 2px 6px rgba(2,4,20,0.28),
-    inset 0 1px 0 rgba(255,255,255,0.18),
-    inset 0 -1px 0 rgba(110,130,255,0.14),
-    inset 0 0 20px rgba(100,110,255,0.09);
+    0 14px 26px -16px rgba(0,0,0,0.62),
+    0 2px 6px rgba(0,0,0,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.22),
+    inset 0 -1px 0 rgba(150,170,255,0.15),
+    inset 0 0 20px rgba(130,120,255,0.09);
   --pmg-spec:
-    linear-gradient(90deg,transparent,rgba(255,255,255,0.32) 50%,transparent) center top/70% 1px no-repeat,
-    linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.02) 55%,transparent);
-  --pmg-glow:radial-gradient(90% 80% at 50% 0%,rgba(150,135,255,0.16),transparent 70%);
-  --pmg-rim:linear-gradient(145deg,rgba(255,255,255,0.28) 0%,rgba(255,255,255,0.06) 32%,rgba(139,92,246,0.18) 66%,rgba(59,130,246,0.32) 100%);
+    linear-gradient(90deg,transparent,rgba(255,255,255,0.34) 50%,transparent) center top/72% 1px no-repeat,
+    linear-gradient(180deg,rgba(255,255,255,0.11),rgba(255,255,255,0.02) 55%,transparent);
+  --pmg-glow:radial-gradient(90% 80% at 50% 0%,rgba(255,255,255,0.16),transparent 70%);
+  --pmg-rim:linear-gradient(140deg,rgba(255,255,255,0.34) 0%,rgba(255,255,255,0.08) 30%,rgba(255,255,255,0.03) 58%,rgba(0,136,255,0.34) 100%);
   --pmg-value:#FFFFFF;
-  --pmg-label:#AEB9D6;
-  --pmg-focus:#8F83FF;
-  --pmg-badge-bg:rgba(8,14,44,0.82);
-  --pmg-badge-border:rgba(150,160,255,0.20);
+  --pmg-label:#B4BFDE;
+  --pmg-focus:#A79BFF;
+  --pmg-badge-bg:rgba(3,7,27,0.88);
+  --pmg-badge-border:rgba(255,255,255,0.18);
   --pmg-up:#6EE7B7;--pmg-down:#FDA4AF;--pmg-zero:#A8B3CC;
   --pmg-a-posts:#C4B5FD;--pmg-a-followers:#D8B4FE;--pmg-a-following:#67E8F9;
   --pmg-a-friends:#7DD3FC;--pmg-a-views:#5EEAD4;--pmg-a-likes:#FDA4AF;--pmg-a-coins:#FCD34D;
@@ -124,49 +122,51 @@ const STYLES = `
   --pmg-rim:linear-gradient(145deg,#FFFFFF 0%,rgba(255,255,255,0.55) 30%,rgba(139,92,246,0.28) 68%,rgba(59,130,246,0.42) 100%);
   --pmg-value:#0F172A;
   --pmg-label:#475569;
-  --pmg-focus:#4431F7;
+  --pmg-focus:var(--arv-brand-indigo);
   --pmg-badge-bg:rgba(255,255,255,0.94);
   --pmg-badge-border:rgba(110,130,220,0.30);
   --pmg-up:#047857;--pmg-down:#E11D48;--pmg-zero:#64748B;
-  --pmg-a-posts:#7C1FE0;--pmg-a-followers:#8B1EF3;--pmg-a-following:#0891B2;
-  --pmg-a-friends:#055BFB;--pmg-a-views:#0E7490;--pmg-a-likes:#E11D48;--pmg-a-coins:#B45309;
+  --pmg-a-posts:#7C1FE0;--pmg-a-followers:var(--arv-brand-violet);--pmg-a-following:#0891B2;
+  --pmg-a-friends:var(--arv-brand-blue);--pmg-a-views:#0E7490;--pmg-a-likes:#E11D48;--pmg-a-coins:#B45309;
 }
 
-/* ---------- Grid: equal tiles, four per row, incomplete rows centred ---------- */
+/* ---------- Grid: single horizontal row across Android & Desktop ---------- */
 .pmg-grid{
-  /* Fallback sizes (no container-query support): Android-first. */
-  --pmg-gx:7px;--pmg-gy:8px;--pmg-r:16px;--pmg-h:82px;
-  --pmg-icon:18px;--pmg-num:18px;--pmg-lbl:10px;--pmg-trend:9px;
-  --pmg-px:4px;--pmg-py:8px;--pmg-gap:4px;
-  display:flex;flex-wrap:wrap;justify-content:center;
+  /* Fallback sizes (no container-query support): Android-first single row. */
+  --pmg-gx:4px;--pmg-gy:6px;--pmg-r:13px;--pmg-h:62px;
+  --pmg-icon:14px;--pmg-num:13.5px;--pmg-lbl:8.5px;--pmg-trend:7.5px;
+  --pmg-px:2px;--pmg-py:6px;--pmg-gap:3px;
+  display:grid;
+  grid-template-columns:repeat(var(--pmg-cols, 6), minmax(0, 1fr));
+  align-items:stretch;
   gap:var(--pmg-gy) var(--pmg-gx);
   margin:0;padding:0;
 }
 @supports (width:1cqw){
   .pmg-grid{
-    --pmg-gx:clamp(6px,2.2cqw,14px);
-    --pmg-gy:clamp(7px,2.5cqw,14px);
-    --pmg-r:clamp(15px,4.6cqw,21px);
-    --pmg-h:clamp(82px,22.5cqw,108px);
-    --pmg-icon:clamp(17px,5.2cqw,23px);
-    --pmg-num:clamp(17px,5.6cqw,26px);
-    --pmg-lbl:clamp(10px,2.9cqw,12.5px);
-    --pmg-trend:clamp(9px,2.6cqw,11px);
-    --pmg-px:clamp(3px,1.4cqw,8px);
-    --pmg-py:clamp(7px,2.4cqw,12px);
-    --pmg-gap:clamp(3px,1.1cqw,6px);
+    --pmg-gx:clamp(3px,1.1cqw,10px);
+    --pmg-gy:clamp(6px,1.8cqw,12px);
+    --pmg-r:clamp(12px,2.8cqw,18px);
+    --pmg-h:clamp(60px,14cqw,90px);
+    --pmg-icon:clamp(13px,3.2cqw,19px);
+    --pmg-num:clamp(13px,3.5cqw,22px);
+    --pmg-lbl:clamp(8px,2.0cqw,11.5px);
+    --pmg-trend:clamp(7.5px,1.8cqw,10px);
+    --pmg-px:clamp(2px,0.8cqw,8px);
+    --pmg-py:clamp(6px,1.5cqw,11px);
+    --pmg-gap:clamp(2px,0.7cqw,5px);
   }
 }
 @supports not (width:1cqw){
   @media (min-width:640px){
-    .pmg-grid{--pmg-gx:14px;--pmg-gy:14px;--pmg-r:20px;--pmg-h:104px;--pmg-icon:22px;--pmg-num:25px;--pmg-lbl:12.5px;--pmg-trend:11px;--pmg-px:8px;--pmg-py:12px;--pmg-gap:6px}
+    .pmg-grid{--pmg-gx:10px;--pmg-gy:10px;--pmg-r:18px;--pmg-h:88px;--pmg-icon:18px;--pmg-num:21px;--pmg-lbl:11.5px;--pmg-trend:10px;--pmg-px:8px;--pmg-py:10px;--pmg-gap:5px}
   }
 }
 
 /* ---------- Tile ---------- */
 .pmg-tile{
   position:relative;isolation:isolate;
-  flex:0 0 calc((100% - 3 * var(--pmg-gx)) / 4);
+  width:100%;
   min-width:0;
   min-height:var(--pmg-h);
   padding:var(--pmg-py) var(--pmg-px);
@@ -270,17 +270,17 @@ button.pmg-tile{cursor:pointer;touch-action:manipulation;user-select:none;-webki
 /* ---------- Progressive fallbacks ---------- */
 /* No backdrop blur: a denser, still-translucent body keeps the tile coherent and readable. */
 @supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
-  .pmg-root[data-theme="dark"]{--pmg-base:rgba(9,13,42,0.82)}
+  .pmg-root[data-theme="dark"]{--pmg-base:rgba(3,7,27,0.88)}
   .pmg-root[data-theme="light"]{--pmg-base:rgba(246,248,255,0.90)}
 }
 /* Reduced transparency and Lite/performance modes: drop blur, keep the layered material. */
 @media (prefers-reduced-transparency:reduce){
   .pmg-root{--pmg-blur:none}
-  .pmg-root[data-theme="dark"]{--pmg-base:rgba(9,13,42,0.88)}
+  .pmg-root[data-theme="dark"]{--pmg-base:rgba(3,7,27,0.92)}
   .pmg-root[data-theme="light"]{--pmg-base:rgba(246,248,255,0.94)}
 }
 .lite-mode .pmg-root,[data-lite-mode="true"] .pmg-root,[data-performance="lite"] .pmg-root{--pmg-blur:none}
-.lite-mode .pmg-root[data-theme="dark"],[data-lite-mode="true"] .pmg-root[data-theme="dark"],[data-performance="lite"] .pmg-root[data-theme="dark"]{--pmg-base:rgba(9,13,42,0.86)}
+.lite-mode .pmg-root[data-theme="dark"],[data-lite-mode="true"] .pmg-root[data-theme="dark"],[data-performance="lite"] .pmg-root[data-theme="dark"]{--pmg-base:rgba(3,7,27,0.90)}
 .lite-mode .pmg-root[data-theme="light"],[data-lite-mode="true"] .pmg-root[data-theme="light"],[data-performance="lite"] .pmg-root[data-theme="light"]{--pmg-base:rgba(246,248,255,0.92)}
 
 @media (prefers-reduced-motion:reduce){
@@ -341,6 +341,12 @@ const formatCompact = (n) => {
     unit += 1;
   }
   return `${rounded}${COMPACT_UNITS[unit]}`;
+};
+
+/** Canonical count formatter that never fabricates 0 for missing metrics. */
+const formatNumber = (num) => {
+  if (num === undefined || num === null) return '—';
+  return formatCompact(num);
 };
 
 /** Full-precision value for assistive technology. */
@@ -424,7 +430,7 @@ const ProfileMetricsGrid = memo(({
   const friends = canViewFriends ? pickCount(profile?.friendCount, profile?.friendsCount) : null;
   const views = isOwner ? pickCount(analytics?.totalViews, profile?.profileViews, profile?.viewsCount) : null;
   const likes = pickCount(profile?.likesReceived, profile?.likesCount);
-  const coins = showEconomic ? pickCount(profile?.coins, profile?.coinBalance, profile?.balance) : null;
+  const coinsCount = showEconomic ? pickCount(profile?.coins, profile?.coinBalance, profile?.balance) : null;
 
   const followerTrend = showFollowers ? formatGrowth(analytics?.followerGrowth) : null;
   const viewsTrend = isOwner ? formatGrowth(analytics?.viewsGrowth) : null;
@@ -437,7 +443,7 @@ const ProfileMetricsGrid = memo(({
     canViewFriends && { key: 'friends', count: friends, actionable: hasHandler },
     isOwner && { key: 'views', count: views, actionable: hasHandler, trend: viewsTrend },
     { key: 'likes', count: likes, actionable: false },
-    showEconomic && { key: 'coins', count: coins, actionable: hasHandler },
+    showEconomic && { key: 'coins', count: coinsCount, actionable: hasHandler },
   ].filter(Boolean);
 
   const hasTrend = metrics.some((m) => m.trend);
@@ -453,11 +459,11 @@ const ProfileMetricsGrid = memo(({
     >
       <style dangerouslySetInnerHTML={STYLE_MARKUP} />
 
-      <div className="pmg-grid">
+      <div className="pmg-grid" style={{ '--pmg-cols': Math.max(metrics.length, 1) }}>
         {metrics.map((item) => {
           const { label, icon: Icon } = METRIC_DEFS[item.key];
           const known = item.count !== null;
-          const display = known ? formatCompact(item.count) : '—';
+          const display = formatNumber(item.count);
           const full = known ? formatFull(item.count) : 'unavailable';
           const trend = item.trend || null;
           const Tag = item.actionable ? 'button' : 'div';

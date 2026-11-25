@@ -134,6 +134,7 @@ const ProfileOptionsMenu = ({
   friendRequestLoading = false,
   onFriendRequestToggle,
   onCancelFriendRequest,
+  onDeclineFriendRequest,
   onOpenTipModal,
   onOpenLocationSetup,
 }) => {
@@ -334,7 +335,7 @@ const ProfileOptionsMenu = ({
         className={cn(
           'w-full max-w-[400px] max-sm:rounded-b-none max-sm:rounded-t-[28px] sm:rounded-[26px] overflow-hidden border relative z-[10000]',
           isDark
-            ? 'bg-[#0B1234]/74 backdrop-blur-2xl border-white/[0.10] text-white shadow-[0_18px_46px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]'
+            ? 'bg-[#03071B]/82 bg-gradient-to-br from-white/[0.05] to-white/[0.01] backdrop-blur-2xl border-white/[0.10] text-white shadow-[0_18px_46px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]'
             : 'bg-[#F8FAFD] border-slate-200/90 text-slate-900 shadow-[0_20px_50px_rgba(15,23,42,0.22)]'
         )}
         onClick={(e) => e.stopPropagation()}
@@ -539,6 +540,21 @@ const ProfileOptionsMenu = ({
                   isDark={isDark}
                 />
               )}
+              {friendshipStatus === 'received' && onDeclineFriendRequest && (
+                <ActionRow
+                  icon={X}
+                  label="Decline Friend Request"
+                  busy={friendRequestLoading}
+                  disabled={friendRequestLoading}
+                  tone="danger"
+                  onClick={() => {
+                    onClose?.();
+                    onDeclineFriendRequest();
+                  }}
+                  isDark={isDark}
+                  trailing={false}
+                />
+              )}
               {callsEnabled && (
                 <ActionRow
                   icon={Phone}
@@ -644,7 +660,7 @@ const ProfileOptionsMenu = ({
             className={cn(
               'w-full max-w-sm rounded-[26px] p-6 border relative',
               isDark
-                ? 'bg-[#0B1234]/78 backdrop-blur-2xl border-white/[0.10] text-white shadow-[0_18px_46px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]'
+                ? 'bg-[#03071B]/86 bg-gradient-to-br from-white/[0.05] to-white/[0.01] backdrop-blur-2xl border-white/[0.10] text-white shadow-[0_18px_46px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]'
                 : 'bg-white border-slate-200 text-slate-900 shadow-2xl'
             )}
             onClick={(e) => e.stopPropagation()}

@@ -1,5 +1,5 @@
 // src/screens/CreatePost/CreatorInsightsDrawer.jsx
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as Icons from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';

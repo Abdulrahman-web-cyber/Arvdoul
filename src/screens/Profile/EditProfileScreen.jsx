@@ -750,7 +750,7 @@ export default function EditProfileScreen() {
         <section className={cn(
           "rounded-[28px] border backdrop-blur-xl transition-all p-5 sm:p-7 relative overflow-hidden",
           isDark
-            ? "bg-[#0B1234]/34 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            ? "bg-white/[0.025] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
             : "bg-white border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
         )}>
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
@@ -761,7 +761,7 @@ export default function EditProfileScreen() {
                 className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-[3px] bg-gradient-to-tr from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue"
                 style={{ boxShadow: `0 8px 24px ${brandRgba(0.35)}` }}
               >
-                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-white dark:ring-[#0B1234] relative">
+                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-white dark:ring-[#03071B] relative">
                   <LazyImage
                     src={avatarPreview}
                     alt={formData.displayName || "Avatar"}
@@ -830,7 +830,7 @@ export default function EditProfileScreen() {
         <section className={cn(
           "rounded-[28px] border backdrop-blur-xl transition-all p-5 sm:p-7 space-y-5",
           isDark
-            ? "bg-[#0B1234]/34 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            ? "bg-white/[0.025] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
             : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
         )}>
           <div>
@@ -922,7 +922,7 @@ export default function EditProfileScreen() {
                   className={cn(
                     "w-full pl-8 pr-4 py-2.5 rounded-2xl text-sm font-mono font-medium outline-none transition-all border",
                     isDark
-                      ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple focus:ring-2 focus:ring-arvdoul-purple/20"
+                      ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple focus:ring-2 focus:ring-arvdoul-purple/20"
                       : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple focus:ring-2 focus:ring-arvdoul-purple/20"
                   )}
                 />
@@ -958,7 +958,7 @@ export default function EditProfileScreen() {
                   fieldErrors.displayName
                     ? "border-rose-500 bg-rose-500/5"
                     : isDark
-                      ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                      ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
                       : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                 )}
               />
@@ -987,7 +987,7 @@ export default function EditProfileScreen() {
                 className={cn(
                   "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark
-                    ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                    ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
                     : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                 )}
               />
@@ -1012,7 +1012,7 @@ export default function EditProfileScreen() {
                 className={cn(
                   "w-full px-4 py-2.5 rounded-2xl text-sm font-normal outline-none transition-all border resize-none leading-relaxed focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark
-                    ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                    ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
                     : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                 )}
               />
@@ -1052,7 +1052,7 @@ export default function EditProfileScreen() {
                   className={cn(
                     "w-full px-4 py-2 min-h-[44px] rounded-2xl text-xs outline-none transition-all border mt-1.5 focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark
-                      ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                      ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
                       : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                   )}
                 />
@@ -1071,7 +1071,7 @@ export default function EditProfileScreen() {
                   className={cn(
                     "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark
-                      ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                      ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
                       : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                   )}
                 />
@@ -1093,7 +1093,7 @@ export default function EditProfileScreen() {
                   className={cn(
                     "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark
-                      ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                      ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
                       : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                   )}
                 />
@@ -1112,7 +1112,7 @@ export default function EditProfileScreen() {
                   className={cn(
                     "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark
-                      ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                      ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-arvdoul-purple"
                       : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                   )}
                 />
@@ -1141,7 +1141,7 @@ export default function EditProfileScreen() {
                             ? "bg-arvdoul-purple/20 border-arvdoul-purple text-white shadow-sm"
                             : "bg-purple-50 border-purple-400 text-purple-950 shadow-sm"
                           : isDark
-                            ? "bg-[#0A1030]/42 border-white/[0.09] text-slate-300 hover:bg-white/[0.04]"
+                            ? "bg-white/[0.04] border-white/[0.09] text-slate-300 hover:bg-white/[0.04]"
                             : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
                       )}
                     >
@@ -1160,7 +1160,7 @@ export default function EditProfileScreen() {
         <section className={cn(
           "rounded-[28px] border backdrop-blur-xl transition-all p-5 sm:p-7 space-y-5",
           isDark
-            ? "bg-[#0B1234]/34 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            ? "bg-white/[0.025] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
             : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
         )}>
           <div>
@@ -1201,7 +1201,7 @@ export default function EditProfileScreen() {
                   className={cn(
                     "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple disabled:opacity-60 disabled:cursor-not-allowed",
                     isDark
-                      ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-emerald-500"
+                      ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-emerald-500"
                       : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-emerald-500"
                   )}
                 />
@@ -1215,7 +1215,7 @@ export default function EditProfileScreen() {
                   onChange={(e) => handleInputChange('locationPrivacy', e.target.value)}
                   className={cn(
                     "px-2.5 py-1.5 min-h-[36px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                    isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                    isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
                   <option value="public">City &amp; Country</option>
@@ -1249,7 +1249,7 @@ export default function EditProfileScreen() {
                   fieldErrors.website
                     ? "border-rose-500 bg-rose-500/5"
                     : isDark
-                      ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-cyan-500"
+                      ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-cyan-500"
                       : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-cyan-500"
                 )}
               />
@@ -1265,7 +1265,7 @@ export default function EditProfileScreen() {
         <section className={cn(
           "rounded-[28px] border backdrop-blur-xl transition-all p-5 sm:p-7 space-y-5",
           isDark
-            ? "bg-[#0B1234]/34 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            ? "bg-white/[0.025] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
             : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
         )}>
           <div className="flex items-center justify-between">
@@ -1309,7 +1309,7 @@ export default function EditProfileScreen() {
                   key={link.id || idx}
                   className={cn(
                     "p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row items-stretch sm:items-center gap-3",
-                    isDark ? "bg-[#0A1030]/42 border-white/[0.09]" : "bg-slate-50 border-slate-200"
+                    isDark ? "bg-white/[0.04] border-white/[0.09]" : "bg-slate-50 border-slate-200"
                   )}
                 >
                   <select aria-label="Link Platform"
@@ -1318,7 +1318,7 @@ export default function EditProfileScreen() {
                     className={cn(
                       "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                       isDark 
-                        ? "bg-[#0B1234]/75 border-white/[0.10] text-white" 
+                        ? "bg-[#03071B]/90 border-white/[0.10] text-white" 
                         : "bg-white border-slate-200 text-slate-800"
                     )}
                   >
@@ -1393,7 +1393,7 @@ export default function EditProfileScreen() {
         <section className={cn(
           "rounded-[28px] border backdrop-blur-xl transition-all p-5 sm:p-7 space-y-5 relative overflow-hidden",
           isDark
-            ? "bg-gradient-to-br from-[#0B1234]/46 to-[#080E2A]/38 border-amber-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            ? "bg-white/[0.03] border-amber-500/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
             : "bg-gradient-to-br from-amber-50/50 to-white border-amber-200 shadow-[0_8px_30px_rgba(245,158,11,0.06)]"
         )}>
           <div className="flex items-center justify-between gap-3">
@@ -1429,7 +1429,7 @@ export default function EditProfileScreen() {
                   className={cn(
                     "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
                     isDark 
-                      ? "bg-[#0B1234]/75 border-white/[0.10] text-white focus:border-amber-400" 
+                      ? "bg-[#03071B]/90 border-white/[0.10] text-white focus:border-amber-400" 
                       : "bg-white border-slate-200 text-slate-800 focus:border-amber-400"
                   )}
                 >
@@ -1457,7 +1457,7 @@ export default function EditProfileScreen() {
                     fieldErrors.inquiriesEmail
                       ? "border-rose-500 bg-rose-500/5"
                       : isDark
-                        ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-amber-400"
+                        ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-amber-400"
                         : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-amber-400"
                   )}
                 />
@@ -1482,7 +1482,7 @@ export default function EditProfileScreen() {
                 className={cn(
                   "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
                   isDark
-                    ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-rose-400"
+                    ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-rose-400"
                     : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-rose-400"
                 )}
               />
@@ -1499,7 +1499,7 @@ export default function EditProfileScreen() {
                 onChange={(e) => handlePrivacyChange('creatorInfo', e.target.value)}
                 className={cn(
                   "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
-                  isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                  isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                 )}
               >
                 <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
@@ -1517,7 +1517,7 @@ export default function EditProfileScreen() {
         <section className={cn(
           "rounded-[28px] border backdrop-blur-xl transition-all p-5 sm:p-7 space-y-5 relative overflow-hidden",
           isDark
-            ? "bg-gradient-to-br from-[#120A32]/46 to-[#0B1234]/38 border-purple-500/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            ? "bg-white/[0.03] border-purple-500/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
             : "bg-gradient-to-br from-purple-50/50 to-white border-purple-200 shadow-[0_8px_30px_rgba(168,85,247,0.08)]"
         )}>
           <div className="flex items-center gap-2.5">
@@ -1552,7 +1552,7 @@ export default function EditProfileScreen() {
                 className={cn(
                   "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
                   isDark
-                    ? "bg-[#0A1030]/42 border-white/[0.09] text-white placeholder-slate-500 focus:border-purple-400"
+                    ? "bg-white/[0.04] border-white/[0.09] text-white placeholder-slate-500 focus:border-purple-400"
                     : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-purple-400"
                 )}
               />
@@ -1574,7 +1574,7 @@ export default function EditProfileScreen() {
                       formData.crestAura === aura.id
                         ? "bg-purple-500/20 border-purple-500 shadow-md ring-2 ring-purple-500/40"
                         : isDark
-                        ? "bg-[#0A1030]/42 border-white/[0.09] hover:bg-white/[0.04]"
+                        ? "bg-white/[0.04] border-white/[0.09] hover:bg-white/[0.04]"
                         : "bg-white border-slate-200 hover:bg-slate-50"
                     )}
                   >
@@ -1592,7 +1592,7 @@ export default function EditProfileScreen() {
         <section className={cn(
           "rounded-[28px] border backdrop-blur-xl transition-all p-5 sm:p-7 space-y-5",
           isDark
-            ? "bg-[#0B1234]/34 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            ? "bg-white/[0.025] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
             : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
         )}>
           <div className="flex items-center gap-2.5">
@@ -1616,7 +1616,7 @@ export default function EditProfileScreen() {
                 "p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2",
                 formData.showLevel 
                   ? (isDark ? "bg-purple-900/20 border-purple-500/40" : "bg-purple-50 border-purple-200") 
-                  : (isDark ? "bg-[#0A1030]/42 border-white/[0.09]" : "bg-slate-50 border-slate-200")
+                  : (isDark ? "bg-white/[0.04] border-white/[0.09]" : "bg-slate-50 border-slate-200")
               )}>
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
@@ -1635,7 +1635,7 @@ export default function EditProfileScreen() {
                 "p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2",
                 formData.showReputation 
                   ? (isDark ? "bg-emerald-900/20 border-emerald-500/40" : "bg-emerald-50 border-emerald-200") 
-                  : (isDark ? "bg-[#0A1030]/42 border-white/[0.09]" : "bg-slate-50 border-slate-200")
+                  : (isDark ? "bg-white/[0.04] border-white/[0.09]" : "bg-slate-50 border-slate-200")
               )}>
                 <div className="flex items-center gap-2">
                   <Star className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -1654,7 +1654,7 @@ export default function EditProfileScreen() {
                 "p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2",
                 formData.showStreak 
                   ? (isDark ? "bg-amber-900/20 border-amber-500/40" : "bg-amber-50 border-amber-200") 
-                  : (isDark ? "bg-[#0A1030]/42 border-white/[0.09]" : "bg-slate-50 border-slate-200")
+                  : (isDark ? "bg-white/[0.04] border-white/[0.09]" : "bg-slate-50 border-slate-200")
               )}>
                 <div className="flex items-center gap-2">
                   <Flame className="w-4 h-4 text-amber-400 shrink-0" />
@@ -1680,7 +1680,7 @@ export default function EditProfileScreen() {
                 onChange={(e) => handleInputChange('defaultTab', e.target.value)}
                 className={cn(
                   "px-3.5 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                  isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                  isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                 )}
               >
                 <option value="posts">Posts &amp; Sparks</option>
@@ -1717,7 +1717,7 @@ export default function EditProfileScreen() {
         <section className={cn(
           "rounded-[28px] border backdrop-blur-xl transition-all p-5 sm:p-7 space-y-5",
           isDark
-            ? "bg-[#0B1234]/34 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            ? "bg-white/[0.025] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
             : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
         )}>
           <div>
@@ -1739,7 +1739,7 @@ export default function EditProfileScreen() {
                   ? "bg-purple-900/20 border-purple-500/40" 
                   : "bg-purple-50 border-purple-200"
                 : isDark
-                ? "bg-[#0A1030]/42 border-white/[0.09]"
+                ? "bg-white/[0.04] border-white/[0.09]"
                 : "bg-slate-50 border-slate-200"
             )}>
               <div className="space-y-0.5">
@@ -1776,7 +1776,7 @@ export default function EditProfileScreen() {
                   onChange={(e) => handlePrivacyChange('profileInfo', e.target.value)}
                   className={cn(
                     "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                    isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                    isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
                   <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
@@ -1797,7 +1797,7 @@ export default function EditProfileScreen() {
                   onChange={(e) => handlePrivacyChange('links', e.target.value)}
                   className={cn(
                     "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                    isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                    isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
                   <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
@@ -1818,7 +1818,7 @@ export default function EditProfileScreen() {
                   onChange={(e) => handlePrivacyChange('presence', e.target.value)}
                   className={cn(
                     "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                    isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                    isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
                   <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
@@ -1842,7 +1842,7 @@ export default function EditProfileScreen() {
                   })}
                   className={cn(
                     "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                    isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                    isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
                   <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
@@ -1866,7 +1866,7 @@ export default function EditProfileScreen() {
                   })}
                   className={cn(
                     "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                    isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                    isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
                   <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
@@ -1887,7 +1887,7 @@ export default function EditProfileScreen() {
                   onChange={(e) => handlePrivacyChange('titles', e.target.value)}
                   className={cn(
                     "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                    isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                    isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
                   <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
@@ -1911,7 +1911,7 @@ export default function EditProfileScreen() {
                   })}
                   className={cn(
                     "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                    isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                    isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
                   <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
@@ -1976,7 +1976,7 @@ export default function EditProfileScreen() {
         <section className={cn(
           "rounded-[28px] border backdrop-blur-xl transition-all p-5 sm:p-7 space-y-5",
           isDark
-            ? "bg-[#0B1234]/34 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            ? "bg-white/[0.025] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
             : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
         )}>
           <div className="flex items-center gap-2.5">
@@ -2010,7 +2010,7 @@ export default function EditProfileScreen() {
                 onChange={(e) => handleInteractionSettingChange('allowDMs', e.target.value)}
                 className={cn(
                   "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple disabled:opacity-60",
-                  isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                  isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                 )}
               >
                 <option value="everyone">Everyone</option>
@@ -2035,7 +2035,7 @@ export default function EditProfileScreen() {
                 onChange={(e) => handleInteractionSettingChange('whoCanCall', e.target.value)}
                 className={cn(
                   "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple disabled:opacity-60",
-                  isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                  isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                 )}
               >
                 <option value="everyone">Everyone</option>
@@ -2061,7 +2061,7 @@ export default function EditProfileScreen() {
                 onChange={(e) => handleInteractionSettingChange('whoCanAddToGroups', e.target.value)}
                 className={cn(
                   "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple disabled:opacity-60",
-                  isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                  isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                 )}
               >
                 <option value="everyone">Everyone</option>
@@ -2087,7 +2087,7 @@ export default function EditProfileScreen() {
                 onChange={(e) => handleInteractionSettingChange('whoCanSendGifts', e.target.value)}
                 className={cn(
                   "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple disabled:opacity-60",
-                  isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                  isDark ? "bg-[#03071B]/90 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
                 )}
               >
                 <option value="everyone">Everyone</option>
@@ -2104,7 +2104,7 @@ export default function EditProfileScreen() {
                 className={cn(
                   "min-h-[44px] px-4 py-2.5 rounded-2xl border flex items-center justify-between gap-2 text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark
-                    ? "bg-[#0A1030]/42 border-white/[0.09] text-slate-200 hover:bg-white/[0.05]"
+                    ? "bg-white/[0.04] border-white/[0.09] text-slate-200 hover:bg-white/[0.05]"
                     : "bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100"
                 )}
               >
@@ -2121,7 +2121,7 @@ export default function EditProfileScreen() {
                 className={cn(
                   "min-h-[44px] px-4 py-2.5 rounded-2xl border flex items-center justify-between gap-2 text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark
-                    ? "bg-[#0A1030]/42 border-white/[0.09] text-slate-200 hover:bg-white/[0.05]"
+                    ? "bg-white/[0.04] border-white/[0.09] text-slate-200 hover:bg-white/[0.05]"
                     : "bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100"
                 )}
               >

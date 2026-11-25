@@ -13,10 +13,24 @@
  * them; call it from the auth session reset (see `AuthContext.clearSessionStores`).
  */
 
+import { openDB, deleteDB } from 'idb';
+
 export const LOCAL_POSTS_KEY = 'arvdoul_local_posts';
 export const LOCAL_COMMENTS_PREFIX = 'arvdoul_local_comments_';
 export const LOCAL_LIKES_KEY = 'arvdoul_user_likes';
 export const LOCAL_FEED_WARM_PREFIX = 'arvdoul_feed_warm_';
+const CREATE_POST_DB_NAME = 'arvdoul_create_post_v6';
+const CREATE_POST_DB_VERSION = 5;
+const LEGACY_UPLOAD_QUEUE_DB = 'arvdoul_upload_queue';
+const CREATE_POST_STORES_TO_SCRUB = [
+  'drafts',
+  'offline_queue',
+  'draft_versions',
+  'templates',
+  'media_upload_queue',
+  'media_blobs',
+  'blob_hashes',
+];
 
 /**
  * Synchronous, uid-scoped warm feed snapshot (up to 12 lightweight posts)
@@ -122,8 +136,42 @@ export function purgeDeviceLocalContent() {
   for (const key of prefixedKeys) storage.removeItem(key);
 }
 
+/**
+ * Scrubs all IndexedDB composer records belonging to a departing user (plus any
+ * legacy unscoped entries). Lives in utils/ so AuthContext can purge without
+ * cross-layer imports from screens/.
+ */
+export async function purgeCreatePostStorageForOwner(ownerUid) {
+  if (!ownerUid || typeof indexedDB === 'undefined') return;
+  try {
+    const db = await openDB(CREATE_POST_DB_NAME, CREATE_POST_DB_VERSION, {
+      allowDowngrade: true,
+    });
+    for (const storeName of CREATE_POST_STORES_TO_SCRUB) {
+      if (!db.objectStoreNames.contains(storeName)) continue;
+      const rows = await db.getAll(storeName);
+      for (const row of rows) {
+        if (!row?.ownerUid || row.ownerUid === ownerUid) {
+          const key = storeName === 'blob_hashes' ? row.hash : row.id;
+          if (key !== undefined) await db.delete(storeName, key);
+        }
+      }
+    }
+    db.close();
+  } catch (err) {
+    console.warn('[CreatePost] UID storage purge failed:', err?.message);
+  }
+
+  try {
+    await deleteDB(LEGACY_UPLOAD_QUEUE_DB);
+  } catch (err) {
+    console.warn('[CreatePost] Legacy upload DB cleanup note:', err?.message);
+  }
+}
+
 export default {
   purgeDeviceLocalContent,
+  purgeCreatePostStorageForOwner,
   LOCAL_POSTS_KEY,
   LOCAL_COMMENTS_PREFIX,
   LOCAL_LIKES_KEY,

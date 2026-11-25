@@ -63,7 +63,7 @@ const ProfileAbout = ({
   return (
     <div aria-label="Profile component" role="region" className={cn(
       'p-5 rounded-2xl sm:rounded-3xl',
-      'bg-white dark:bg-[#0B1234]/36 dark:backdrop-blur-xl',
+      'bg-white dark:bg-white/[0.025] dark:backdrop-blur-2xl',
       'border border-slate-200/90 dark:border-white/[0.08]',
       'space-y-4 shadow-sm dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
     )}>

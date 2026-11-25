@@ -798,8 +798,8 @@ class UltimateVideoService {
       );
 
     const [postSnap, legacySnap] = await Promise.all([
-      getDocs(postQuery).catch(() => ({ docs: [] })),
-      getDocs(legacyQuery).catch(() => ({ docs: [] })),
+      getDocs(query(postQuery, limit(pageLimit))).catch(() => ({ docs: [] })),
+      getDocs(query(legacyQuery, limit(pageLimit))).catch(() => ({ docs: [] })),
     ]);
 
     const seenIds = new Set();
@@ -1041,7 +1041,7 @@ class UltimateVideoService {
 
       let postDocs = [];
       try {
-        const postSnap = await getDocs(postQ);
+        const postSnap = await getDocs(query(postQ, limit(fetchCap)));
         postDocs = postSnap.docs;
       } catch {
         let fallbackPostQ = query(
@@ -1057,7 +1057,7 @@ class UltimateVideoService {
         if (lastDocSnapshot && lastDocSnapshot.ref?.parent?.id === 'posts') {
           fallbackPostQ = query(fallbackPostQ, startAfter(lastDocSnapshot));
         }
-        const fallbackPostSnap = await getDocs(fallbackPostQ).catch(() => ({ docs: [] }));
+        const fallbackPostSnap = await getDocs(query(fallbackPostQ, limit(fetchCap))).catch(() => ({ docs: [] }));
         postDocs = fallbackPostSnap.docs;
       }
 
@@ -1086,7 +1086,7 @@ class UltimateVideoService {
         if (lastDocSnapshot && lastDocSnapshot.ref?.parent?.id === 'videos') {
           legacyQ = query(legacyQ, startAfter(lastDocSnapshot));
         }
-        const legacySnap = await getDocs(legacyQ).catch(() => ({ docs: [] }));
+        const legacySnap = await getDocs(query(legacyQ, limit(fetchCap))).catch(() => ({ docs: [] }));
         legacySnap.docs.forEach((d) => {
           const data = d.data() || {};
           const linkedCanonical = data.canonicalPostId || data.postId || d.id;

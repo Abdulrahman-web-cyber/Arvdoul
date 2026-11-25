@@ -90,8 +90,6 @@ export const FUNCTIONS = {
   REPORT_CHANNEL: 'reportChannel',
   REPORT_CALL: 'reportCall',
   GET_MUX_PLAYBACK_URL: 'getMuxPlaybackUrl',
-  GENERATE_AI_CAPTION: 'generateAICaption',
-  GENERATE_AI_HASHTAGS: 'generateAIHashtags',
   MODERATE_POST: 'moderatePost',
   PREDICT_POST_PERFORMANCE: 'predictPostPerformance',
   SCRAPE_LINK: 'scrapeLink',

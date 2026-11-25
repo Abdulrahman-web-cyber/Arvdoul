@@ -648,8 +648,8 @@ class UltimateFeedService {
         snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
       } catch {
         // The ordered query can fail (missing index / field); fall back to an
-        // unordered read, but keep the limit — an unbounded `getDocs(postsRef)`
-        // reads the entire posts collection (bill + latency cliff).
+        // unordered read, but keep the limit — an unbounded collection scan
+        // reads every post (bill + latency cliff).
         snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
       const posts = [];

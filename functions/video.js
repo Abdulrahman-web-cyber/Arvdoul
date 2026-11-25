@@ -170,6 +170,11 @@ async function isMutuallyBlocked(uidA, uidB) {
   return outSnap.exists || inSnap.exists;
 }
 
+async function evaluateSparkAccessForViewer(resolved, uid, options = {}) {
+  const isAdmin = await checkIsAdmin(uid);
+  return evaluateSparkAccess(resolved, uid, isAdmin, options);
+}
+
 async function evaluateSparkAccess(resolved, uid, isAdmin, options = {}) {
   if (!resolved) return { allowed: false, reason: 'not-found' };
   if (isAdmin) return { allowed: true, reason: 'admin' };
@@ -909,8 +914,7 @@ exports.likeVideo = onCall(async (data, context) => {
   const resolved = await resolveSparkTarget(targetId);
   if (!resolved) throw new functions.https.HttpsError('not-found', 'Spark not found');
 
-  const isAdmin = await checkIsAdmin(uid);
-  const access = await evaluateSparkAccess(resolved, uid, isAdmin);
+  const access = await evaluateSparkAccessForViewer(resolved, uid);
   if (!access.allowed) {
     throw new functions.https.HttpsError('permission-denied', 'Cannot like an inaccessible Spark.');
   }
@@ -1055,8 +1059,7 @@ exports.toggleVideoSave = onCall(async (data, context) => {
   const resolved = await resolveSparkTarget(targetId);
   if (!resolved) throw new functions.https.HttpsError('not-found', 'Spark not found');
 
-  const isAdmin = await checkIsAdmin(uid);
-  const access = await evaluateSparkAccess(resolved, uid, isAdmin);
+  const access = await evaluateSparkAccessForViewer(resolved, uid);
   if (!access.allowed) {
     throw new functions.https.HttpsError('permission-denied', 'Cannot save an inaccessible Spark.');
   }

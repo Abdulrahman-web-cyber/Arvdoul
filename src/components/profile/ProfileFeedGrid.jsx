@@ -351,7 +351,7 @@ const ProfileFeedGrid = memo(({
     return (
       <div className={cn(
         "w-full rounded-2xl p-5 sm:p-7 border backdrop-blur-xl transition-colors space-y-6",
-        isDark ? "bg-[#0B1234]/34 border-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200/90 text-slate-900 shadow-sm"
+        isDark ? "bg-white/[0.025] border-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200/90 text-slate-900 shadow-sm"
       )}>
         <div>
           <h3 className="font-display text-base sm:text-lg font-bold mb-2 tracking-tight">About Citizen</h3>
@@ -600,7 +600,7 @@ const ProfileFeedGrid = memo(({
     return (
       <div className={cn(
         "py-14 px-4 text-center rounded-[24px] border backdrop-blur-xl space-y-3.5 my-2 w-full",
-        isDark ? "bg-[#0B1234]/32 border-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white/65 border-white/90 text-slate-900 shadow-[0_8px_22px_rgba(38,56,120,0.06)]"
+        isDark ? "bg-white/[0.025] border-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white/65 border-white/90 text-slate-900 shadow-[0_8px_22px_rgba(38,56,120,0.06)]"
       )}>
         <div className="w-11 h-11 mx-auto rounded-2xl bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
           <EmptyIcon className="w-5 h-5" />
@@ -661,7 +661,7 @@ const ProfileFeedGrid = memo(({
               className={cn(
                 "rounded-[22px] p-4 border backdrop-blur-xl transition-all duration-200 group flex flex-col justify-between gap-3",
                 isDark
-                  ? "bg-[#0B1234]/34 border-white/[0.08] hover:border-arvdoul-purple/40 hover:bg-[#101A4A]/46 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                  ? "bg-white/[0.025] border-white/[0.08] hover:border-arvdoul-purple/40 hover:bg-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                   : "bg-white/75 border-white/90 hover:border-arvdoul-purple/40 shadow-[0_10px_26px_rgba(38,56,120,0.07)]"
               )}
             >
@@ -842,7 +842,7 @@ const ProfileFeedGrid = memo(({
               key={item.id || idx}
               className={cn(
                 "group relative rounded-[20px] sm:rounded-[24px] overflow-hidden border backdrop-blur-xl transition-all duration-300 hover:scale-[1.012] hover:shadow-[0_12px_28px_rgba(0,0,0,0.16)]",
-                isDark ? "border-white/[0.08] bg-[#0B1234]/38" : "border-white/90 bg-white/80",
+                isDark ? "border-white/[0.08] bg-white/[0.025] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "border-white/90 bg-white/80",
                 (isReel || isVibe) ? "aspect-[9/16]" : "aspect-square"
               )}
             >
@@ -864,7 +864,7 @@ const ProfileFeedGrid = memo(({
                   <div className={cn(
                     "w-full h-full flex flex-col justify-between p-4 text-left",
                     isDark
-                      ? "bg-[#0B1234]/34 text-slate-100"
+                      ? "bg-transparent text-slate-100"
                       : "bg-white text-slate-800"
                   )}>
                     <div className="space-y-1.5 min-w-0">
@@ -1011,7 +1011,7 @@ const ProfileFeedGrid = memo(({
               key={item.id || idx}
               className={cn(
                 "break-inside-avoid rounded-[24px] overflow-hidden border backdrop-blur-xl transition-all duration-300 hover:shadow-lg group",
-                isDark ? "bg-[#0B1234]/34 border-white/[0.08] hover:border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white/80 border-white/90 hover:border-indigo-200"
+                isDark ? "bg-white/[0.025] border-white/[0.08] hover:border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white/80 border-white/90 hover:border-indigo-200"
               )}
             >
               <button
@@ -1163,7 +1163,7 @@ const ProfileFeedGrid = memo(({
             key={item.id || idx}
             className={cn(
               "rounded-[24px] border backdrop-blur-xl transition-all duration-300 overflow-hidden",
-              isDark ? "bg-[#0B1234]/34 border-white/[0.08] hover:border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white/80 border-white/90 hover:border-indigo-200 shadow-[0_10px_28px_rgba(0,0,0,0.08)]"
+              isDark ? "bg-white/[0.025] border-white/[0.08] hover:border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white/80 border-white/90 hover:border-indigo-200 shadow-[0_10px_28px_rgba(0,0,0,0.08)]"
             )}
           >
             {/* Clickable Header + Body Button */}

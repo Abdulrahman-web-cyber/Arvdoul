@@ -134,11 +134,13 @@ describe('pending follow request is a distinct, real state', () => {
     expect(preview).toMatch(/requestStatus:\s*storeFollowStatus\?\.requestStatus/);
     const hero = read('src/components/profile/ProfileHeroSection.jsx');
     // Preview passes no onFollowToggle/onOpenTipModal/onOpenOptions/onOpenMessages,
-    // so those controls must render disabled rather than silently do nothing.
-    expect(hero).toMatch(/disabled=\{followLoading \|\| !onFollowToggle\}/);
-    expect(hero).toMatch(/disabled=\{!onOpenTipModal\}/);
-    expect(hero).toMatch(/disabled=\{!onOpenOptions\}/);
-    expect(hero).toMatch(/disabled=\{!onOpenMessages\}/);
+    // so those controls must render disabled or omitted rather than silently do nothing.
+    expect(hero).toMatch(/canFollowAction\s*=\s*Boolean\(onFollowToggle\)/);
+    expect(hero).toMatch(/disabled:\s*followLoading\s*\|\|\s*!canFollowAction/);
+    expect(hero).toMatch(/canTipAction\s*=\s*Boolean\(onOpenTipModal\)/);
+    expect(hero).toMatch(/onOpenOptions\s*&&/);
+    expect(hero).toMatch(/canMessageAction\s*=\s*Boolean\(onOpenMessages\)/);
+    expect(hero).toMatch(/disabled=\{!canMessageAction\}/);
   });
 
   test('VideoDetailScreen resolves the real edge and renders a Requested state (N364)', () => {
@@ -148,10 +150,10 @@ describe('pending follow request is a distinct, real state', () => {
     // so the button was dead. The screen must resolve the real per-pair edge,
     // branch on the pending request, and pass the handler down.
     const detail = read('src/screens/VideoDetailScreen.jsx');
-    expect(detail).toMatch(/getFollowStatus\(user\.uid, data\.userId\)/);
+    expect(detail).toMatch(/getFollowStatus\(user\.uid,\s*(?:resolvedOwnerId|data\.userId)\)/);
     expect(detail).toMatch(/requestStatus:\s*'pending'/);
-    expect(detail).toMatch(/cancelFollowRequest\(user\.uid, targetId\)/);
-    expect(detail).toMatch(/onFollow=\{video\?\.userId && video\.userId !== user\?\.uid \? handleFollowToggle : undefined\}/);
+    expect(detail).toMatch(/cancelFollowRequest\(user\.uid,\s*(?:ownerId|targetId)\)/);
+    expect(detail).toMatch(/onFollow=\{(?:ownerId && ownerId|video\?\.userId && video\.userId) !== user\?\.uid \? handleFollowToggle : undefined\}/);
 
     const info = read('src/components/Videos/VideoCreatorInfo.jsx');
     // The card renders the Requested state (with a disabled control) instead of

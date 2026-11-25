@@ -292,6 +292,8 @@ export const TopAppBar = ({
     activeTab: "sparks",
     viewMode: "feed",
   });
+  const [composerHeaderState, setComposerHeaderState] = useState(null);
+  const [searchHeaderState, setSearchHeaderState] = useState({ filtersActive: false });
   const inboxSearchInputRef = useRef(null);
   const storiesSearchInputRef = useRef(null);
   const notificationsSearchInputRef = useRef(null);
@@ -352,12 +354,28 @@ export const TopAppBar = ({
         }));
       }
     };
+    const onComposerState = (e) => {
+      if (e?.detail === null) {
+        setComposerHeaderState(null);
+      } else if (e?.detail && typeof e.detail === "object") {
+        setComposerHeaderState(e.detail);
+      }
+    };
+    const onSearchState = (e) => {
+      if (e?.detail === null) {
+        setSearchHeaderState({ filtersActive: false });
+      } else if (e?.detail && typeof e.detail === "object") {
+        setSearchHeaderState({ filtersActive: Boolean(e.detail.filtersActive) });
+      }
+    };
     window.addEventListener("arvdoul:inbox_header_state", onInboxState);
     window.addEventListener("arvdoul:chat_header_state", onChatState);
     window.addEventListener("arvdoul:notifications_header_state", onNotificationsState);
     window.addEventListener("arvdoul:network_header_state", onNetworkState);
     window.addEventListener("arvdoul:focus_inbox_search", onFocusInboxSearch);
     window.addEventListener("arvdoul:sparks_header_state", onSparksState);
+    window.addEventListener("arvdoul:composer_header_state", onComposerState);
+    window.addEventListener("arvdoul:search_header_state", onSearchState);
     return () => {
       window.removeEventListener("arvdoul:inbox_header_state", onInboxState);
       window.removeEventListener("arvdoul:chat_header_state", onChatState);
@@ -365,6 +383,8 @@ export const TopAppBar = ({
       window.removeEventListener("arvdoul:network_header_state", onNetworkState);
       window.removeEventListener("arvdoul:focus_inbox_search", onFocusInboxSearch);
       window.removeEventListener("arvdoul:sparks_header_state", onSparksState);
+      window.removeEventListener("arvdoul:composer_header_state", onComposerState);
+      window.removeEventListener("arvdoul:search_header_state", onSearchState);
     };
   }, []);
 
@@ -504,7 +524,7 @@ export const TopAppBar = ({
     if (path.startsWith("/profile/") || path.startsWith("/user/")) {
       const parts = path.toLowerCase().split("/").filter(Boolean);
       const last = parts[parts.length - 1];
-      if (['edit', 'analytics', 'highlights', 'followers', 'following', 'friends', 'connections', 'about', 'preview', 'wallet', 'progress', 'achievements', 'titles', 'passport', 'citizen', 'citizenship'].includes(last)) {
+      if (['edit', 'analytics', 'highlights', 'followers', 'following', 'friends', 'connections', 'about', 'preview', 'wallet', 'progress', 'levels', 'roadmap', 'achievements', 'titles', 'passport', 'citizen', 'citizenship'].includes(last)) {
         return "contextual";
       }
       return "profile_visitor";
@@ -571,10 +591,11 @@ export const TopAppBar = ({
     if (path.startsWith("/community")) return "Communities";
     if (path.startsWith("/rankings")) return "Rankings";
     if (path.startsWith("/badges")) return "Badges & Rewards";
+    if (path.startsWith("/levels") || path.startsWith("/profile/levels") || path.startsWith("/roadmap")) return "Level & Citizenship";
     if (path.startsWith("/progress")) return "Progression & Perks";
     if (path.startsWith("/achievements")) return "Achievements";
     if (path.startsWith("/creator/onboarding") || path.startsWith("/creator-onboarding")) return "Creator Accreditation";
-    if (path.startsWith("/create-post")) return "Create Post";
+    if (path.startsWith("/create-post")) return composerHeaderState?.title || "Create Post";
     if (path.startsWith("/create-story")) return "Create Story";
     if (path.startsWith("/video-editor")) return "Video Studio";
     if (path.startsWith("/audio-editor")) return "Audio Studio";
@@ -1853,6 +1874,7 @@ export const TopAppBar = ({
                     icon={SlidersHorizontal}
                     label="Filters"
                     theme={theme}
+                    active={searchHeaderState.filtersActive}
                     onClick={() => {
                       if (onAction) onAction();
                       window.dispatchEvent(new CustomEvent("arvdoul:toggle_search_filters"));
@@ -1879,11 +1901,15 @@ export const TopAppBar = ({
                   </div>
                   <button
                     type="button"
-                    onClick={onAction}
-                    className="px-4 py-1.5 rounded-full text-white text-xs font-bold shadow-lg hover:brightness-110 active:scale-95 transition-all"
+                    disabled={Boolean(composerHeaderState && (!composerHeaderState.canPublish || composerHeaderState.isPublishing))}
+                    onClick={() => {
+                      if (onAction) onAction();
+                      else window.dispatchEvent(new CustomEvent("arvdoul:composer_publish", { detail: { source: "topbar" } }));
+                    }}
+                    className="px-4 py-1.5 rounded-full text-white text-xs font-bold shadow-lg hover:brightness-110 active:scale-95 transition-all disabled:opacity-45 disabled:pointer-events-none"
                     style={{ backgroundImage: tokens.brandGradient }}
                   >
-                    Publish
+                    {composerHeaderState?.isPublishing ? "Publishing..." : composerHeaderState?.scheduledTime ? "Schedule" : "Publish"}
                   </button>
                 </div>
               )}

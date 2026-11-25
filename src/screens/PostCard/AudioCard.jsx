@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { openDB } from 'idb';
 import { pickDisplayName } from '../../services/profileReadModel.js';
 import { tokens as designTokens, BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 // 1. ZUSTAND STORE – Single source of truth for playback state
 const useAudioStore = create((set, get) => ({
@@ -735,7 +736,7 @@ const AudioCard = React.memo(({
               }}
             >
               {audio?.coverUrl && (
-                <img
+                <LazyImage
                   src={audio.coverUrl}
                   alt={audio?.title || audio?.name || 'Audio cover'}
                   referrerPolicy="no-referrer"

@@ -1,6 +1,7 @@
 // src/screens/CreatePost/createPostStorage.js
-import { openDB, deleteDB } from 'idb';
+import { openDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
+import { purgeCreatePostStorageForOwner } from '../../utils/localContentCache.js';
 import {
   DRAFT_DB_NAME,
   DRAFT_DB_VERSION,
@@ -14,7 +15,7 @@ import {
   MAX_VERSIONS_PER_DRAFT,
 } from './createPostConstants.js';
 
-const LEGACY_UPLOAD_QUEUE_DB = 'arvdoul_upload_queue';
+export { purgeCreatePostStorageForOwner };
 
 export async function sha256(blob) {
   const buffer = await blob.arrayBuffer();
@@ -406,42 +407,5 @@ export async function removeMediaUpload(db, id, ownerUid) {
   if (rec && ownedBy(rec, ownerUid)) {
     await db.delete(MEDIA_UPLOAD_QUEUE_STORE, id);
     await gcOrphanBlobs(db, ownerUid);
-  }
-}
-
-export async function purgeCreatePostStorageForOwner(ownerUid) {
-  if (!ownerUid || typeof indexedDB === 'undefined') return;
-  try {
-    const db = await openCreatePostDB();
-    const storesToScrub = [
-      DRAFTS_STORE,
-      OFFLINE_QUEUE_STORE,
-      VERSIONS_STORE,
-      TEMPLATES_STORE,
-      MEDIA_UPLOAD_QUEUE_STORE,
-      MEDIA_BLOB_STORE,
-      BLOB_HASH_STORE,
-    ];
-    for (const storeName of storesToScrub) {
-      if (!db.objectStoreNames.contains(storeName)) continue;
-      const rows = await db.getAll(storeName);
-      for (const row of rows) {
-        // Delete records owned by the departing user OR legacy un-scoped records
-        if (!row?.ownerUid || row.ownerUid === ownerUid) {
-          const key = storeName === BLOB_HASH_STORE ? row.hash : row.id;
-          if (key !== undefined) await db.delete(storeName, key);
-        }
-      }
-    }
-    db.close();
-  } catch (err) {
-    console.warn('[CreatePost] UID storage purge failed:', err?.message);
-  }
-
-  // Also remove any legacy unscoped image upload database from previous versions.
-  try {
-    await deleteDB(LEGACY_UPLOAD_QUEUE_DB);
-  } catch (err) {
-    console.warn('[CreatePost] Legacy upload DB cleanup note:', err?.message);
   }
 }

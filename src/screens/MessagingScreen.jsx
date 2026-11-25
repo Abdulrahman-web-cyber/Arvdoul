@@ -539,7 +539,8 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
           return;
         }
         const ids = groups.map((g) => g.userId);
-        const profilesMap = await getSocialGraphService().hydrateProfiles(ids).catch(() => new Map());
+        const hydratedList = await getSocialGraphService().hydrateProfiles(ids).catch(() => []);
+        const profilesMap = new Map((Array.isArray(hydratedList) ? hydratedList : []).map((p) => [p?.uid || p?.id, p]));
         if (cancelled) return;
         const items = groups.map((g) => {
           const p = profilesMap.get(g.userId) || {};

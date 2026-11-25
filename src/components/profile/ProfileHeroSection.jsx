@@ -35,7 +35,7 @@
  */
 
 import {
-  memo, forwardRef, lazy, Suspense, useMemo, useState, useCallback, useRef, useEffect, useId,
+  memo, forwardRef, useMemo, useState, useCallback, useRef, useEffect, useId,
 } from "react";
 import { useNavigate } from 'react-router-dom';
 import {
@@ -80,10 +80,8 @@ import { sanitizeProfileUrl } from '../../config/profileContracts.js';
 import { toast } from 'sonner';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
-import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, brandHexRgba, brandRgba, tokens } from '../../design-system/tokens.js';
 import { useLayoutChrome } from '../../context/LayoutChromeContext.jsx';
-
-const ProfileSystemRoadmapModal = lazy(() => import('./ProfileSystemRoadmapModal'));
 
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
 const getIdentityBadge = LevelModule.getIdentityBadge || (() => null);
@@ -97,7 +95,7 @@ const COPIED_RESET_MS = 2000;
 const BIO_CLAMP_THRESHOLD = 140;
 
 const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4431F7] focus-visible:ring-offset-1 focus-visible:ring-offset-transparent';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--arv-brand-indigo)] focus-visible:ring-offset-1 focus-visible:ring-offset-transparent';
 
 const PRESS =
   'active:scale-[0.98] motion-reduce:active:scale-100 transition-[transform,background-color,border-color,color,opacity,filter] duration-150 motion-reduce:transition-none';
@@ -108,30 +106,32 @@ const PRESS =
  */
 const buildMaterial = (isDark, isLite) => {
   const blur = (px) => (isLite ? {} : { backdropFilter: `blur(${px}px) saturate(150%)`, WebkitBackdropFilter: `blur(${px}px) saturate(150%)` });
+  const indigo = tokens.color.brand.indigo;
+  const blue = tokens.color.brand.blue;
   return isDark
     ? {
         tile: {
-          background: isLite ? 'rgba(20,28,64,0.92)' : 'rgba(255,255,255,0.06)',
+          background: isLite ? 'rgba(3,7,27,0.92)' : 'rgba(255,255,255,0.025)',
           border: '1px solid rgba(255,255,255,0.12)',
           boxShadow: '0 8px 20px -10px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.12)',
           ...blur(14),
         },
         panel: {
           background:
-            'linear-gradient(145deg, rgba(139,30,243,0.10) 0%, rgba(68,49,247,0.05) 50%, rgba(5,91,251,0.09) 100%), rgba(255,255,255,0.04)',
+            `linear-gradient(145deg, ${brandRgba(0.08)} 0%, ${brandHexRgba(indigo, 0.04)} 50%, ${brandHexRgba(blue, 0.07)} 100%), rgba(255,255,255,0.025)`,
           border: '1px solid rgba(255,255,255,0.11)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10)',
           ...blur(20),
         },
         passport: {
-          background: 'linear-gradient(135deg, rgba(139,30,243,0.24) 0%, rgba(68,49,247,0.16) 55%, rgba(5,91,251,0.22) 100%)',
+          background: `linear-gradient(135deg, ${brandRgba(0.22)} 0%, ${brandHexRgba(indigo, 0.14)} 55%, ${brandHexRgba(blue, 0.20)} 100%)`,
           border: '1px solid rgba(255,255,255,0.14)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)',
         },
         overlay: {
           background: isLite
-            ? 'rgb(14,20,48)'
-            : 'linear-gradient(145deg, rgba(139,30,243,0.10) 0%, rgba(5,91,251,0.08) 100%), rgba(12,18,44,0.92)',
+            ? 'rgb(3,7,27)'
+            : `linear-gradient(145deg, ${brandRgba(0.08)} 0%, ${brandHexRgba(blue, 0.06)} 100%), rgba(3,7,27,0.88)`,
           border: '1px solid rgba(255,255,255,0.14)',
           boxShadow: '0 14px 34px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
           ...blur(22),
@@ -139,7 +139,7 @@ const buildMaterial = (isDark, isLite) => {
         primaryShadow: isLite ? '0 6px 14px -8px rgba(68,49,247,0.6)' : '0 12px 26px -8px rgba(68,49,247,0.6)',
         ringGlow: isLite
           ? '0 0 14px rgba(68,49,247,0.35)'
-          : '0 0 26px rgba(139,30,243,0.42), 0 0 46px rgba(5,91,251,0.30)',
+          : `0 0 26px ${brandRgba(0.42)}, 0 0 46px ${brandHexRgba(blue, 0.30)}`,
         gap: 'rgba(3,7,27,0.9)',
         reflection: 'via-white/30',
         control: 'bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] border-white/[0.10] text-slate-100',
@@ -153,21 +153,21 @@ const buildMaterial = (isDark, isLite) => {
         },
         panel: {
           background:
-            'linear-gradient(145deg, rgba(139,30,243,0.07) 0%, rgba(68,49,247,0.04) 50%, rgba(5,91,251,0.07) 100%), rgba(255,255,255,0.66)',
+            `linear-gradient(145deg, ${brandRgba(0.07)} 0%, ${brandHexRgba(indigo, 0.04)} 50%, ${brandHexRgba(blue, 0.07)} 100%), rgba(255,255,255,0.66)`,
           border: '1px solid rgba(120,140,170,0.22)',
           boxShadow: '0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -12px rgba(30,41,90,0.18), inset 0 1px 0 rgba(255,255,255,0.95)',
           ...blur(20),
         },
         passport: {
           background:
-            'linear-gradient(135deg, rgba(139,30,243,0.10) 0%, rgba(68,49,247,0.06) 55%, rgba(5,91,251,0.10) 100%), rgba(255,255,255,0.7)',
+            `linear-gradient(135deg, ${brandRgba(0.10)} 0%, ${brandHexRgba(indigo, 0.06)} 55%, ${brandHexRgba(blue, 0.10)} 100%), rgba(255,255,255,0.7)`,
           border: '1px solid rgba(68,49,247,0.20)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.95)',
         },
         overlay: {
           background: isLite
             ? 'rgb(255,255,255)'
-            : 'linear-gradient(145deg, rgba(139,30,243,0.06) 0%, rgba(5,91,251,0.06) 100%), rgba(255,255,255,0.94)',
+            : `linear-gradient(145deg, ${brandRgba(0.06)} 0%, ${brandHexRgba(blue, 0.06)} 100%), rgba(255,255,255,0.94)`,
           border: '1px solid rgba(120,140,170,0.22)',
           boxShadow: '0 14px 34px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.95)',
           ...blur(22),
@@ -175,7 +175,7 @@ const buildMaterial = (isDark, isLite) => {
         primaryShadow: isLite ? '0 6px 14px -8px rgba(68,49,247,0.5)' : '0 12px 24px -10px rgba(68,49,247,0.5)',
         ringGlow: isLite
           ? '0 4px 14px rgba(68,49,247,0.22)'
-          : '0 10px 30px rgba(68,49,247,0.28), 0 0 24px rgba(139,30,243,0.16)',
+          : `0 10px 30px ${brandHexRgba(indigo, 0.28)}, 0 0 24px ${brandRgba(0.16)}`,
         gap: 'rgba(246,248,252,0.92)',
         reflection: 'via-white',
         control: 'bg-white/70 hover:bg-white active:bg-white border-slate-300/60 text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.05)]',
@@ -411,34 +411,34 @@ ProfileMetricsBar.displayName = 'ProfileMetricsBar';
 const PHS_CSS = `
 .phs{
   --v:200,43,255;--b:0,136,255;
-  --g-title:#F5F7FF;--g-text:#E9EDFF;--g-muted:#B4BFDE;--g-body:#D2D9F1;--g-link:#8FC4FF;--g-hover:rgba(255,255,255,.08);--g-pop:rgba(11,18,52,.84);
+  --g-title:#F5F7FF;--g-text:#E9EDFF;--g-muted:#B4BFDE;--g-body:#D2D9F1;--g-link:#8FC4FF;--g-hover:rgba(255,255,255,.08);--g-pop:rgba(3,7,27,.86);
   --lg-spec:.22;--lg-spec2:.05;--lg-v:.16;--lg-b:.22;--lg-gloss:.10;
-  --lg-base:rgba(14,20,60,.30);--lg-solid:#0B1234;
+  --lg-base:rgba(255,255,255,.025);--lg-solid:#03071B;
   --lg-shadow:0 12px 24px -18px rgba(0,0,0,.55),0 2px 6px -3px rgba(0,0,0,.25),0 0 18px -10px rgba(var(--b),.24);
   --lg-inset:inset 0 1px 1px rgba(255,255,255,.22),inset 0 -1px 1px rgba(150,170,255,.14),inset 0 0 16px rgba(130,110,255,.08),inset 0 -10px 16px -14px rgba(var(--b),.26);
   --lg-rim:linear-gradient(140deg,rgba(255,255,255,.36),rgba(255,255,255,.09) 28%,rgba(255,255,255,.03) 56%,rgba(var(--b),.34));
   --sig-shadow:0 16px 30px -12px rgba(68,49,247,.85),0 0 26px -6px rgba(var(--b),.55);
   --lv-a:#D9A0FF;--lv-b:#5FB2FF;
-  --focus:#B2A6FF;--edge:#03071B;--photo-bg:#0B1438;--online:#2EE59D;--ring-glow:rgba(88,70,255,.55);
-  --r-gold-bg:linear-gradient(180deg,rgba(245,184,59,.26),rgba(245,184,59,.08));--r-gold-bd:rgba(245,184,59,.55);--r-gold:#F8DC95;
-  --r-vio-bg:linear-gradient(180deg,rgba(139,30,243,.38),rgba(68,49,247,.16));--r-vio-bd:rgba(176,132,255,.58);--r-vio:#EBDDFF;
-  --r-neu-bg:rgba(226,232,240,.10);--r-neu-bd:rgba(226,232,240,.30);--r-neu:#E2E8F0;
+  --focus:#B2A6FF;--edge:#03071B;--photo-bg:#03071B;--online:#2EE59D;--ring-glow:rgba(88,70,255,.55);
+  --r-gold-bg:linear-gradient(180deg,rgba(245,184,59,.18),rgba(245,184,59,.06));--r-gold-bd:rgba(245,184,59,.48);--r-gold:#F8DC95;
+  --r-vio-bg:linear-gradient(180deg,${brandRgba(.22)},rgba(68,49,247,.09));--r-vio-bd:rgba(176,132,255,.46);--r-vio:#EBDDFF;
+  --r-neu-bg:rgba(255,255,255,.04);--r-neu-bd:rgba(226,232,240,.28);--r-neu:#E2E8F0;
   --ab:clamp(42px,11.4vw,46px);
   position:relative;z-index:20;width:100%;padding-top:2px;color:var(--g-text);
   -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;
 }
 .phs[data-theme="light"]{
-  --g-title:#121A3A;--g-text:#16204A;--g-muted:#4B5679;--g-body:#38425F;--g-link:#055BFB;--g-hover:rgba(68,49,247,.07);--g-pop:rgba(252,253,255,.97);
+  --g-title:#121A3A;--g-text:#16204A;--g-muted:#4B5679;--g-body:#38425F;--g-link:var(--arv-brand-blue);--g-hover:rgba(68,49,247,.07);--g-pop:rgba(252,253,255,.97);
   --lg-spec:.96;--lg-spec2:.5;--lg-v:.16;--lg-b:.22;--lg-gloss:.7;
   --lg-base:rgba(255,255,255,.50);--lg-solid:#FFFFFF;
   --lg-shadow:0 16px 28px -18px rgba(40,50,150,.45),0 2px 4px -2px rgba(30,40,110,.12),0 0 20px -10px rgba(var(--b),.30);
   --lg-inset:inset 0 1px 1px #fff,inset 0 -1px 1px rgba(110,120,230,.24),inset 0 0 18px rgba(255,255,255,.55),inset 0 -12px 18px -14px rgba(var(--b),.30);
   --lg-rim:linear-gradient(140deg,#fff,rgba(255,255,255,.55) 28%,rgba(90,80,220,.14) 56%,rgba(var(--b),.52));
   --sig-shadow:0 16px 28px -12px rgba(68,49,247,.55),0 0 22px -8px rgba(var(--b),.40);
-  --lv-a:#8B1EF3;--lv-b:#055BFB;
-  --focus:#4431F7;--edge:#F6F8FC;--photo-bg:#E2E8F0;--online:#17B97A;--ring-glow:rgba(68,49,247,.34);
+  --lv-a:var(--arv-brand-violet);--lv-b:var(--arv-brand-blue);
+  --focus:var(--arv-brand-indigo);--edge:#F6F8FC;--photo-bg:#E2E8F0;--online:#17B97A;--ring-glow:rgba(68,49,247,.34);
   --r-gold-bg:linear-gradient(180deg,#FFF8E6,#FFEBB8);--r-gold-bd:rgba(217,160,30,.6);--r-gold:#7A4E00;
-  --r-vio-bg:linear-gradient(180deg,#F8F0FF,#E9DEFF);--r-vio-bd:rgba(139,30,243,.36);--r-vio:#6B21A8;
+  --r-vio-bg:linear-gradient(180deg,#F8F0FF,#E9DEFF);--r-vio-bd:${brandRgba(.36)};--r-vio:#6B21A8;
   --r-neu-bg:linear-gradient(180deg,#F8FAFC,#EEF2F7);--r-neu-bd:#CBD5E1;--r-neu:#334155;
 }
 .phs *,.phs *::before,.phs *::after{box-sizing:border-box}
@@ -476,7 +476,7 @@ const PHS_CSS = `
     radial-gradient(130% 95% at 16% -28%,rgba(255,255,255,.6) 0%,rgba(255,255,255,.10) 36%,transparent 58%),
     radial-gradient(80% 70% at 102% 122%,rgba(0,210,255,.6) 0%,transparent 62%),
     radial-gradient(70% 60% at -6% 122%,rgba(var(--v),.55) 0%,transparent 60%),
-    linear-gradient(120deg,#8B1EF3 0%,#4431F7 52%,#055BFB 100%);
+    linear-gradient(120deg,var(--arv-brand-violet) 0%,var(--arv-brand-indigo) 52%,var(--arv-brand-blue) 100%);
   background-origin:border-box;
   box-shadow:var(--sig-shadow),inset 0 1px 1px rgba(255,255,255,.7),inset 0 -10px 16px -10px rgba(5,20,120,.65),inset 0 0 18px rgba(255,255,255,.13)}
 .phs-sig::before{content:"";position:absolute;inset:-1px;padding:1px;border-radius:inherit;pointer-events:none;
@@ -493,19 +493,19 @@ button.phs-photo:active{transform:scale(.98)}
 .phs-photo img{display:block;width:100%;height:100%;object-fit:cover}
 .phs-initials{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:34px;font-weight:700;color:var(--g-muted)}
 .phs-ring{position:absolute;inset:0;border-radius:50%;padding:3px;pointer-events:none;
-  background:conic-gradient(from 200deg,#8B1EF3,#4431F7,#055BFB,#22D3EE,#055BFB,#8B1EF3);
+  background:conic-gradient(from 200deg,var(--arv-brand-violet),var(--arv-brand-indigo),var(--arv-brand-blue),#22D3EE,var(--arv-brand-blue),var(--arv-brand-violet));
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
-.phs-ring[data-state="seen"]{background:linear-gradient(135deg,rgba(139,30,243,.6),rgba(5,91,251,.6));opacity:.5}
+.phs-ring[data-state="seen"]{background:linear-gradient(135deg,${brandRgba(.6)},rgba(5,91,251,.6));opacity:.5}
 .phs-ring[data-state="active"]{opacity:.82}
 .phs-ring-glow{position:absolute;inset:3px;border-radius:50%;pointer-events:none;box-shadow:0 0 20px -2px var(--ring-glow)}
 .phs-dot{position:absolute;left:5%;bottom:7%;width:15px;height:15px;border-radius:50%;background:var(--online);box-shadow:0 0 0 3px var(--edge)}
-.phs-vbadge{position:absolute;right:3%;bottom:3%;display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#055BFB;color:#fff;box-shadow:0 0 0 3px var(--edge),0 4px 10px -3px rgba(5,91,251,.6)}
+.phs-vbadge{position:absolute;right:3%;bottom:3%;display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:var(--arv-brand-blue);color:#fff;box-shadow:0 0 0 3px var(--edge),0 4px 10px -3px rgba(5,91,251,.6)}
 .phs-vbadge svg{width:14px;height:14px}
 
 /* ── identity (tight vertical rhythm) ──────────────────────── */
 .phs-name{margin:8px 0 0;max-width:100%;font-size:clamp(22px,calc(16px + 1.6vw),28px);line-height:1.12;font-weight:800;letter-spacing:-.025em;color:var(--g-title);overflow-wrap:anywhere;text-wrap:balance}
 .phs-vcheck{position:relative;display:inline-flex;vertical-align:-3px;margin-left:6px;padding:0;border:0;background:none;border-radius:50%;line-height:0}
-.phs-vcheck svg{width:20px;height:20px;color:#fff;fill:#055BFB}
+.phs-vcheck svg{width:20px;height:20px;color:#fff;fill:var(--arv-brand-blue)}
 button.phs-vcheck{cursor:pointer;transition:transform .15s}
 button.phs-vcheck::after{content:"";position:absolute;inset:-9px}
 button.phs-vcheck:active{transform:scale(.94)}
@@ -517,15 +517,14 @@ button.phs-vcheck:active{transform:scale(.94)}
 .phs-handle svg{flex:none;width:14px;height:14px;opacity:.75}
 .phs-handle svg[data-ok]{opacity:1;color:var(--online)}
 .phs-ident{margin-top:5px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px}
-.phs-pill{position:relative;display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px 0 9px;border:1px solid transparent;border-radius:999px;font:inherit;font-size:11.5px;font-weight:650;line-height:1;white-space:nowrap;
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.34),inset 0 -6px 10px -8px rgba(255,255,255,.18),0 6px 14px -8px rgba(0,0,0,.35)}
-.phs-pill svg{flex:none;width:14px;height:14px}
+.phs-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;height:30px;padding:0 12px;border-radius:999px;font:inherit;font-size:12px;font-weight:700;line-height:1;letter-spacing:.01em;white-space:nowrap}
+.phs-pill svg{flex:none;width:15px;height:15px}
 button.phs-pill{cursor:pointer;transition:filter .15s,transform .15s}
 button.phs-pill:hover{filter:brightness(1.1)}
 button.phs-pill:active{transform:scale(.97)}
-.phs-pill[data-kind="royal"]{background:linear-gradient(180deg,rgba(255,255,255,.26),rgba(255,255,255,0) 52%),var(--r-gold-bg);border-color:var(--r-gold-bd);color:var(--r-gold)}
-.phs-pill[data-kind="creator"]{background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 52%),var(--r-vio-bg);border-color:var(--r-vio-bd);color:var(--r-vio)}
-.phs-pill[data-kind="premium"]{background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 52%),var(--r-neu-bg);border-color:var(--r-neu-bd);color:var(--r-neu)}
+.phs-pill[data-kind="royal"]{background:var(--lg-layers),var(--r-gold-bg),var(--lg-base);color:var(--r-gold)}
+.phs-pill[data-kind="creator"]{background:var(--lg-layers),var(--r-vio-bg),var(--lg-base);color:var(--r-vio)}
+.phs-pill[data-kind="premium"]{background:var(--lg-layers),var(--r-neu-bg),var(--lg-base);color:var(--r-neu)}
 
 /* ── one metadata row: Location · Website · Joined ──────────── */
 .phs-meta{margin-top:8px;width:100%;display:flex;align-items:center;justify-content:center;flex-wrap:nowrap;gap:5px clamp(7px,2.4vw,11px);
@@ -537,9 +536,9 @@ button.phs-pill:active{transform:scale(.97)}
 .phs-mi>a:hover{text-decoration-color:currentColor}
 .phs-mi>button{padding:0;border:0;background:none;font:inherit;color:inherit;cursor:pointer;border-radius:4px}
 .phs-mi>button:hover{text-decoration:underline;text-underline-offset:2px}
-.phs-level{display:inline-flex;align-items:center;gap:5px;flex:none;height:28px;padding:0 12px 0 8px;border-radius:999px;font:inherit;font-size:12px;font-weight:750;line-height:1;letter-spacing:.01em;color:var(--g-title);cursor:pointer;
+.phs-level{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;height:30px;padding:0 12px;border-radius:999px;font:inherit;font-size:12px;font-weight:700;line-height:1;letter-spacing:.01em;color:var(--g-title);cursor:pointer;white-space:nowrap;
   transition:transform .15s,filter .15s}
-.phs-level svg{flex:none;width:16px;height:16px;filter:drop-shadow(0 0 5px rgba(var(--b),.45))}
+.phs-level svg{flex:none;width:15px;height:15px;filter:drop-shadow(0 0 5px rgba(var(--b),.45))}
 .phs-level:hover{filter:brightness(1.08)}
 .phs-level:active{transform:scale(.97)}
 .phs-prof{margin-top:4px;max-width:100%;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;line-height:1.3;color:var(--g-muted)}
@@ -847,6 +846,7 @@ export const ProfileHeroSection = memo(({
   friendRequestLoading = false,
   onFriendRequestToggle,
   onCancelFriendRequest,
+  onDeclineFriendRequest,
   onOpenTipModal,
   onOpenMessages,
   capabilities,
@@ -869,9 +869,6 @@ export const ProfileHeroSection = memo(({
   });
 
   const [copiedHandle, setCopiedHandle] = useState(false);
-  const [showRoadmapModal, setShowRoadmapModal] = useState(false);
-  const [roadmapMounted, setRoadmapMounted] = useState(false);
-  const [roadmapInitialTab, setRoadmapInitialTab] = useState('levels');
   const [bioExpanded, setBioExpanded] = useState(false);
   const [callPending, setCallPending] = useState(false);
   const [failedAvatarUrl, setFailedAvatarUrl] = useState(null);
@@ -888,13 +885,14 @@ export const ProfileHeroSection = memo(({
     };
   }, []);
 
-  const handleOpenRoadmap = useCallback((tab = 'levels') => {
-    setRoadmapInitialTab(tab);
-    setRoadmapMounted(true);
-    setShowRoadmapModal(true);
-  }, []);
-
   const profileUid = profile?.id || profile?.uid || null;
+
+  const handleOpenRoadmap = useCallback((tab = 'levels') => {
+    const params = new URLSearchParams();
+    if (tab) params.set('tab', tab);
+    if (!isOwner && profileUid) params.set('userId', profileUid);
+    navigate(`/levels?${params.toString()}`);
+  }, [navigate, isOwner, profileUid]);
 
   // --- Visibility: owners see everything; visitors only what is explicitly granted (fail closed) ---
   const caps = capabilities || {};
@@ -959,7 +957,8 @@ export const ProfileHeroSection = memo(({
   // Royal designation: presentation of the resolver result on the projected profile only.
   const isRoyal = titlesAllowed && Boolean(resolveRoyalFlag(profile));
   const royalTitleId = isRoyal ? resolveActiveTitleId(profile) : null;
-  const activeTitleObject = profile?.activeTitle && typeof profile.activeTitle === 'object' ? profile.activeTitle : null;
+  const rawActiveTitle = profile?.activeTitle;
+  const activeTitleObject = rawActiveTitle && typeof rawActiveTitle === 'object' ? rawActiveTitle : null;
   const canonicalTitleLabel = cleanString(activeTitleObject?.name) || cleanString(activeTitleObject?.label);
   const royalLabel = canonicalTitleLabel
     || (typeof royalTitleId === 'string' && royalTitleId ? humanizeTitle(royalTitleId) : 'Royal Family');
@@ -1012,6 +1011,7 @@ export const ProfileHeroSection = memo(({
 
   // --- Visitor relationship: Friends-first for eligible lower-level, non-creator profiles ---
   // The gate is a relationship rule (never displayed), so it reads the projected level directly.
+  const verifiedPriorityLevel = toFiniteNumber(LevelModule.LEVEL_GATES?.verifiedPriority);
   const followersGate = toFiniteNumber(LevelModule.LEVEL_GATES?.publicFollowers);
   const relationCreator = !isOwner && Boolean(resolveCreatorFlag(profile || {}, {}, rawLevel));
   const friendsFirst = !isOwner && !relationCreator && followersGate !== null && rawLevel !== null && rawLevel < followersGate;
@@ -1038,7 +1038,7 @@ export const ProfileHeroSection = memo(({
     }
     if (friendshipStatus === 'pending') {
       return onCancelFriendRequest
-        ? { key: 'friend', icon: X, label: 'Cancel', ariaLabel: 'Cancel friend request', variant: 'glass', disabled: friendRequestLoading, busy: friendRequestLoading, onClick: onCancelFriendRequest }
+        ? { key: 'friend', icon: X, label: 'Cancel Request', ariaLabel: 'Cancel friend request', variant: 'glass', disabled: friendRequestLoading, busy: friendRequestLoading, onClick: onCancelFriendRequest }
         : { key: 'friend', icon: Clock, label: 'Sent', ariaLabel: 'Friend request sent', variant: 'glass', disabled: true };
     }
     return {
@@ -1095,6 +1095,14 @@ export const ProfileHeroSection = memo(({
           disabled: secondaryRelation.disabled,
           busy: secondaryRelation.busy,
           onClick: secondaryRelation.onClick,
+        },
+        friendshipStatus === 'received' && onDeclineFriendRequest && {
+          key: 'decline_friend',
+          icon: X,
+          label: 'Decline friend request',
+          disabled: friendRequestLoading,
+          busy: friendRequestLoading,
+          onClick: onDeclineFriendRequest,
         },
         onOpenQrCode && { key: 'qr', icon: QrCode, label: 'QR code', onClick: onOpenQrCode },
         passportUrl && { key: 'passport', icon: ShieldCheck, label: 'Digital Passport', onClick: openPassport },
@@ -1179,7 +1187,13 @@ export const ProfileHeroSection = memo(({
           <span>{displayName}</span>
           {isVerified && (
             onOpenVerificationModal ? (
-              <button type="button" onClick={onOpenVerificationModal} aria-label="Verified account credentials" className="phs-vcheck">
+              <button
+                type="button"
+                onClick={onOpenVerificationModal}
+                aria-label="Verified account credentials"
+                title={verifiedPriorityLevel ? `Verified credentials (Priority Level ${verifiedPriorityLevel}+)` : 'Verified account credentials'}
+                className="phs-vcheck"
+              >
                 {verifiedIcon}
               </button>
             ) : (
@@ -1220,9 +1234,9 @@ export const ProfileHeroSection = memo(({
                 </>
               );
               return onClick ? (
-                <button key={key} type="button" onClick={onClick} className="phs-pill" data-kind={kind}>{content}</button>
+                <button key={key} type="button" onClick={onClick} className="phs-pill phs-lg" data-tier="premium" data-kind={kind}>{content}</button>
               ) : (
-                <span key={key} className="phs-pill" data-kind={kind}>{content}</span>
+                <span key={key} className="phs-pill phs-lg" data-tier="premium" data-kind={kind}>{content}</span>
               );
             })}
           </div>
@@ -1339,20 +1353,6 @@ export const ProfileHeroSection = memo(({
           )}
         </div>
       </div>
-
-      {/* Level, citizenship and Royal Family roadmap (loaded on first open) */}
-      {roadmapMounted && (
-        <Suspense fallback={null}>
-          <ProfileSystemRoadmapModal
-            isOpen={showRoadmapModal}
-            onClose={() => setShowRoadmapModal(false)}
-            profile={profile}
-            theme={theme}
-            initialTab={roadmapInitialTab}
-            userId={profileUid}
-          />
-        </Suspense>
-      )}
     </div>
   );
 });

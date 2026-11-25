@@ -49,6 +49,7 @@ const ConnectionsScreen = lazy(() => import("../screens/Profile/ConnectionsScree
 const HighlightsScreen = lazy(() => import("../screens/Profile/HighlightsScreen.jsx"));
 const AboutScreen = lazy(() => import("../screens/Profile/AboutScreen.jsx"));
 const ProfilePreviewScreen = lazy(() => import("../screens/Profile/ProfilePreviewScreen.jsx"));
+const LevelRoadmapScreen = lazy(() => import("../screens/Profile/LevelRoadmapScreen.jsx"));
 // Legacy screens
 const PostDetails = lazy(() => import("../screens/PostDetails.jsx"));
 const SettingsScreen = lazy(() => import("../screens/SettingsScreen.jsx"));
@@ -1064,6 +1065,23 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/profile/progress" element={<Navigate to="/progress" replace />} />
+
+      {/* Level, Citizenship & Royal Family Roadmap */}
+      <Route path="/levels" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <LevelRoadmapScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile/levels" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <LevelRoadmapScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/roadmap" element={<Navigate to="/levels" replace />} />
 
       {/* Part 2: Perks & Rewards Suite */}
       <Route path="/perks" element={

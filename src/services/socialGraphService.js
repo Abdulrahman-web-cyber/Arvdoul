@@ -255,7 +255,7 @@ class SocialGraphService {
         }),
       ]);
       const isFollowing = followOut.has(`${viewerId}_${targetId}`);
-      const isFollower = followIn.has(`${targetId}_${viewerId}`);
+      const isFollower = followIn.has(`${viewerId}_${targetId}`);
       const isBlocking = blockOut.has(`${viewerId}_${targetId}`);
       const isBlockedBy = blockIn.has(`${viewerId}_${targetId}`);
       const edge = {
@@ -332,7 +332,7 @@ class SocialGraphService {
 
       for (const t of others) {
         const isFollowing = followOut.has(`${viewerId}_${t}`);
-        const isFollower = followIn.has(`${t}_${viewerId}`);
+        const isFollower = followIn.has(`${viewerId}_${t}`);
         const isBlocking = blockOut.has(`${viewerId}_${t}`);
         const isBlockedBy = blockIn.has(`${viewerId}_${t}`);
         result.set(t, {

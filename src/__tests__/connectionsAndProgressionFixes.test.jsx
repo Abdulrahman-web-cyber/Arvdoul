@@ -65,6 +65,7 @@ let mockAuthValue = {
     activeStreak: 4,
     isCreator: true,
   },
+  authInitialized: true,
 };
 
 jest.mock('../context/AuthContext.jsx', () => ({
@@ -337,6 +338,7 @@ describe('ProgressScreen live hydration & zero-fabrication guard', () => {
       user: { uid: 'viewer-2', email: 'new@arvdoul.test' },
       currentUser: { uid: 'viewer-2', email: 'new@arvdoul.test' },
       userProfile: { uid: 'viewer-2', id: 'viewer-2', username: 'fresh_user', displayName: 'Fresh User' },
+      authInitialized: true,
     };
 
     mockGetLevelInfo.mockResolvedValue({

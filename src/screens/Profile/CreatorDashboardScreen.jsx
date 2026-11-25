@@ -242,7 +242,7 @@ export default function CreatorDashboardScreen() {
                     key={metric.key}
                     className={cn(
                       'p-4 rounded-2xl',
-                      'bg-white dark:bg-[#0B1234]/42 backdrop-blur-xl',
+                      'bg-white dark:bg-white/[0.025] backdrop-blur-2xl',
                       'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
                     )}
                   >
@@ -324,7 +324,7 @@ export default function CreatorDashboardScreen() {
             {/* Daily Stats Chart */}
             <div className={cn(
               'p-4 sm:p-5 rounded-2xl',
-              'bg-white dark:bg-[#0B1234]/42 backdrop-blur-xl',
+              'bg-white dark:bg-white/[0.025] backdrop-blur-2xl',
               'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
             )}>
               <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white mb-4">
@@ -362,7 +362,7 @@ export default function CreatorDashboardScreen() {
             {typeof analytics?.growthRate === 'number' && (
               <div className={cn(
                 'p-4 rounded-2xl',
-                'bg-white dark:bg-[#0B1234]/42 backdrop-blur-xl',
+                'bg-white dark:bg-white/[0.025] backdrop-blur-2xl',
                 'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
               )}>
                 <div className="flex items-center justify-between">
@@ -396,7 +396,7 @@ export default function CreatorDashboardScreen() {
                 value renders unknown. */}
             <div className={cn(
               'p-4 rounded-2xl',
-              'bg-white dark:bg-[#0B1234]/42 backdrop-blur-xl',
+              'bg-white dark:bg-white/[0.025] backdrop-blur-2xl',
               'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
             )}>
               <div className="flex items-center justify-between">

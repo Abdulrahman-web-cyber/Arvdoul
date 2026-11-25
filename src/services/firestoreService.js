@@ -1571,7 +1571,7 @@ class EnterpriseFirestoreService {
   }
 
   invalidateCache(key) { this.cache.delete(key); }
-  invalidateCachePattern(pattern) { this.cache.deletePattern(pattern); }
+  invalidateCachePattern(pattern) { this.cache?.deletePattern?.(pattern); }
 
   getStats() {
     return {

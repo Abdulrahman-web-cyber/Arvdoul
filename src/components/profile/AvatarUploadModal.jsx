@@ -144,7 +144,7 @@ const AvatarUploadModal = memo(({
           className={cn(
             'relative w-full max-w-md rounded-3xl p-6 z-10 overflow-hidden backdrop-blur-2xl',
             isDark
-              ? 'bg-[#0B1234]/72 border border-white/[0.10] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_20px_44px_-18px_rgba(0,0,0,0.62)]'
+              ? 'bg-[#03071B]/88 border border-white/[0.10] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_20px_44px_-18px_rgba(0,0,0,0.62)]'
               : 'bg-white/90 border border-slate-200/80 text-slate-900 shadow-2xl'
           )}
         >

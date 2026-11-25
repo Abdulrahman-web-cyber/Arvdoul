@@ -181,7 +181,7 @@ export const ProfileVerificationModal = memo(({
         className={cn(
           "relative w-full max-w-lg rounded-2xl sm:rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh]",
           isDark
-            ? "bg-[#0B1234]/72 backdrop-blur-2xl border-white/[0.09] text-white shadow-[0_14px_40px_rgba(3,7,27,0.45)]"
+            ? "bg-[#03071B]/88 backdrop-blur-2xl border-white/[0.10] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_14px_40px_rgba(3,7,27,0.55)]"
             : "bg-white border-slate-200 text-slate-900"
         )}
       >
@@ -220,7 +220,7 @@ export const ProfileVerificationModal = memo(({
             /* Mode 1: Already Verified */
             <div className="space-y-4 text-center py-4">
               <div className="relative mx-auto w-20 h-20 rounded-full p-[3px] bg-gradient-to-tr from-arvdoul-purple to-arvdoul-glow-cyan shadow-arvdoul-glow flex items-center justify-center">
-                <div className={cn("w-full h-full rounded-full flex items-center justify-center", isDark ? "bg-[#0B1234]" : "bg-white")}>
+                <div className={cn("w-full h-full rounded-full flex items-center justify-center", isDark ? "bg-[#03071B]" : "bg-white")}>
                   <BadgeCheck className="w-10 h-10 fill-arvdoul-purple text-white" />
                 </div>
                 <div className="absolute -top-1 -right-1 text-arvdoul-glow-cyan">

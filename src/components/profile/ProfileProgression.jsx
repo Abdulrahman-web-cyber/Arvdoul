@@ -32,6 +32,7 @@ import { memo, useMemo, useId, useInsertionEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { Crown, Flame, ChevronRight, Award, Sparkles } from "lucide-react";
 import { cn } from '../../lib/utils';
+import { brandRgba } from '../../design-system/tokens.js';
 import LevelNumeralBadge from './LevelNumeralBadge.jsx';
 import {
   getLevelInfo,
@@ -58,15 +59,15 @@ const STYLES = `
 }
 .ppr-root *,.ppr-root *::before,.ppr-root *::after{box-sizing:border-box}
 
-/* ---------- Dark: transparent deep-indigo glass, balanced highlights ---------- */
+/* ---------- Dark: zero-contrast transparent glass over #03071B ---------- */
 .ppr-root[data-theme="dark"]{
-  --ppr-base:rgba(14,20,60,0.26);
+  --ppr-base:rgba(255,255,255,0.025);
   --ppr-layers:
     radial-gradient(60% 150% at 0% 0%,rgba(200,43,255,0.12),transparent 64%),
     radial-gradient(60% 150% at 100% 100%,rgba(0,136,255,0.14),transparent 64%),
-    radial-gradient(50% 100% at 55% -40%,rgba(139,30,243,0.10),transparent 70%),
-    linear-gradient(160deg,rgba(44,54,136,0.22),rgba(16,24,78,0.22) 52%,rgba(8,14,50,0.28));
-  --ppr-border:rgba(175,184,255,0.16);
+    radial-gradient(50% 100% at 55% -40%,${brandRgba(0.10)},transparent 70%),
+    linear-gradient(160deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02) 52%,rgba(255,255,255,0.01));
+  --ppr-border:rgba(255,255,255,0.12);
   --ppr-shadow:
     0 12px 24px -18px rgba(1,3,22,0.52),
     0 2px 6px -4px rgba(5,10,40,0.22),
@@ -90,7 +91,7 @@ const STYLES = `
     linear-gradient(90deg,transparent,rgba(235,240,255,0.42) 20%,rgba(235,240,255,0.42) 72%,transparent) center top/86% 1px no-repeat,
     linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03) 60%,transparent);
   --ppr-streak:linear-gradient(90deg,transparent,rgba(255,255,255,0.06) 46%,rgba(255,255,255,0.02) 62%,transparent);
-  --ppr-rim:conic-gradient(from 200deg at 50% 50%,rgba(245,248,255,0.36),rgba(139,30,243,0.24) 22%,rgba(5,91,251,0.34) 46%,rgba(210,220,255,0.10) 66%,rgba(200,43,255,0.22) 84%,rgba(245,248,255,0.36));
+  --ppr-rim:conic-gradient(from 200deg at 50% 50%,rgba(245,248,255,0.36),${brandRgba(0.24)} 22%,rgba(5,91,251,0.34) 46%,rgba(210,220,255,0.10) 66%,rgba(200,43,255,0.22) 84%,rgba(245,248,255,0.36));
   --ppr-sat:90%;--ppr-fl:52%;--ppr-tl:70%;
   --ppr-title:#F6F8FF;--ppr-sub:#BAC4E2;--ppr-meta:#AEB9DA;--ppr-accent:#D3C4FF;
   --ppr-track:rgba(255,255,255,0.10);--ppr-track-edge:rgba(255,255,255,0.08);--ppr-track-inset:rgba(2,4,30,0.34);
@@ -130,12 +131,12 @@ const STYLES = `
     linear-gradient(90deg,transparent,#FFFFFF 20%,#FFFFFF 72%,transparent) center top/88% 1px no-repeat,
     linear-gradient(180deg,rgba(255,255,255,0.80),rgba(255,255,255,0.20) 60%,transparent);
   --ppr-streak:linear-gradient(90deg,transparent,rgba(255,255,255,0.50) 46%,rgba(255,255,255,0.18) 62%,transparent);
-  --ppr-rim:conic-gradient(from 200deg at 50% 50%,#FFFFFF,rgba(139,30,243,0.34) 22%,rgba(5,91,251,0.46) 46%,rgba(255,255,255,0.70) 66%,rgba(200,43,255,0.30) 84%,#FFFFFF);
+  --ppr-rim:conic-gradient(from 200deg at 50% 50%,#FFFFFF,${brandRgba(0.34)} 22%,rgba(5,91,251,0.46) 46%,rgba(255,255,255,0.70) 66%,rgba(200,43,255,0.30) 84%,#FFFFFF);
   --ppr-sat:86%;--ppr-fl:46%;--ppr-tl:30%;
   --ppr-title:#0F172A;--ppr-sub:#4B5873;--ppr-meta:#51607C;--ppr-accent:#5B21B6;
   --ppr-track:rgba(70,85,170,0.14);--ppr-track-edge:rgba(255,255,255,0.75);--ppr-track-inset:rgba(60,75,160,0.18);
   --ppr-rep:#1D4ED8;--ppr-streak-c:#7E22CE;--ppr-reward:#475569;
-  --ppr-focus:#4431F7;--ppr-icon-tile:rgba(255,255,255,0.72);--ppr-crown:#7C1FE0;
+  --ppr-focus:var(--arv-brand-indigo);--ppr-icon-tile:rgba(255,255,255,0.72);--ppr-crown:#7C1FE0;
 }
 
 /* ---------- Card ---------- */
@@ -247,16 +248,16 @@ const STYLES = `
 /* ---------- Progressive fallbacks ---------- */
 /* No backdrop blur: denser, still translucent body with the same reflections. */
 @supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
-  .ppr-root[data-theme="dark"]{--ppr-base:rgba(16,22,74,0.80)}
+  .ppr-root[data-theme="dark"]{--ppr-base:rgba(3,7,27,0.88)}
   .ppr-root[data-theme="light"]{--ppr-base:rgba(247,249,255,0.88)}
 }
 @media (prefers-reduced-transparency:reduce){
   .ppr-root{--ppr-blur:none}
-  .ppr-root[data-theme="dark"]{--ppr-base:rgba(16,22,74,0.90)}
+  .ppr-root[data-theme="dark"]{--ppr-base:rgba(3,7,27,0.92)}
   .ppr-root[data-theme="light"]{--ppr-base:rgba(247,249,255,0.95)}
 }
 .lite-mode .ppr-root,[data-lite-mode="true"] .ppr-root,[data-performance="lite"] .ppr-root{--ppr-blur:none}
-.lite-mode .ppr-root[data-theme="dark"],[data-lite-mode="true"] .ppr-root[data-theme="dark"],[data-performance="lite"] .ppr-root[data-theme="dark"]{--ppr-base:rgba(16,22,74,0.86)}
+.lite-mode .ppr-root[data-theme="dark"],[data-lite-mode="true"] .ppr-root[data-theme="dark"],[data-performance="lite"] .ppr-root[data-theme="dark"]{--ppr-base:rgba(3,7,27,0.90)}
 .lite-mode .ppr-root[data-theme="light"],[data-lite-mode="true"] .ppr-root[data-theme="light"],[data-performance="lite"] .ppr-root[data-theme="light"]{--ppr-base:rgba(247,249,255,0.92)}
 
 @media (prefers-reduced-motion:reduce){

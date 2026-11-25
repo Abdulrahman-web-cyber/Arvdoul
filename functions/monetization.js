@@ -2087,6 +2087,17 @@ exports.processVideoEvent = functions.https.onCall(async (data, context) => {
     }
     await batch.commit();
 
+    if (callerIsAdmin && (eventType === 'video.processed' || eventType === 'video.moderated')) {
+      const { writeAudit } = require('./admin');
+      await writeAudit(
+        uid,
+        `video_event_${eventType.replace(/\./g, '_')}`,
+        canonicalPostId || videoId,
+        { videoId, approved: eventType === 'video.moderated' ? Boolean(payload.approved) : undefined },
+        'video',
+      );
+    }
+
     logEvent('video_event_processed', { uid, videoId, eventType, callerIsAdmin });
     return { success: true, videoId, eventType };
   } catch (err) { throw handleError(err); }

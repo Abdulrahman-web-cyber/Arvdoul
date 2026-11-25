@@ -42,7 +42,7 @@ function isApprovedFollowerView(get, userId, options) {
   const profile = options.profile || state.profile;
   if (!profile || (profile.id !== userId && profile.uid !== userId)) return false;
   if (profile.isPrivate !== true) return false;
-  const viewerUid = state.viewerUid || null;
+  const viewerUid = state.viewerUid || useAppStore.getState().currentUser?.uid || null;
   if (!viewerUid || viewerUid === userId) return false;
   return state.followStatus?.isFollowing === true;
 }
@@ -757,7 +757,7 @@ export const useProfileStore = create(
       });
       
       try {
-        const viewerId = get().viewerUid || null;
+        const viewerId = get().viewerUid || useAppStore.getState().currentUser?.uid || null;
         const constrainAuthorIsPrivate = !isApprovedFollowerView(get, userId, options);
         const queryOpts = {
           limit: options.limit || 12,
@@ -880,7 +880,7 @@ export const useProfileStore = create(
         const result = await fsSvc.getPostsByUser(userId, {
           limit: 12,
           cursor: postsCursor,
-          viewerId: get().viewerUid || null,
+          viewerId: get().viewerUid || useAppStore.getState().currentUser?.uid || null,
           constrainAuthorIsPrivate: !isApprovedFollowerView(get, userId, {}),
         });
 
@@ -1228,8 +1228,9 @@ export const useProfileStore = create(
       if (get().followLoading) return;
       if (get().followStatusTargetId === followingId && get().followStatus?.isFollowing === true) return;
 
-      const isCurrentProfileTarget = (get().profile?.uid || get().profile?.id) === followingId;
-      const previousFollowStatus = get().followStatusTargetId === followingId ? get().followStatus : null;
+      const activeProfileId = get().profile?.uid || get().profile?.id;
+      const isCurrentProfileTarget = activeProfileId === followingId || (!activeProfileId && (!get().followStatusTargetId || get().followStatusTargetId === followingId));
+      const previousFollowStatus = (get().followStatusTargetId === followingId || !get().followStatusTargetId) ? get().followStatus : null;
       const previousFollowerCount = isCurrentProfileTarget ? (get().profile?.followerCount ?? null) : null;
 
       set((state) => {
@@ -1237,7 +1238,7 @@ export const useProfileStore = create(
         if (isCurrentProfileTarget) {
           state.followStatusTargetId = followingId;
           state.followStatus = { ...state.followStatus, isFollowing: true, requestStatus: null };
-          if (typeof state.profile.followerCount === 'number' && Number.isFinite(state.profile.followerCount)) {
+          if (state.profile && typeof state.profile.followerCount === 'number' && Number.isFinite(state.profile.followerCount)) {
             state.profile.followerCount += 1;
           }
         }
@@ -1252,7 +1253,7 @@ export const useProfileStore = create(
             if (state.followStatusTargetId === followingId) {
               state.followStatus = { isFollowing: false, requestStatus: 'pending' };
             }
-            if ((state.profile?.uid || state.profile?.id) === followingId) {
+            if ((state.profile?.uid || state.profile?.id) === followingId || (state.profile && !(state.profile.uid || state.profile.id) && state.followStatusTargetId === followingId)) {
               state.profile.followerCount = previousFollowerCount;
             }
           });
@@ -1278,7 +1279,7 @@ export const useProfileStore = create(
           if (state.followStatusTargetId === followingId) {
             state.followStatus = previousFollowStatus;
           }
-          if ((state.profile?.uid || state.profile?.id) === followingId) {
+          if ((state.profile?.uid || state.profile?.id) === followingId || (state.profile && !(state.profile.uid || state.profile.id) && state.followStatusTargetId === followingId)) {
             state.profile.followerCount = previousFollowerCount;
           }
         });
@@ -1378,11 +1379,12 @@ export const useProfileStore = create(
     cancelFollowRequest: async (fromUserId, toUserId) => {
       if (!fromUserId || !toUserId) return;
       if (get().followLoading) return;
-      if (get().followStatusTargetId !== toUserId || get().followStatus?.requestStatus !== 'pending') return;
+      if ((get().followStatusTargetId && get().followStatusTargetId !== toUserId) || get().followStatus?.requestStatus !== 'pending') return;
       const previousFollowStatus = get().followStatus;
       set((state) => {
         state.followLoading = true;
-        if (state.followStatusTargetId === toUserId) {
+        if (!state.followStatusTargetId || state.followStatusTargetId === toUserId) {
+          state.followStatusTargetId = toUserId;
           state.followStatus = { isFollowing: false, requestStatus: null };
         }
       });
@@ -1396,7 +1398,7 @@ export const useProfileStore = create(
       } catch (error) {
         set((state) => {
           state.followLoading = false;
-          if (state.followStatusTargetId === toUserId) {
+          if (!state.followStatusTargetId || state.followStatusTargetId === toUserId) {
             state.followStatus = previousFollowStatus;
           }
         });

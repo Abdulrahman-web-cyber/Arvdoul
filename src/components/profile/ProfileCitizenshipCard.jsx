@@ -69,7 +69,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
     <div className={cn(
       "rounded-3xl border relative overflow-hidden transition-all shadow-xl backdrop-blur-xl",
       isDark
-        ? "bg-[#0B1234]/38 border-amber-400/20 text-slate-100"
+        ? "bg-white/[0.025] border-amber-400/20 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
         : "bg-gradient-to-b from-white via-amber-50/20 to-slate-50 border-amber-600/30 text-slate-900",
       className
     )}>

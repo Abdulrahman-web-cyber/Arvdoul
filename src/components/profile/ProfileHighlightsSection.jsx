@@ -24,7 +24,7 @@
  * @component
  */
 
-import React, { memo, useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, ChevronRight, RefreshCw } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -128,19 +128,19 @@ const CSS = `
 .phl{
   --v:200,43,255;--b:0,136,255;
   --tx:#F5F7FF;--tx2:#B4BFDE;--link:#8EC3FF;--focus:#7DB6FF;--err:#FCA5A5;
-  --base:rgba(14,20,60,.28);--solid:#0B1234;
+  --base:rgba(255,255,255,.025);--solid:#03071B;
   --spec:.14;--spec2:.03;--cv:.09;--cb:.13;--gloss:.05;
   --shadow:0 14px 26px -22px rgba(0,0,0,.48),0 2px 6px -3px rgba(0,0,0,.20);
   --inset:inset 0 1px 1px rgba(255,255,255,.16),inset 0 -10px 16px -14px rgba(var(--b),.22),inset 0 0 14px rgba(130,110,255,.04);
   --rim:linear-gradient(140deg,rgba(255,255,255,.26),rgba(255,255,255,.06) 30%,rgba(255,255,255,.02) 56%,rgba(var(--b),.28));
   --chip:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.03));--chip-rim:rgba(255,255,255,.12);
-  --face:#0B1438;--sk:rgba(255,255,255,.07);
+  --face:#03071B;--sk:rgba(255,255,255,.07);
   --size:clamp(52px,14.5vw,60px);
   display:block;width:100%;min-width:0;color:var(--tx);
   font-family:inherit;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;
 }
 .phl[data-theme="light"]{
-  --tx:#121A3A;--tx2:#4B5679;--link:#055BFB;--focus:#055BFB;--err:#B91C1C;
+  --tx:#121A3A;--tx2:#4B5679;--link:var(--arv-brand-blue);--focus:var(--arv-brand-blue);--err:#B91C1C;
   --base:rgba(255,255,255,.42);--solid:#FFFFFF;
   --spec:.85;--spec2:.36;--cv:.10;--cb:.14;--gloss:.5;
   --shadow:0 16px 26px -22px rgba(40,50,150,.34),0 1px 3px -1px rgba(30,40,110,.10);

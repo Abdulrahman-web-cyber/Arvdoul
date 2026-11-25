@@ -38,7 +38,6 @@
     "clsx": "^2.1.1",
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
-    "dayjs": "^1.11.21",
     "dompurify": "^3.4.10",
     "emoji-picker-react": "^4.19.1",
     "express": "^5.3.0",

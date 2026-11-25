@@ -22,6 +22,7 @@ import {
   X,
   Check,
   Clock,
+  Inbox,
 } from "lucide-react";
 import FollowButton from '../../components/profile/FollowButton';
 import { useProfileStore } from '../../store/profileStore';
@@ -69,6 +70,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const [following, setFollowing] = useState([]);
   const [friends, setFriends] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
+  const [receivedFriendRequests, setReceivedFriendRequests] = useState([]);
+  const [followRequests, setFollowRequests] = useState([]);
+  const [requestBusyIds, setRequestBusyIds] = useState(() => new Set());
   const [sentFriendIds, setSentFriendIds] = useState(() => new Set());
   const [friendBusyIds, setFriendBusyIds] = useState(() => new Set());
 
@@ -88,27 +92,37 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const effectiveLevel = rawLvl != null && Number.isFinite(Number(rawLvl)) ? Number(rawLvl) : null;
   const isCreatorOrAdvanced = Boolean(
     targetProfile?.isCreator ||
-    (isOwner && ownerProfile?.isCreator) ||
+    ((isOwner && userProfile?.isCreator) && userProfile?.uid === currentUserId) ||
     (effectiveLevel != null && effectiveLevel >= LEVEL_GATES.publicFollowers)
   );
 
   const derivedInitialTab = useMemo(() => {
     if (propInitialTab) return propInitialTab;
+    const searchTab = new URLSearchParams(location.search).get('tab')?.toLowerCase();
+    if (searchTab && ['followers', 'following', 'friends', 'discover', 'requests'].includes(searchTab)) {
+      if (searchTab === 'requests' && !isOwner) return isCreatorOrAdvanced ? 'followers' : 'friends';
+      return searchTab;
+    }
     const pathname = location.pathname.toLowerCase();
     if (pathname.includes('/following')) return 'following';
     if (pathname.includes('/followers')) return 'followers';
     if (pathname.includes('/friends')) return 'friends';
     if (pathname.includes('/discover')) return 'discover';
     return isCreatorOrAdvanced ? 'followers' : 'friends';
-  }, [propInitialTab, location.pathname, isCreatorOrAdvanced]);
+  }, [propInitialTab, location.pathname, location.search, isCreatorOrAdvanced, isOwner]);
 
   const [activeTab, setActiveTab] = useState(propInitialTab || derivedInitialTab);
 
   useEffect(() => {
     if (propInitialTab) {
       setActiveTab(propInitialTab);
+      return;
     }
-  }, [propInitialTab]);
+    const searchTab = new URLSearchParams(location.search).get('tab')?.toLowerCase();
+    if (searchTab && ['followers', 'following', 'friends', 'discover', 'requests'].includes(searchTab)) {
+      if (searchTab !== 'requests' || isOwner) setActiveTab(searchTab);
+    }
+  }, [propInitialTab, location.search, isOwner]);
 
   const { follow, unfollow, cancelFollowRequest, followLoading } = useProfileStore();
 
@@ -128,6 +142,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       return {
         ...u,
         isFollowing: Boolean(s?.isFollowing),
+        isFollower: Boolean(s?.isFollower),
+        isMutualFriend: Boolean(s?.isMutualFriend),
         requestStatus: s?.requestStatus ?? null,
       };
     });
@@ -155,6 +171,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       setFollowing([]);
       setFriends([]);
       setSuggestions([]);
+      setReceivedFriendRequests([]);
+      setFollowRequests([]);
       setCursors({ followers: null, following: null, friends: null });
       setHasMore({ followers: false, following: false, friends: false });
 
@@ -212,13 +230,29 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         const sentRequestsPromise = isOwner && currentUserId && typeof userService.getFriendRequests === 'function'
           ? userService.getFriendRequests(currentUserId, 'sent').catch(() => ({ requests: [] }))
           : Promise.resolve({ requests: [] });
+        const receivedRequestsPromise = isOwner && currentUserId && typeof userService.getFriendRequests === 'function'
+          ? userService.getFriendRequests(currentUserId, 'received').catch(() => ({ requests: [] }))
+          : Promise.resolve({ requests: [] });
+        const followRequestsPromise = isOwner && currentUserId && typeof userService.getFollowRequests === 'function'
+          ? userService.getFollowRequests(currentUserId).catch(() => ({ requests: [] }))
+          : Promise.resolve({ requests: [] });
 
-        const [followersRes, followingRes, friendsRes, discoverRes, sentReqRes] = await Promise.allSettled([
+        const [
+          followersRes,
+          followingRes,
+          friendsRes,
+          discoverRes,
+          sentReqRes,
+          receivedReqRes,
+          followReqRes,
+        ] = await Promise.allSettled([
           followersPromise,
           followingPromise,
           friendsPromise,
           discoverPromise,
           sentRequestsPromise,
+          receivedRequestsPromise,
+          followRequestsPromise,
         ]);
         if (!isMounted) return;
         if ([followersRes, followingRes, friendsRes].some((result) => result.status === 'rejected')) {
@@ -240,6 +274,12 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           const sentReqs = sentReqRes.status === 'fulfilled'
             ? (Array.isArray(sentReqRes.value) ? sentReqRes.value : sentReqRes.value?.requests || [])
             : [];
+          const incomingFriendReqs = receivedReqRes.status === 'fulfilled'
+            ? (Array.isArray(receivedReqRes.value) ? receivedReqRes.value : receivedReqRes.value?.requests || [])
+            : [];
+          const incomingFollowReqs = followReqRes.status === 'fulfilled'
+            ? (Array.isArray(followReqRes.value) ? followReqRes.value : followReqRes.value?.requests || [])
+            : [];
 
           setCursors({
             followers: followersVal?.nextCursor || null,
@@ -253,6 +293,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           });
 
           setSentFriendIds(new Set(sentReqs.map((r) => r.toUserId).filter(Boolean)));
+          setReceivedFriendRequests(incomingFriendReqs);
+          setFollowRequests(incomingFollowReqs);
 
           const allIds = [...new Set([
             ...followersList, ...followingList, ...friendsList, ...suggestionsList,
@@ -275,6 +317,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
             return {
               ...u,
               isFollowing: Boolean(s?.isFollowing),
+              isFollower: Boolean(s?.isFollower),
+              isMutualFriend: Boolean(s?.isMutualFriend),
               requestStatus: s?.requestStatus ?? null,
             };
           });
@@ -452,23 +496,95 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     }
   }, [currentUserId, friendBusyIds, sentFriendIds]);
 
+  const handleRespondFriendRequest = useCallback(async (requestId, accept) => {
+    if (!currentUserId || !requestId || requestBusyIds.has(requestId)) return;
+    setRequestBusyIds((prev) => new Set(prev).add(requestId));
+    try {
+      const svc = getUserService();
+      if (accept) {
+        await svc.acceptFriendRequest(requestId, currentUserId);
+        toast.success('Friend request accepted');
+      } else {
+        await svc.declineFriendRequest(requestId, currentUserId);
+        toast.info('Friend request declined');
+      }
+      setReceivedFriendRequests((prev) => prev.filter((r) => r.id !== requestId));
+      setRefreshNonce((n) => n + 1);
+    } catch (err) {
+      toast.error(err?.message || 'Could not update friend request');
+    } finally {
+      setRequestBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(requestId);
+        return next;
+      });
+    }
+  }, [currentUserId, requestBusyIds]);
+
+  const handleRespondFollowRequest = useCallback(async (requestId, approve) => {
+    if (!currentUserId || !requestId || requestBusyIds.has(requestId)) return;
+    setRequestBusyIds((prev) => new Set(prev).add(requestId));
+    try {
+      const svc = getUserService();
+      if (approve) {
+        const res = await svc.approveFollowRequest(requestId, currentUserId);
+        if (res?.blocked) toast.info('Blocked user request closed');
+        else toast.success('Follow request approved');
+      } else {
+        await svc.declineFollowRequest(requestId, currentUserId);
+        toast.info('Follow request declined');
+      }
+      setFollowRequests((prev) => prev.filter((r) => r.id !== requestId));
+      setRefreshNonce((n) => n + 1);
+    } catch (err) {
+      toast.error(err?.message || 'Could not update follow request');
+    } finally {
+      setRequestBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(requestId);
+        return next;
+      });
+    }
+  }, [currentUserId, requestBusyIds]);
+
   const followersUnlocked = Boolean(isCreatorOrAdvanced);
 
   const tabVisible = useMemo(() => ({
     followers: followersUnlocked && (isOwner || Boolean(capabilities?.canViewFollowers)),
     following: followersUnlocked && (isOwner || Boolean(capabilities?.canViewFollowing)),
     friends: isOwner || Boolean(capabilities?.canViewFriends),
+    requests: isOwner,
     discover: isOwner,
   }), [followersUnlocked, isOwner, capabilities]);
 
   useEffect(() => {
     if (!tabVisible[activeTab]) {
-      const fallback = ['followers', 'following', 'friends', 'discover'].find((k) => tabVisible[k]);
+      const fallback = ['followers', 'following', 'friends', 'requests', 'discover'].find((k) => tabVisible[k]);
       if (fallback) setActiveTab(fallback);
     }
   }, [tabVisible, activeTab]);
 
+  const combinedRequestsCount = receivedFriendRequests.length + followRequests.length;
+
+  const normalizedRequestItems = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    const filterBySearch = (item) => {
+      if (!q) return true;
+      const peer = item.peerProfile || {};
+      const name = String(item.fromUserDisplayName || peer.displayName || '').toLowerCase();
+      const user = String(item.fromUserUsername || peer.username || '').toLowerCase();
+      return name.includes(q) || user.includes(q);
+    };
+    return {
+      friend: receivedFriendRequests.filter(filterBySearch),
+      follow: followRequests.filter(filterBySearch),
+    };
+  }, [receivedFriendRequests, followRequests, searchQuery]);
+
   const currentItems = useMemo(() => {
+    if (activeTab === 'requests' && tabVisible.requests) {
+      return [...normalizedRequestItems.friend, ...normalizedRequestItems.follow];
+    }
     let rawList = [];
     if (activeTab === 'followers' && tabVisible.followers) rawList = followers;
     else if (activeTab === 'following' && tabVisible.following) rawList = following;
@@ -483,7 +599,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       const bio = (item.bio || '').toLowerCase();
       return name.includes(q) || user.includes(q) || bio.includes(q);
     });
-  }, [activeTab, tabVisible, followers, following, friends, suggestions, searchQuery]);
+  }, [activeTab, tabVisible, followers, following, friends, suggestions, normalizedRequestItems, searchQuery]);
 
   const tabs = useMemo(() => [
     tabVisible.followers && { id: 'followers', label: 'Followers', count: followers.length, icon: Users },
@@ -494,8 +610,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       count: friends.length,
       icon: ShieldCheck,
     },
+    tabVisible.requests && { id: 'requests', label: 'Requests', count: combinedRequestsCount, icon: Inbox },
     tabVisible.discover && { id: 'discover', label: 'Discover', count: suggestions.length, icon: UserPlus },
-  ].filter(Boolean), [tabVisible, followers.length, following.length, friends.length, suggestions.length, isOwner]);
+  ].filter(Boolean), [tabVisible, followers.length, following.length, friends.length, combinedRequestsCount, suggestions.length, isOwner]);
 
   const targetDisplayName = targetProfile
     ? resolveActorName([targetProfile.displayName, targetProfile.username], targetUserId)
@@ -504,6 +621,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const activeTabLabel = useMemo(() => {
     if (activeTab === 'followers') return 'Followers';
     if (activeTab === 'following') return 'Following';
+    if (activeTab === 'requests') return 'Requests';
     if (activeTab === 'discover') return 'Discover';
     return isOwner ? 'Friends' : 'Mutual Friends';
   }, [activeTab, isOwner]);
@@ -529,9 +647,13 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     };
     window.addEventListener('arvdoul:network_search_query', onSearchQuery);
     window.addEventListener('arvdoul:network_refresh', onRefresh);
+    window.addEventListener('arvdoul:friend-request-changed', onRefresh);
+    window.addEventListener('arvdoul:follow-request-changed', onRefresh);
     return () => {
       window.removeEventListener('arvdoul:network_search_query', onSearchQuery);
       window.removeEventListener('arvdoul:network_refresh', onRefresh);
+      window.removeEventListener('arvdoul:friend-request-changed', onRefresh);
+      window.removeEventListener('arvdoul:follow-request-changed', onRefresh);
       window.dispatchEvent(new CustomEvent('arvdoul:network_header_state', { detail: null }));
     };
   }, []);
@@ -550,7 +672,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           aria-label="Connection lists"
           className={cn(
             "p-1 rounded-2xl border flex items-center gap-1 overflow-x-auto no-scrollbar",
-            isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-slate-200/60 border-slate-200/80"
+            isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08]" : "bg-slate-200/60 border-slate-200/80"
           )}
         >
           {tabs.map((tab) => {
@@ -570,7 +692,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                   "relative flex-1 min-w-[92px] min-h-[44px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-all cursor-pointer",
                   active
                     ? isDark
-                      ? "bg-[#111C4A] text-white shadow-sm border border-white/[0.1]"
+                      ? "bg-white/[0.09] text-white shadow-sm border border-white/[0.14]"
                       : "bg-white text-slate-950 shadow-sm border border-slate-200/60"
                     : isDark
                       ? "text-slate-400 hover:text-slate-200"
@@ -602,7 +724,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         <div className={cn(
           "px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 text-xs",
           isDark
-            ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] text-slate-300"
+            ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] text-slate-300"
             : "bg-white border-slate-200/80 text-slate-700 shadow-[0_1px_6px_rgba(15,23,42,0.03)]"
         )}>
           <div className="min-w-0">
@@ -636,7 +758,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           <div className={cn(
             "flex items-center gap-2.5 px-3.5 min-h-[44px] rounded-2xl border transition-colors",
             isDark
-              ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] focus-within:border-purple-500/50"
+              ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] focus-within:border-arvdoul-purple/60"
               : "bg-white border-slate-200 focus-within:border-purple-400"
           )}>
             <Search className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
@@ -650,9 +772,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                   ? 'followers'
                   : activeTab === 'following'
                     ? 'following'
-                    : activeTab === 'discover'
-                      ? 'suggested people'
-                      : 'mutual friends'
+                    : activeTab === 'requests'
+                      ? 'pending requests'
+                      : activeTab === 'discover'
+                        ? 'suggested people'
+                        : 'mutual friends'
               } by name or handle...`}
               className="flex-1 bg-transparent text-xs sm:text-sm placeholder-slate-400 focus:outline-none py-2.5"
             />
@@ -670,7 +794,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         ) : searchQuery.trim() ? (
           <div className={cn(
             "px-3.5 py-2 rounded-xl border flex items-center justify-between gap-2 text-xs",
-            isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] text-slate-300" : "bg-white border-slate-200 text-slate-700"
+            isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] text-slate-300" : "bg-white border-slate-200 text-slate-700"
           )}>
             <div className="flex items-center gap-2 min-w-0">
               <Search className="w-3.5 h-3.5 text-arvdoul-purple shrink-0" aria-hidden="true" />
@@ -696,7 +820,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           /* Privacy Protected State */
           <div className={cn(
             "rounded-3xl p-8 sm:p-12 text-center border space-y-4 my-6",
-            isDark ? "bg-[#0B1234]/48 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200"
+            isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08]" : "bg-white border-slate-200"
           )}>
             <div className={cn(
               "w-14 h-14 mx-auto rounded-2xl flex items-center justify-center border",
@@ -727,7 +851,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           /* Empty State */
           <div className={cn(
             "py-16 text-center rounded-3xl border space-y-2.5 px-6",
-            isDark ? "bg-[#0B1234]/34 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200"
+            isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08]" : "bg-white border-slate-200"
           )}>
             <div className={cn(
               "w-12 h-12 mx-auto rounded-2xl flex items-center justify-center",
@@ -745,10 +869,187 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                   ? 'People who follow this profile will appear here.'
                   : activeTab === 'following'
                     ? 'Accounts followed by this profile will appear here.'
-                    : activeTab === 'discover'
-                      ? 'Suggested people and creators will appear here as your network grows.'
-                      : 'Mutual friends who follow each other will appear here.'}
+                    : activeTab === 'requests'
+                      ? 'Pending friend requests and follow requests will appear here.'
+                      : activeTab === 'discover'
+                        ? 'Suggested people and creators will appear here as your network grows.'
+                        : 'Mutual friends who follow each other will appear here.'}
             </p>
+          </div>
+        ) : activeTab === 'requests' ? (
+          /* Pending Friend & Follow Requests View (Owner only) */
+          <div className="space-y-5">
+            {normalizedRequestItems.friend.length > 0 && (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between px-1">
+                  <h2 className={cn("text-xs font-bold uppercase tracking-wider", isDark ? "text-slate-400" : "text-slate-500")}>
+                    Friend Requests · {normalizedRequestItems.friend.length}
+                  </h2>
+                </div>
+                {normalizedRequestItems.friend.map((req) => {
+                  const peer = req.peerProfile || {};
+                  const peerId = req.fromUserId;
+                  const peerName = resolveActorName([req.fromUserDisplayName, peer.displayName, peer.username], peerId);
+                  const peerHandle = pickHandle([req.fromUserUsername, peer.username]) || deriveHandle(peerName);
+                  const safeAvatar = getSafeAvatarUrl(req.fromUserPhotoURL || peer.photoURL, peerName, peerId);
+                  const busy = requestBusyIds.has(req.id);
+                  return (
+                    <div
+                      key={req.id}
+                      className={cn(
+                        "p-3.5 sm:p-4 rounded-2xl border transition-colors flex flex-wrap sm:flex-nowrap items-center justify-between gap-3",
+                        isDark
+                          ? "bg-white/[0.025] hover:bg-white/[0.05] backdrop-blur-2xl border-white/[0.08] hover:border-white/15"
+                          : "bg-white hover:bg-slate-50/80 border-slate-200/80 hover:border-slate-300"
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/profile/${peerId}`)}
+                        className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-arvdoul-purple rounded-xl"
+                      >
+                        <div className={cn(
+                          "w-12 h-12 rounded-xl overflow-hidden border shrink-0",
+                          isDark ? "border-white/10 bg-white/[0.05]" : "border-slate-200 bg-slate-100"
+                        )}>
+                          <LazyImage
+                            src={safeAvatar}
+                            alt={peerName}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.target.src = getSafeAvatarUrl(null, peerName, peerId); }}
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn("text-sm font-semibold truncate", isDark ? "text-white" : "text-slate-900")}>
+                              {peerName}
+                            </span>
+                            {peer.isVerified && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-label="Verified" />}
+                          </div>
+                          <div className={cn("flex items-center gap-1.5 text-xs truncate", isDark ? "text-slate-400" : "text-slate-500")}>
+                            {peerHandle && <span className="truncate">@{peerHandle}</span>}
+                            <span aria-hidden="true">·</span>
+                            <span>Wants to be friends</span>
+                          </div>
+                        </div>
+                      </button>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => handleRespondFriendRequest(req.id, true)}
+                          className="min-h-[40px] px-3.5 rounded-xl bg-arvdoul-gradient text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-60 hover:brightness-110 transition-all"
+                        >
+                          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" aria-hidden="true" />}
+                          <span>Accept</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => handleRespondFriendRequest(req.id, false)}
+                          className={cn(
+                            "min-h-[40px] px-3 rounded-xl border text-xs font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-60 transition-colors",
+                            isDark
+                              ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-300"
+                              : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
+                          )}
+                        >
+                          <X className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>Decline</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {normalizedRequestItems.follow.length > 0 && (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between px-1">
+                  <h2 className={cn("text-xs font-bold uppercase tracking-wider", isDark ? "text-slate-400" : "text-slate-500")}>
+                    Follow Requests · {normalizedRequestItems.follow.length}
+                  </h2>
+                </div>
+                {normalizedRequestItems.follow.map((req) => {
+                  const peer = req.peerProfile || {};
+                  const peerId = req.fromUserId;
+                  const peerName = resolveActorName([req.fromUserDisplayName, peer.displayName, peer.username], peerId);
+                  const peerHandle = pickHandle([req.fromUserUsername, peer.username]) || deriveHandle(peerName);
+                  const safeAvatar = getSafeAvatarUrl(req.fromUserPhotoURL || peer.photoURL, peerName, peerId);
+                  const busy = requestBusyIds.has(req.id);
+                  return (
+                    <div
+                      key={req.id}
+                      className={cn(
+                        "p-3.5 sm:p-4 rounded-2xl border transition-colors flex flex-wrap sm:flex-nowrap items-center justify-between gap-3",
+                        isDark
+                          ? "bg-white/[0.025] hover:bg-white/[0.05] backdrop-blur-2xl border-white/[0.08] hover:border-white/15"
+                          : "bg-white hover:bg-slate-50/80 border-slate-200/80 hover:border-slate-300"
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/profile/${peerId}`)}
+                        className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-arvdoul-purple rounded-xl"
+                      >
+                        <div className={cn(
+                          "w-12 h-12 rounded-xl overflow-hidden border shrink-0",
+                          isDark ? "border-white/10 bg-white/[0.05]" : "border-slate-200 bg-slate-100"
+                        )}>
+                          <LazyImage
+                            src={safeAvatar}
+                            alt={peerName}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.target.src = getSafeAvatarUrl(null, peerName, peerId); }}
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn("text-sm font-semibold truncate", isDark ? "text-white" : "text-slate-900")}>
+                              {peerName}
+                            </span>
+                            {peer.isVerified && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-label="Verified" />}
+                          </div>
+                          <div className={cn("flex items-center gap-1.5 text-xs truncate", isDark ? "text-slate-400" : "text-slate-500")}>
+                            {peerHandle && <span className="truncate">@{peerHandle}</span>}
+                            <span aria-hidden="true">·</span>
+                            <span>Requested to follow you</span>
+                          </div>
+                        </div>
+                      </button>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => handleRespondFollowRequest(req.id, true)}
+                          className="min-h-[40px] px-3.5 rounded-xl bg-arvdoul-gradient text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-60 hover:brightness-110 transition-all"
+                        >
+                          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" aria-hidden="true" />}
+                          <span>Approve</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => handleRespondFollowRequest(req.id, false)}
+                          className={cn(
+                            "min-h-[40px] px-3 rounded-xl border text-xs font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-60 transition-colors",
+                            isDark
+                              ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-300"
+                              : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
+                          )}
+                        >
+                          <X className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>Decline</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : (
           /* Connection List */
@@ -774,7 +1075,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                   className={cn(
                     "p-3.5 sm:p-4 rounded-2xl border transition-colors flex items-center justify-between gap-3",
                     isDark
-                      ? "bg-[#0B1234]/42 hover:bg-[#0B1234]/60 backdrop-blur-xl border-white/[0.08] hover:border-white/15"
+                      ? "bg-white/[0.025] hover:bg-white/[0.05] backdrop-blur-2xl border-white/[0.08] hover:border-white/15"
                       : "bg-white hover:bg-slate-50/80 border-slate-200/80 hover:border-slate-300"
                   )}
                 >
@@ -799,7 +1100,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={cn(
                           "text-sm font-semibold truncate",
                           isDark ? "text-white" : "text-slate-900"
@@ -808,6 +1109,14 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                         </span>
                         {rowUser.isVerified && (
                           <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-label="Verified" />
+                        )}
+                        {!isSelf && rowUser.isFollower && activeTab !== 'followers' && (
+                          <span className={cn(
+                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-md",
+                            isDark ? "bg-white/[0.07] text-slate-300" : "bg-slate-100 text-slate-600"
+                          )}>
+                            Follows you
+                          </span>
                         )}
                       </div>
 
@@ -920,7 +1229,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
             })}
 
             {/* Cursor Pagination Load More */}
-            {activeTab !== 'discover' && hasMore[activeTab] && !searchQuery.trim() && (
+            {activeTab !== 'discover' && activeTab !== 'requests' && hasMore[activeTab] && !searchQuery.trim() && (
               <div className="pt-2 flex justify-center">
                 <button
                   type="button"
@@ -929,7 +1238,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                   className={cn(
                     "min-h-[44px] px-5 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer disabled:opacity-60",
                     isDark
-                      ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] text-slate-200 hover:bg-white/10"
+                      ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] text-slate-200 hover:bg-white/[0.07]"
                       : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50"
                   )}
                 >

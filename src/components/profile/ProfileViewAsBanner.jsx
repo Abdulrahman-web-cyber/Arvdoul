@@ -29,7 +29,7 @@ export const ProfileViewAsBanner = memo(({
     >
       <div className={cn(
         "relative rounded-2xl p-3 sm:p-4 border backdrop-blur-2xl shadow-2xl transition-all",
-        "bg-[#0B1234]/78 text-white border-amber-500/35 shadow-black/50",
+        "bg-[#03071B]/88 text-white border-amber-500/35 shadow-black/50",
         "flex flex-col sm:flex-row items-center justify-between gap-3"
       )}>
         {/* Glow accent hairline */}
@@ -42,7 +42,7 @@ export const ProfileViewAsBanner = memo(({
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="relative shrink-0 w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center">
             <Eye className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-[#0B1234]" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-[#03071B]" />
           </div>
 
           <div className="min-w-0 flex-1">

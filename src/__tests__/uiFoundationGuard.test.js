@@ -77,11 +77,12 @@ describe('UI foundation - theme color', () => {
 describe('UI foundation - splash + focus', () => {
   test('the splash loader uses the canonical brand family', () => {
     const html = read('index.html');
-    const splash = html.match(/\.app-loading\s*\{[^}]*background:\s*linear-gradient\(([^)]+)\)/);
+    const splash = html.match(/<linearGradient\s+id="av-boot-brand"[\s\S]*?<\/linearGradient>/);
     expect(splash).toBeTruthy();
-    expect(splash[1]).toContain('#8B1EF3');
-    expect(splash[1]).not.toContain('#3B82F6');
-    expect(splash[1]).not.toContain('#EC4899');
+    expect(splash[0]).toContain('#BD03F6');
+    expect(splash[0]).toContain('#0074F8');
+    expect(splash[0]).not.toContain('#3B82F6');
+    expect(splash[0]).not.toContain('#EC4899');
   });
 
   test('a global :focus-visible fallback exists in the stylesheet', () => {

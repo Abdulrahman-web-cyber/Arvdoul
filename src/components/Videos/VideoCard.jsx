@@ -15,7 +15,7 @@ import { useVideoStore } from '../../store/videoStore';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { formatDuration, formatViewCount } from '../../utils/videoUtils';
-import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, brandRgba } from '../../design-system/tokens.js';
 import useDoubleTap from '../../hooks/useDoubleTap.js';
 import useHlsVideo from '../../hooks/useHlsVideo.js';
 import VideoQualitySelector from './VideoQualitySelector';
@@ -809,14 +809,15 @@ const VideoCard = memo(({
               className={`absolute bottom-[146px] lg:bottom-16 left-3 sm:left-4 right-20 max-w-[330px] z-20 pointer-events-auto backdrop-blur-2xl border rounded-3xl p-3.5 flex flex-col gap-2 text-left transition-colors ${
                 isDark
                   ? 'bg-black/50 border-white/15 text-white shadow-2xl'
-                  : 'bg-white/88 border-white/80 text-slate-900 shadow-[0_12px_32px_rgba(15,23,42,0.18)]'
+                  : 'bg-white/90 border-white/80 text-slate-900 shadow-[0_12px_32px_rgba(15,23,42,0.18)]'
               }`}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-3">
-                <div
-                  className="flex items-center gap-2.5 min-w-0 cursor-pointer"
+                <button
+                  type="button"
                   onClick={() => ownerId && navigate(`/profile/${ownerId}`)}
+                  className="flex items-center gap-2.5 min-w-0 cursor-pointer text-left bg-transparent border-0 p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple rounded-xl"
                 >
                   <div className="relative shrink-0">
                     <LazyImage
@@ -848,7 +849,7 @@ const VideoCard = memo(({
                       {video?.creator?.username ? `@${video.creator.username}` : ''}
                     </span>
                   </div>
-                </div>
+                </button>
 
                 {!isOwner && (
                   <motion.button
@@ -1034,8 +1035,8 @@ const VideoCard = memo(({
                   );
                 })}
                 <div
-                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_10px_rgba(139,30,243,0.85)] ring-2 ring-arvdoul-purple transition-transform group-hover:scale-125"
-                  style={{ left: `${progress}%` }}
+                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white ring-2 ring-arvdoul-purple transition-transform group-hover:scale-125"
+                  style={{ left: `${progress}%`, boxShadow: `0 0 10px ${brandRgba(0.85)}` }}
                 />
               </div>
 

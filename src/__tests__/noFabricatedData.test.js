@@ -879,9 +879,10 @@ describe('Unbounded queries bounded', () => {
     const spine = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
     expect(spine).toContain('MAX_PAGE_SIZE');
     // The shared hidden-author reader unions all three safety edges (N223/N225).
-    expect(spine).toContain("this.listEdges(userId, 'blocked'");
-    expect(spine).toContain("this.listEdges(userId, 'blocked_by'");
-    expect(spine).toContain("this.listEdges(userId, 'muted'");
+    expect(spine).toContain("this._collectEdgesBounded(userId, 'blocked'");
+    expect(spine).toContain("this._collectEdgesBounded(userId, 'blocked_by'");
+    expect(spine).toContain("this._collectEdgesBounded(userId, 'muted'");
+    expect(spine).toContain('this.listEdges(userId, kind');
   });
 
   test('the Sparks video feed hides blocked/blocked-by/muted authors (N224)', () => {
@@ -2542,7 +2543,8 @@ describe('Profile hero XP bar shows a consistent within-level fraction', () => {
     // `nextLevelXp` is an absolute XP total (e.g. 5000 at level 10), while the
     // numerator `xpIntoLevel` is relative, so "300 / 5000 XP" was wrong. The
     // span (nextLevelXp - currentLevelXp) is the honest denominator.
-    expect(s).toContain('levelInfo.nextLevelXp - levelInfo.currentLevelXp');
+    expect(s).toContain('nextXp - currentXp');
+    expect(s).toContain('Math.round(span).toLocaleString()} XP');
   });
 
   test('a max-level citizen sees no fabricated "100 XP" denominator', () => {
@@ -2936,7 +2938,8 @@ describe('Wallet/economy surfaces never fabricate an empty balance', () => {
   test('ProfileMetricsGrid renders an unknown coin count as —', () => {
     const s = read('src/components/profile/ProfileMetricsGrid.jsx');
     expect(s).not.toContain('profile?.balance ?? 0;');
-    expect(s).toContain('coinsCount !== null');
+    expect(s).toContain('item.count !== null');
+    expect(s).toContain("if (num === undefined || num === null) return '—';");
   });
 
   test('VideoAnalyticsScreen renders an unknown pending payout, not $0.00', () => {
@@ -2970,8 +2973,9 @@ describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N1
   test('ProfileCreatorDashboard renders an unknown metric as —, not 0', () => {
     const s = read('src/components/profile/ProfileCreatorDashboard.jsx');
     expect(s).not.toMatch(/Number\(analytics\?\.totalViews\)\s*\|\|\s*0/);
-    expect(s).toContain("views === null ? '—'");
-    expect(s).toContain("coins === null ? '—'");
+    expect(s).toContain('readMetric(analytics?.totalViews)');
+    expect(s).toContain('readMetric(analytics?.coinsEarned)');
+    expect(s).toContain("known ? formatCompact(cell.count) : '—'");
   });
 
   test('ProfileCreatorDashboard sparkline series never coerce an unrecorded day to 0', () => {
@@ -2981,7 +2985,8 @@ describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N1
     // must fall back to the explicit "no trend data" placeholder.
     expect(s).not.toMatch(/Number\(d\.(views|reach|engagement|coins)\)\s*\|\|\s*0/);
     expect(s).toContain('unknownNumber');
-    expect(s).toContain('values.every((v) => v !== null) ? values : null');
+    expect(s).toContain('readMetric(point[key])');
+    expect(s).toContain('valid[key] && buffers[key].length >= 2 ? buffers[key] : null');
   });
 });
 
@@ -4041,11 +4046,12 @@ describe('N343 — ProfileProgression never fabricates a "0 XP" bar from a missi
   });
   test('the XP curve is consulted only when a real XP value exists', () => {
     expect(src).not.toMatch(/getLevelInfo\(\s*experience\s*\|\|\s*0\s*\)/);
-    expect(src).toContain('getLevelInfo(Number(experience))');
-    expect(src).toContain('hasExperience');
+    expect(src).toContain('getLevelInfo(validExperience)');
+    expect(src).toContain('validExperience !== null');
   });
   test('the XP bar is gated on the resolved XP info, not the level alone', () => {
-    expect(src).toContain('{xpInfo && (');
+    expect(src).toContain('const hasBar = progress !== null;');
+    expect(src).toContain('{hasBar && (');
   });
 });
 
@@ -4104,7 +4110,7 @@ describe('N388 — ProfileHeroSection creator pill uses the canonical identity b
     // 'Top Creator' is reserved for creators at LEVEL_GATES.verifiedPriority;
     // the literal claimed that standing for every creator regardless of level.
     expect(src).toMatch(/getIdentityBadge/);
-    expect(src).toMatch(/creatorBadgeLabel/);
+    expect(src).toMatch(/creatorLabel/);
     expect(src).not.toMatch(/>\s*Top Creator\s*</);
   });
 });
@@ -4477,7 +4483,7 @@ describe('N405 — identity derivation never invents a civic/creator name', () =
     const s = read('src/services/userService.js');
     expect(s).not.toContain("(isSelfUser ? 'Member' : 'Creator')");
     expect(s).not.toContain(": 'creator')");
-    expect(s).toContain('`user ${String(userId).slice(0, 6)}`');
+    expect(s).toContain('`user ${String(targetUid).slice(0, 6)}`');
   });
 });
 

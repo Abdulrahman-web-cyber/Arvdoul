@@ -1,16 +1,13 @@
-// functions/moderation.js — content moderation, reporting, and AI authoring
+// functions/moderation.js — content moderation and reporting
 //
-// This module is the single server-side implementation for four features the
-// client depends on:
+// This module is the single server-side implementation for moderation and
+// content reporting:
 //
 //   1. moderatePost          — server-side moderation check for the composer
 //   2. reportContent         — one unified callable for post/comment/user/video
 //                              reports (client may still call reportComment /
 //                              reportPost / reportVideo, which are thin aliases)
-//   3. generateAICaption /   — creator writing assistance backed by the AI
-//      generateAIHashtags      gateway (functions/ai.js). Fail loudly when the
-//                              provider is unconfigured; never fabricate text.
-//   4. predictPostPerformance — deterministic, explainable predictions derived
+//   3. predictPostPerformance — deterministic, explainable predictions derived
 //                              from the real payload (no random/fake metrics).
 //
 // Every report lands in the collection the admin console already reads
@@ -19,7 +16,6 @@
 //
 // Configuration:
 //   functions:config:set perspective.api_key="..."   (moderation)
-//   AI_OPENAI_API_KEY / AI_MODEL                     (see functions/ai.js)
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
@@ -343,106 +339,7 @@ exports.moderatePost = functions.https.onCall(async (data, context) => {
 });
 
 // ----------------------------------------------------------------------
-//  5. AI authoring helpers (caption + hashtags)
-//
-//  Both reuse the AI gateway callable so rate limiting, budget caps and
-//  telemetry stay in one place. Text is derived from real input; when the
-//  provider is unconfigured the call fails loudly instead of inventing copy.
-// ----------------------------------------------------------------------
-async function callAIGateway(prompt, systemPrompt, capability) {
-  const apiKey = process.env.AI_OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new functions.https.HttpsError(
-      'failed-precondition',
-      'AI writing assistant is not configured. Contact support.'
-    );
-  }
-  const model = process.env.AI_MODEL || 'gpt-4o-mini';
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.8,
-      max_tokens: 400,
-    }),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!res.ok) {
-    throw new functions.https.HttpsError('internal', `AI provider error (${res.status})`);
-  }
-  const json = await res.json();
-  const text = json?.choices?.[0]?.message?.content?.trim();
-  if (!text) {
-    throw new functions.https.HttpsError('internal', 'AI provider returned no content.');
-  }
-  logger.info('AI authoring', { capability, model });
-  return text;
-}
-
-exports.generateAICaption = functions.https.onCall(async (data, context) => {
-  const uid = validateAuth(context);
-  const content = stripHtml(data?.content).slice(0, 2000);
-  const mediaDescriptions = Array.isArray(data?.mediaDescriptions)
-    ? data.mediaDescriptions.filter((d) => typeof d === 'string').slice(0, 10)
-    : [];
-  const style = stripHtml(data?.style).slice(0, 40) || 'casual';
-
-  if (!content && mediaDescriptions.length === 0) {
-    throw new functions.https.HttpsError('invalid-argument', 'Add some content or media first.');
-  }
-
-  await checkRateLimit(uid, 'generateAICaption', 20, 60000);
-
-  const prompt = [
-    `Write one ${style} social caption.`,
-    content ? `Existing text: ${content}` : 'There is no text yet.',
-    mediaDescriptions.length ? `Media: ${mediaDescriptions.join(', ')}` : '',
-    'Return only the caption, no quotes, no hashtags, max 220 characters.',
-  ]
-    .filter(Boolean)
-    .join('\n');
-
-  const caption = await callAIGateway(prompt, 'You write concise, engaging social captions.', 'caption');
-  return { success: true, caption };
-});
-
-exports.generateAIHashtags = functions.https.onCall(async (data, context) => {
-  const uid = validateAuth(context);
-  const content = stripHtml(data?.content).slice(0, 2000);
-  const mediaTypes = Array.isArray(data?.mediaTypes)
-    ? data.mediaTypes.filter((t) => typeof t === 'string').slice(0, 10)
-    : [];
-
-  if (!content && mediaTypes.length === 0) {
-    throw new functions.https.HttpsError('invalid-argument', 'Add some content or media first.');
-  }
-
-  await checkRateLimit(uid, 'generateAIHashtags', 20, 60000);
-
-  const prompt = [
-    'Suggest 8 relevant social media hashtags.',
-    content ? `Post: ${content}` : '',
-    mediaTypes.length ? `Media types: ${mediaTypes.join(', ')}` : '',
-    'Return only space-separated hashtags starting with #.',
-  ]
-    .filter(Boolean)
-    .join('\n');
-
-  const raw = await callAIGateway(prompt, 'You are a social media hashtag expert.', 'hashtags');
-  const hashtags = [...new Set((raw.match(/#[\p{L}\p{N}_]+/gu) || []))].slice(0, 15);
-  if (hashtags.length === 0) {
-    throw new functions.https.HttpsError('internal', 'AI provider returned no usable hashtags.');
-  }
-  return { success: true, hashtags };
-});
-
-// ----------------------------------------------------------------------
-//  6. predictPostPerformance
+//  5. predictPostPerformance
 //
 //  Explainable predictions computed from the real submitted payload. The
 //  scoring is deterministic: the same draft always produces the same numbers,

@@ -161,7 +161,7 @@ export default function ProfileTipModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.2 }}
-          className="relative w-full max-w-md overflow-hidden rounded-2xl sm:rounded-3xl bg-white dark:bg-[#0B1234]/72 dark:backdrop-blur-2xl border border-slate-200 dark:border-white/[0.09] shadow-2xl p-6"
+          className="relative w-full max-w-md overflow-hidden rounded-2xl sm:rounded-3xl bg-white dark:bg-[#03071B]/88 dark:backdrop-blur-2xl border border-slate-200 dark:border-white/[0.10] shadow-2xl p-6"
         >
           {/* Close button */}
           <button

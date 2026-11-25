@@ -32,6 +32,7 @@ import {
   BarChart2,
   Crown,
   ChevronDown,
+  ChevronUp,
   ArrowUpRight,
   Video,
 } from 'lucide-react';
@@ -63,19 +64,19 @@ const PCD_CSS = `
   --pcd-v:200,43,255;--pcd-b:0,136,255;
   --pcd-tx:#F5F7FF;--pcd-tx2:#B4BFDE;--pcd-link:#8EC3FF;--pcd-focus:#7DB6FF;--pcd-edge:rgba(255,255,255,.10);
   --pcd-up:#6EE7B7;--pcd-down:#FCA5A5;--pcd-line:rgba(255,255,255,.07);
-  --pcd-cell:rgba(10,16,52,.22);--pcd-cell-hover:rgba(60,76,170,.20);--pcd-cell-press:rgba(70,86,184,.28);
-  --pcd-base:rgba(14,20,60,.28);--pcd-solid:#0B1234;
-  --pcd-ctl:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03));--pcd-ctl-solid:#16205A;
-  --pcd-spec:.13;--pcd-spec2:.03;--pcd-cv:.08;--pcd-cb:.12;--pcd-gloss:.05;
+  --pcd-cell:rgba(255,255,255,.015);--pcd-cell-hover:rgba(255,255,255,.06);--pcd-cell-press:rgba(255,255,255,.10);
+  --pcd-base:rgba(255,255,255,.025);--pcd-solid:#03071B;
+  --pcd-ctl:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03));--pcd-ctl-solid:#0B102E;
+  --pcd-spec:.15;--pcd-spec2:.04;--pcd-cv:.09;--pcd-cb:.13;--pcd-gloss:.06;
   --pcd-shadow:0 14px 26px -22px rgba(0,0,0,.48),0 2px 6px -3px rgba(0,0,0,.20);
-  --pcd-inset:inset 0 1px 1px rgba(255,255,255,.15),inset 0 -10px 16px -14px rgba(var(--pcd-b),.20),inset 0 0 14px rgba(130,110,255,.04);
-  --pcd-rim:linear-gradient(140deg,rgba(255,255,255,.24),rgba(255,255,255,.06) 30%,rgba(255,255,255,.02) 56%,rgba(var(--pcd-b),.26));
-  --pcd-ring-in:rgba(8,15,46,.82);--pcd-opt-bg:#0B1234;--pcd-opt-tx:#F5F7FF;
-  --pcd-spark-a:var(--arv-brand-violet,#8B1EF3);--pcd-spark-b:var(--pcd-blue,#055BFB);
+  --pcd-inset:inset 0 1px 1px rgba(255,255,255,.16),inset 0 -10px 16px -14px rgba(var(--pcd-b),.22),inset 0 0 14px rgba(130,110,255,.05);
+  --pcd-rim:linear-gradient(140deg,rgba(255,255,255,.26),rgba(255,255,255,.06) 30%,rgba(255,255,255,.02) 56%,rgba(var(--pcd-b),.28));
+  --pcd-ring-in:rgba(3,7,27,.84);--pcd-opt-bg:#03071B;--pcd-opt-tx:#F5F7FF;
+  --pcd-spark-a:var(--arv-brand-violet);--pcd-spark-b:var(--arv-brand-blue);
   display:block;width:100%;min-width:0;color:var(--pcd-tx);color-scheme:dark;
   font-family:inherit;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
 .pcd[data-theme="light"]{
-  --pcd-tx:#121A3A;--pcd-tx2:#4B5679;--pcd-link:#055BFB;--pcd-focus:#055BFB;--pcd-edge:rgba(60,76,140,.18);
+  --pcd-tx:#121A3A;--pcd-tx2:#4B5679;--pcd-link:var(--arv-brand-blue);--pcd-focus:var(--arv-brand-blue);--pcd-edge:rgba(60,76,140,.18);
   --pcd-up:#047857;--pcd-down:#BE123C;--pcd-line:rgba(70,86,150,.13);
   --pcd-cell:rgba(255,255,255,.38);--pcd-cell-hover:rgba(255,255,255,.70);--pcd-cell-press:rgba(255,255,255,.86);
   --pcd-base:rgba(255,255,255,.42);--pcd-solid:#FFFFFF;
@@ -94,10 +95,11 @@ const PCD_CSS = `
     radial-gradient(120% 90% at 14% -30%,rgba(255,255,255,var(--pcd-spec)) 0%,rgba(255,255,255,var(--pcd-spec2)) 34%,transparent 58%),
     radial-gradient(70% 70% at 104% 120%,rgba(var(--pcd-b),var(--pcd-cb)) 0%,transparent 64%),
     radial-gradient(60% 70% at -6% 120%,rgba(var(--pcd-v),var(--pcd-cv)) 0%,transparent 62%),
-    linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01));
+    linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01));
   position:relative;isolation:isolate;border:1px solid var(--pcd-edge);border-radius:24px;
   background:var(--pcd-layers),var(--pcd-base);background-origin:border-box;box-shadow:var(--pcd-shadow),var(--pcd-inset);
-  -webkit-backdrop-filter:blur(20px) saturate(170%);backdrop-filter:blur(20px) saturate(170%)}
+  -webkit-backdrop-filter:blur(22px) saturate(190%);backdrop-filter:blur(22px) saturate(190%)}
+.pcd-glass[data-folded="true"]{border-radius:22px}
 @media (max-width:639px){.pcd-glass{-webkit-backdrop-filter:blur(16px) saturate(160%);backdrop-filter:blur(16px) saturate(160%)}}
 @supports ((-webkit-mask-composite:xor) or (mask-composite:exclude)){
   .pcd-glass{border-color:transparent}
@@ -114,32 +116,42 @@ const PCD_CSS = `
   .pcd-glass{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--pcd-layers),var(--pcd-solid);background-origin:border-box}
 }
 /* clips the hairline grid to the rounded panel without clipping the rim */
-.pcd-inner{border-radius:23px;overflow:hidden}
+.pcd-glass[data-folded="true"] .pcd-inner{border-radius:21px}
 
 /* header */
-.pcd-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 12px;padding:12px 16px;border-bottom:1px solid var(--pcd-line)}
+.pcd-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 10px;padding:12px 16px;border-bottom:1px solid var(--pcd-line)}
+.pcd-glass[data-folded="true"] .pcd-head{padding:10px 14px}
 .pcd-title{display:flex;align-items:center;gap:10px;min-width:0}
 .pcd-title > svg{width:18px;height:18px;flex:none;color:var(--pcd-link)}
 .pcd-title-text{min-width:0}
 .pcd-title h2{margin:0;font-size:15px;line-height:1.2;font-weight:700;letter-spacing:-.005em;color:var(--pcd-tx)}
 .pcd-title p{margin:2px 0 0;font-size:11.5px;line-height:1.25;font-weight:500;color:var(--pcd-tx2)}
-.pcd-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.pcd-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 
 /* subtle glass controls (same material as the hero's icon buttons) */
-.pcd-ctl{position:relative;isolation:isolate;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:1px solid var(--pcd-edge);border-radius:16px;
-  font:inherit;font-size:12.5px;font-weight:600;line-height:1;color:var(--pcd-tx);white-space:nowrap;cursor:pointer;background:var(--pcd-ctl);
+.pcd-ctl{position:relative;isolation:isolate;display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border:1px solid var(--pcd-edge);border-radius:14px;
+  font:inherit;font-size:12px;font-weight:600;line-height:1;color:var(--pcd-tx);white-space:nowrap;cursor:pointer;background:var(--pcd-ctl);
   box-shadow:inset 0 1px 1px rgba(255,255,255,.2),0 8px 16px -12px rgba(var(--pcd-b),.45);
   transition:filter .15s ease,transform .15s ease}
+.pcd-fold-btn{width:40px;padding:0;justify-content:center}
 .pcd[data-theme="light"] .pcd-ctl{box-shadow:inset 0 1px 1px #fff,0 8px 16px -12px rgba(var(--pcd-b),.35)}
 .pcd-ctl > svg{width:14px;height:14px;flex:none;color:var(--pcd-link)}
 @media (hover:hover){.pcd-ctl:hover:not(:disabled){filter:brightness(1.1)}}
 .pcd-ctl:active:not(:disabled){transform:scale(.97)}
 .pcd-ctl:disabled{opacity:.55;cursor:not-allowed}
 .pcd-select-wrap{position:relative;display:inline-flex}
-.pcd-select{appearance:none;-webkit-appearance:none;padding-right:32px;min-width:0;max-width:100%}
+.pcd-select{appearance:none;-webkit-appearance:none;padding-right:30px;min-width:0;max-width:100%}
 .pcd-select option{background:var(--pcd-opt-bg);color:var(--pcd-opt-tx)}
-.pcd-select-wrap > svg{position:absolute;right:12px;top:50%;width:14px;height:14px;transform:translateY(-50%);pointer-events:none;color:var(--pcd-tx2)}
+.pcd-select-wrap > svg{position:absolute;right:10px;top:50%;width:14px;height:14px;transform:translateY(-50%);pointer-events:none;color:var(--pcd-tx2)}
 .pcd-ctl:focus-visible,.pcd-select:focus-visible,.pcd-cta:focus-visible{outline:2px solid var(--pcd-focus);outline-offset:2px}
+
+/* folded compact summary strip (matches Highlights height) */
+.pcd-folded-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--pcd-line);min-height:56px}
+.pcd-folded-cell{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 4px;background:var(--pcd-cell);text-align:center;border:0;font:inherit;color:inherit}
+button.pcd-folded-cell{cursor:pointer;transition:background-color .15s ease}
+@media (hover:hover){button.pcd-folded-cell:hover{background:var(--pcd-cell-hover)}}
+.pcd-folded-val{max-width:100%;font-size:clamp(13px,3.3vw,16px);line-height:1.1;font-weight:700;font-variant-numeric:tabular-nums;color:var(--pcd-tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcd-folded-lbl{max-width:100%;font-size:clamp(9px,2.2vw,11px);line-height:1.15;font-weight:500;color:var(--pcd-tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* hairline-divided metrics (translucent cells over the line colour) */
 .pcd-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--pcd-line)}
@@ -497,12 +509,15 @@ const ProfileCreatorDashboard = memo(({
   const openRankings = useCallback(() => navigate('/rankings'), [navigate]);
   const openProgress = useCallback(() => navigate('/progress'), [navigate]);
 
+  const [folded, setFolded] = useState(false);
+
   const cells = useMemo(() => (isEligibleCreator ? buildCells(analytics) : null), [isEligibleCreator, analytics]);
   const rank = useMemo(() => (isEligibleCreator ? readRanking(ranking) : null), [isEligibleCreator, ranking]);
 
   const shellProps = {
     className: 'pcd pcd-glass',
     'data-theme': isDark ? 'dark' : 'light',
+    'data-folded': folded ? 'true' : undefined,
     style: { '--pcd-brand': BRAND_GRADIENT, '--pcd-blue': tokens?.color?.brand?.blue },
     'aria-labelledby': headingId,
   };
@@ -588,43 +603,79 @@ const ProfileCreatorDashboard = memo(({
                 <span id={hintId} className="pcd-sr">The timeframe cannot be changed here.</span>
               )}
             </div>
+
+            <button
+              type="button"
+              className="pcd-ctl pcd-fold-btn"
+              onClick={() => setFolded((prev) => !prev)}
+              aria-expanded={!folded}
+              aria-label={folded ? 'Unfold Creator Dashboard' : 'Fold Creator Dashboard'}
+              title={folded ? 'Unfold Creator Dashboard' : 'Fold Creator Dashboard'}
+            >
+              {folded ? <ChevronDown aria-hidden="true" /> : <ChevronUp aria-hidden="true" />}
+            </button>
           </div>
         </header>
 
-        <div className="pcd-grid">
-          {cells.map((cell) => {
-            const known = cell.count !== null;
-            return (
-              <div key={cell.key} className="pcd-cell">
-                <dl>
-                  <dt>{cell.label}</dt>
-                  <dd>
-                    <span className="pcd-val" aria-hidden="true" data-unknown={known ? undefined : ''}>
-                      {known ? formatCompact(cell.count) : '—'}
-                    </span>
-                    <span className="pcd-sr">{known ? formatFull(cell.count) : 'Unavailable'}</span>
-                    <span className="pcd-trend" data-tone={cell.trend.tone} aria-hidden="true">{cell.trend.text}</span>
-                    <span className="pcd-sr">, {cell.trend.spoken}</span>
-                  </dd>
-                </dl>
-                <div className="pcd-spark">
-                  <Sparkline data={cell.series} gradientId={`pcd-${safeId}-${cell.key}`} />
+        {folded ? (
+          <div className="pcd-folded-row">
+            {cells.map((cell) => {
+              const known = cell.count !== null;
+              const shortLabel = cell.key === 'views' ? 'Views' : cell.key === 'reach' ? 'Reach' : cell.key === 'coins' ? 'Coins' : cell.label;
+              return (
+                <div key={cell.key} className="pcd-folded-cell">
+                  <span className="pcd-folded-val" aria-hidden="true">{known ? formatCompact(cell.count) : '—'}</span>
+                  <span className="pcd-sr">{cell.label}: {known ? formatFull(cell.count) : 'Unavailable'}</span>
+                  <span className="pcd-folded-lbl">{shortLabel}</span>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+            <button
+              type="button"
+              className="pcd-folded-cell"
+              aria-label={rank ? `View creator rankings. Current standing: ${rank.spoken}` : 'View creator rankings. Current standing unavailable'}
+              onClick={openRankings}
+            >
+              <span className="pcd-folded-val">{rank ? rank.text : '—'}</span>
+              <span className="pcd-folded-lbl">Standing</span>
+            </button>
+          </div>
+        ) : (
+          <div className="pcd-grid">
+            {cells.map((cell) => {
+              const known = cell.count !== null;
+              return (
+                <div key={cell.key} className="pcd-cell">
+                  <dl>
+                    <dt>{cell.label}</dt>
+                    <dd>
+                      <span className="pcd-val" aria-hidden="true" data-unknown={known ? undefined : ''}>
+                        {known ? formatCompact(cell.count) : '—'}
+                      </span>
+                      <span className="pcd-sr">{known ? formatFull(cell.count) : 'Unavailable'}</span>
+                      <span className="pcd-trend" data-tone={cell.trend.tone} aria-hidden="true">{cell.trend.text}</span>
+                      <span className="pcd-sr">, {cell.trend.spoken}</span>
+                    </dd>
+                  </dl>
+                  <div className="pcd-spark">
+                    <Sparkline data={cell.series} gradientId={`pcd-${safeId}-${cell.key}`} />
+                  </div>
+                </div>
+              );
+            })}
 
-          <button
-            type="button"
-            className="pcd-cell pcd-rank"
-            aria-label={rank ? `View creator rankings. Current standing: ${rank.spoken}` : 'View creator rankings. Current standing unavailable'}
-            onClick={openRankings}
-          >
-            <span className="pcd-ring" aria-hidden="true"><span><Crown /></span></span>
-            <span className="pcd-rank-val">{rank ? rank.text : '—'}</span>
-            <span className="pcd-rank-sub">Among Creators</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              className="pcd-cell pcd-rank"
+              aria-label={rank ? `View creator rankings. Current standing: ${rank.spoken}` : 'View creator rankings. Current standing unavailable'}
+              onClick={openRankings}
+            >
+              <span className="pcd-ring" aria-hidden="true"><span><Crown /></span></span>
+              <span className="pcd-rank-val">{rank ? rank.text : '—'}</span>
+              <span className="pcd-rank-sub">Among Creators</span>
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );

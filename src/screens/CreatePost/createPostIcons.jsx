@@ -1,5 +1,5 @@
 // src/screens/CreatePost/createPostIcons.jsx
-import React, { useId } from 'react';
+import { useId } from 'react';
 import { tokens } from '../../design-system/tokens.js';
 
 // Bespoke Arvdoul studio icons with collision-free instance IDs

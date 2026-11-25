@@ -29,7 +29,7 @@ import {
   Component, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, Suspense, lazy,
 } from "react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Lock, RefreshCw, Coins, ChevronRight, AlertCircle } from "lucide-react";
+import { Lock, RefreshCw, Coins, ChevronRight, AlertCircle, UserPlus } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfileStore } from '../../store/profileStore';
@@ -260,14 +260,14 @@ const buildTabCounts = ({ posts, stories, savedPosts, uid, postsLoaded, postsCom
  *   subtle (sticky tabs, banners) · premium (default panels) · deep (state panels) · signature (primary actions)
  * Each surface layers a specular bloom, two low-opacity brand caustics, a gradient rim and a gloss,
  * over a translucent base with backdrop blur. Lite Mode removes the blur and uses an opaque base.
- * Arvdoul tokens: dark glass rgba(255,255,255,.06) · light glass rgba(255,255,255,.8) · accents #C82BFF / #0088FF.
+ * Arvdoul tokens: dark glass rgba(255,255,255,.06) · light glass rgba(255,255,255,.8) · accents brand-pink / brand-cyan tokens.
  */
 const PMS_CSS = `
 .pms{
   --v:200,43,255;--b:0,136,255;--gold:245,196,81;--gold2:217,145,14;
   --tx:#F5F7FF;--tx2:#B4BFDE;--link:#8EC3FF;--focus:#7DB6FF;
   --err:#FCA5A5;--err-bg:rgba(239,68,68,.10);--err-bd:rgba(239,68,68,.30);
-  --base:rgba(14,20,60,.28);--solid:#0B1234;
+  --base:rgba(255,255,255,.025);--solid:#03071B;
   --spec:.12;--spec2:.03;--cv:.08;--cb:.12;--cg:.18;--gloss:.045;--blur:20px;
   --shadow:0 14px 26px -22px rgba(0,0,0,.48),0 2px 6px -3px rgba(0,0,0,.20);
   --inset:inset 0 1px 1px rgba(255,255,255,.15),inset 0 -10px 16px -14px rgba(var(--b),.20),inset 0 0 14px rgba(130,110,255,.04);
@@ -279,7 +279,7 @@ const PMS_CSS = `
 }
 .pms[data-theme="light"]{
   --gold:217,145,14;--gold2:180,104,6;
-  --tx:#121A3A;--tx2:#4B5679;--link:#055BFB;--focus:#055BFB;
+  --tx:#121A3A;--tx2:#4B5679;--link:var(--arv-brand-blue);--focus:var(--arv-brand-blue);
   --err:#B91C1C;--err-bg:rgba(239,68,68,.08);--err-bd:rgba(239,68,68,.28);
   --base:rgba(255,255,255,.8);--solid:#FFFFFF;
   --spec:.5;--spec2:.2;--cv:.07;--cb:.11;--cg:.22;--gloss:.4;
@@ -546,6 +546,7 @@ export default function ProfileMyScreen() {
   const [loadState, setLoadState] = useState({ key: null, slices: EMPTY_SLICES });
   const [refreshState, setRefreshState] = useState({ uid: null, op: 0 });
   const [avatarOverride, setAvatarOverride] = useState({ uid: null, url: null });
+  const [pendingRequestsState, setPendingRequestsState] = useState({ uid: null, friend: 0, follow: 0 });
 
   const viewAs = viewAsState.uid === currentUserId && PERSPECTIVES.includes(viewAsState.mode) ? viewAsState.mode : 'owner';
   const isOwnerView = viewAs === 'owner';
@@ -849,6 +850,38 @@ export default function ProfileMyScreen() {
     if (!currentUserId || !isOwnerView) return;
     settleAction(() => useAnalyticsStore.getState().loadAnalytics(currentUserId, timeframe, { forceRefresh: true }));
   }, [currentUserId, isOwnerView, timeframe]);
+
+  // Pending friend & follow requests badge count (owner view only, refreshed on request events)
+  useEffect(() => {
+    if (!currentUserId || !isOwnerView) return undefined;
+    let active = true;
+    const syncCounts = async () => {
+      try {
+        const { getUserService } = await import('../../services/userService.js');
+        const svc = getUserService();
+        const [fReqs, flReqs] = await Promise.all([
+          svc.getFriendRequests(currentUserId, 'received').catch(() => ({ requests: [] })),
+          svc.getFollowRequests(currentUserId).catch(() => ({ requests: [] })),
+        ]);
+        if (!active || uidRef.current !== currentUserId) return;
+        setPendingRequestsState({
+          uid: currentUserId,
+          friend: Array.isArray(fReqs?.requests) ? fReqs.requests.length : 0,
+          follow: Array.isArray(flReqs?.requests) ? flReqs.requests.length : 0,
+        });
+      } catch {
+        /* ignore count failure */
+      }
+    };
+    syncCounts();
+    window.addEventListener('arvdoul:friend-request-changed', syncCounts);
+    window.addEventListener('arvdoul:follow-request-changed', syncCounts);
+    return () => {
+      active = false;
+      window.removeEventListener('arvdoul:friend-request-changed', syncCounts);
+      window.removeEventListener('arvdoul:follow-request-changed', syncCounts);
+    };
+  }, [currentUserId, isOwnerView]);
 
   // Saved posts load on demand (owner only). The status distinguishes not-loaded, loading, empty and failed.
   const loadSaved = useCallback(async () => {
@@ -1345,6 +1378,32 @@ export default function ProfileMyScreen() {
             />
           </SectionGuard>
         </section>
+
+        {/* Incoming Friend & Follow Requests Banner (owner only) */}
+        {isOwnerView && pendingRequestsState.uid === currentUserId && (pendingRequestsState.friend + pendingRequestsState.follow) > 0 && (
+          <button
+            type="button"
+            onClick={() => navigate('/connections?tab=requests')}
+            className="pms-glass pms-banner pms-rise w-full text-left cursor-pointer hover:brightness-105 transition-all"
+            data-tier="subtle"
+            style={{ '--i': 0.5 }}
+          >
+            <span className="flex items-center gap-2.5 min-w-0">
+              <span className="w-8 h-8 rounded-xl bg-arvdoul-gradient text-white grid place-items-center shrink-0">
+                <UserPlus className="w-4 h-4" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 truncate">
+                {pendingRequestsState.friend + pendingRequestsState.follow} pending{' '}
+                {pendingRequestsState.friend > 0 && pendingRequestsState.follow > 0
+                  ? 'friend & follow requests'
+                  : pendingRequestsState.friend > 0
+                    ? `friend ${pendingRequestsState.friend === 1 ? 'request' : 'requests'}`
+                    : `follow ${pendingRequestsState.follow === 1 ? 'request' : 'requests'}`}
+              </span>
+            </span>
+            <span className="pms-chev" aria-hidden="true"><ChevronRight /></span>
+          </button>
+        )}
 
         {/* 02. Social presence + Coins Treasury */}
         <div

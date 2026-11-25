@@ -34,7 +34,7 @@ export const GoldCoinsIcon = memo(function GoldCoinsIcon({ className = 'w-6 h-6'
         </linearGradient>
         <linearGradient id={rimHighlight} x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="#FFFBEB" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="#F59E0B" stopOpacity="0" />
+          <stop offset="100%" stopColor="#F5A623" stopOpacity="0" />
         </linearGradient>
       </defs>
       <path

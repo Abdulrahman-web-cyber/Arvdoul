@@ -284,10 +284,10 @@ describe('Profile navigation, skeleton isolation, friends-only gate & real likes
     expect(screen.queryByText(/Private owner bio should never flash/i)).not.toBeInTheDocument();
   });
 
-  test('Basic level (< Level 3, non-creator) enforces Friends-only metrics and hides Followers/Following until Level 3', () => {
+  test('Unknown level hides Followers/Following until resolved, while Level 1+ unlocks Followers/Following alongside Friends', () => {
     const basicProfile = {
       uid: 'u-basic',
-      level: 2,
+      level: null,
       isCreator: false,
       postCount: 4,
       friendCount: 7,
@@ -319,7 +319,7 @@ describe('Profile navigation, skeleton isolation, friends-only gate & real likes
 
     rerender(
       <ProfileMetricsGrid
-        profile={{ ...basicProfile, level: 3 }}
+        profile={{ ...basicProfile, level: 1 }}
         capabilities={caps}
         theme="dark"
       />
@@ -330,7 +330,7 @@ describe('Profile navigation, skeleton isolation, friends-only gate & real likes
     expect(screen.getByText('Friends')).toBeInTheDocument();
   });
 
-  test('ProfileHeroSection uses Friend Request primary CTA below Level 3 for visitors and Follow at Level 3+', () => {
+  test('ProfileHeroSection surfaces Follow as primary CTA at Level 1+ and Accept for incoming friend requests', () => {
     const onFriendRequestToggle = jest.fn();
     const onFollowToggle = jest.fn();
     const visitorBase = {
@@ -338,7 +338,7 @@ describe('Profile navigation, skeleton isolation, friends-only gate & real likes
       id: 'u-visitor',
       displayName: 'Basic Citizen',
       username: 'basiccitizen',
-      level: 2,
+      level: 1,
       isCreator: false,
     };
     const caps = {
@@ -365,16 +365,15 @@ describe('Profile navigation, skeleton isolation, friends-only gate & real likes
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('button', { name: /Add friend/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Follow$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Follow$/i })).toBeInTheDocument();
 
     rerender(
       <MemoryRouter>
         <ProfileHeroSection
           isOwner={false}
-          profile={{ ...visitorBase, level: 3 }}
+          profile={visitorBase}
           capabilities={caps}
-          friendshipStatus="none"
+          friendshipStatus="received"
           isFollowing={false}
           requestStatus="none"
           onFriendRequestToggle={onFriendRequestToggle}
@@ -384,7 +383,7 @@ describe('Profile navigation, skeleton isolation, friends-only gate & real likes
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('button', { name: /^Follow$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Accept friend request/i })).toBeInTheDocument();
   });
 
   test('profileStore.loadPosts aggregates real total post likes for full list and paginated profiles', async () => {

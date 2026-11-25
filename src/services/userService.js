@@ -1394,9 +1394,34 @@ class ProfessionalUserService {
     // A block is terminal: a pending request filed before the block must not
     // render an actionable "approve" affordance for the person it hides.
     const hidden = await this._blockedPairIds(userId);
-    const requests = snap.docs
+    const rawRequests = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter((r) => !hidden.has(r.fromUserId));
+
+    const fromIds = [...new Set(rawRequests.map((r) => r.fromUserId).filter(Boolean))];
+    let hydrated = new Map();
+    if (fromIds.length > 0) {
+      try {
+        const hydratedList = await socialGraphService.hydrateProfiles(fromIds, { viewerId: userId, withPresence: true });
+        hydrated = new Map((Array.isArray(hydratedList) ? hydratedList : []).map((p) => [p?.uid || p?.id, p]));
+      } catch (e) {
+        logger.warn('Follow request profile hydration failed', { userId, error: e?.message });
+      }
+    }
+
+    const requests = rawRequests.map((req) => {
+      const peer = hydrated.get(req.fromUserId) || null;
+      if (!peer) return req;
+      const peerName = resolveActorName([peer.displayName, peer.username, req.fromUserDisplayName], req.fromUserId);
+      return {
+        ...req,
+        fromUserDisplayName: peerName,
+        fromUserUsername: peer.username || '',
+        fromUserPhotoURL: peer.photoURL || req.fromUserPhotoURL || null,
+        fromUserLevel: peer.level ?? null,
+        peerProfile: peer,
+      };
+    });
     return { success: true, requests };
   }
 
@@ -1993,7 +2018,8 @@ class ProfessionalUserService {
     let hydrated = new Map();
     if (otherIds.length > 0) {
       try {
-        hydrated = await socialGraphService.hydrateProfiles(otherIds);
+        const hydratedList = await socialGraphService.hydrateProfiles(otherIds, { viewerId: userId, withPresence: true });
+        hydrated = new Map((Array.isArray(hydratedList) ? hydratedList : []).map((p) => [p?.uid || p?.id, p]));
       } catch (e) {
         logger.warn('Friend request profile hydration failed', { userId, error: e?.message });
       }

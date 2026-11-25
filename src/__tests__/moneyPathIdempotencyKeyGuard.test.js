@@ -38,7 +38,7 @@ describe('money-path idempotency keys are retry-stable (N447)', () => {
       videoFn.indexOf('exports.sendTip'),
       videoFn.indexOf('setVideoChapters'),
     );
-    expect(block).toMatch(/const \{ videoId, amount, message, idempotencyKey \} = data;/);
+    expect(block).toMatch(/const \{[^}]*\bvideoId\b[^}]*\bamount\b[^}]*\bmessage\b[^}]*\bidempotencyKey\b[^}]*\} = data(?:\s*\|\|\s*\{\})?;/);
     expect(block).toMatch(/typeof idempotencyKey === 'string'/);
     expect(block).toMatch(/idempotencyKey: key/);
   });

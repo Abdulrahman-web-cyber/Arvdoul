@@ -877,7 +877,7 @@ export default function NotificationsScreen() {
               >
                 <div className={cn(
                   "p-2 rounded-2xl border flex items-center justify-between gap-2 text-xs",
-                  isDark ? "bg-[#0B1234]/55 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
+                  isDark ? "bg-[#03071B]/90 backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200 shadow-sm"
                 )}>
                   <div className="flex items-center gap-1.5">
                     <button
@@ -932,7 +932,7 @@ export default function NotificationsScreen() {
             aria-label="Notification sections"
             className={cn(
               "p-1 rounded-2xl border flex items-center gap-1",
-              isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-slate-200/60 border-slate-200/80"
+              isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-slate-200/60 border-slate-200/80"
             )}
           >
             <button
@@ -944,7 +944,7 @@ export default function NotificationsScreen() {
                 "relative flex-1 min-h-[44px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-all cursor-pointer",
                 mainTab === 'alerts'
                   ? isDark
-                    ? "bg-[#111C4A] text-white shadow-sm border border-white/[0.1]"
+                    ? "bg-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] border border-white/[0.12]"
                     : "bg-white text-slate-950 shadow-sm border border-slate-200/60"
                   : isDark
                     ? "text-slate-400 hover:text-slate-200"
@@ -974,7 +974,7 @@ export default function NotificationsScreen() {
                 "relative flex-1 min-h-[44px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-all cursor-pointer",
                 mainTab === 'network'
                   ? isDark
-                    ? "bg-[#111C4A] text-white shadow-sm border border-white/[0.1]"
+                    ? "bg-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] border border-white/[0.12]"
                     : "bg-white text-slate-950 shadow-sm border border-slate-200/60"
                   : isDark
                     ? "text-slate-400 hover:text-slate-200"
@@ -1006,7 +1006,7 @@ export default function NotificationsScreen() {
                 >
                   <div className={cn(
                     "flex items-center gap-2 px-3.5 min-h-[44px] rounded-xl border",
-                    isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200"
+                    isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08]" : "bg-white border-slate-200"
                   )}>
                     <Search className="w-4 h-4 text-slate-400 shrink-0" />
                     <input
@@ -1177,7 +1177,7 @@ export default function NotificationsScreen() {
                         key={reqId}
                         className={cn(
                           "p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-colors",
-                          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200/80"
+                          isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
@@ -1251,7 +1251,7 @@ export default function NotificationsScreen() {
                         key={req.id}
                         className={cn(
                           "p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-colors",
-                          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200/80"
+                          isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
@@ -1326,7 +1326,7 @@ export default function NotificationsScreen() {
                         key={fId}
                         className={cn(
                           "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
-                          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200/80"
+                          isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
@@ -1413,7 +1413,7 @@ export default function NotificationsScreen() {
                         key={gId}
                         className={cn(
                           "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
-                          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200/80"
+                          isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
@@ -1485,7 +1485,7 @@ export default function NotificationsScreen() {
                       key={rId}
                       className={cn(
                         "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
-                        isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08]" : "bg-white border-slate-200/80"
+                        isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200/80"
                       )}
                     >
                       <div
@@ -1562,7 +1562,7 @@ export default function NotificationsScreen() {
             {pushStatus === 'default' && !dismissPushBanner && (
               <div className={cn(
                 "p-4 rounded-2xl border flex items-center justify-between gap-3",
-                isDark ? "bg-[#0B1234]/48 backdrop-blur-xl border-purple-500/25" : "bg-white border-purple-200"
+                isDark ? "bg-white/[0.03] backdrop-blur-2xl border-purple-500/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-purple-200"
               )}>
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={cn(
@@ -1642,10 +1642,10 @@ export default function NotificationsScreen() {
                               "relative group rounded-2xl p-3.5 transition-colors border flex items-center justify-between gap-3 cursor-pointer",
                               item.unread
                                 ? isDark
-                                  ? "bg-[#0B1234]/55 backdrop-blur-xl border-purple-500/30 hover:border-purple-400/50"
+                                  ? "bg-white/[0.045] backdrop-blur-2xl border-purple-500/30 hover:border-purple-400/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                                   : "bg-white border-purple-200"
                                 : isDark
-                                  ? "bg-[#0B1234]/34 backdrop-blur-xl border-white/[0.08] hover:border-white/15"
+                                  ? "bg-white/[0.02] backdrop-blur-2xl border-white/[0.08] hover:border-white/15"
                                   : "bg-white/80 border-slate-200/80 hover:border-slate-300"
                             )}
                           >

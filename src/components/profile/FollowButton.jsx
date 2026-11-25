@@ -84,12 +84,13 @@ const FollowButton = memo(({
           'transition-all duration-200',
           sizeClasses[size],
           isFollowing 
-            ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white' 
+            ? 'text-white' 
             : theme === 'dark'
-              ? 'bg-gray-700 text-gray-400 border border-gray-600'
+              ? 'bg-white/[0.06] text-slate-300 border border-white/10 backdrop-blur-md'
               : 'bg-gray-100 text-gray-600 border border-gray-300',
           'opacity-70 cursor-not-allowed'
         )}
+        style={isFollowing ? { background: buttonGradient } : undefined}
         aria-busy="true"
         aria-label="Loading"
       >
@@ -108,7 +109,7 @@ const FollowButton = memo(({
           'transition-all duration-200',
           sizeClasses[size],
           theme === 'dark'
-            ? 'bg-white/10 text-white/80 border border-white/15 hover:bg-white/15'
+            ? 'bg-white/[0.06] text-white/85 border border-white/15 hover:bg-white/[0.10] backdrop-blur-md'
             : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'
         )}
         aria-label="Requested - Click to withdraw request"
@@ -128,11 +129,11 @@ const FollowButton = memo(({
           'flex items-center justify-center rounded-xl font-semibold',
           'transition-all duration-200',
           sizeClasses[size],
-          'bg-gradient-to-r from-purple-500 to-blue-500 text-white',
+          'text-white',
           'hover:scale-105 active:scale-95',
           'shadow-lg hover:shadow-xl'
         )}
-        style={{ boxShadow: glowEffect }}
+        style={{ background: buttonGradient, boxShadow: glowEffect }}
         aria-label="Following - Click to unfollow"
       >
         <UserMinus className={iconSizes[size]} aria-hidden="true" />

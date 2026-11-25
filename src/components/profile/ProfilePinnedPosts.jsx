@@ -57,7 +57,7 @@ const ProfilePinnedPosts = memo(({
       <div className={cn(
         "w-full rounded-[22px] px-4 py-4 border backdrop-blur-xl flex items-center justify-between gap-3",
         isDark
-          ? "bg-[#0B1234]/34 border-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+          ? "bg-white/[0.025] border-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
           : "bg-white/65 border-white/90 text-slate-900 shadow-[0_8px_22px_rgba(38,56,120,0.06)]"
       )}>
         <div className="flex items-center gap-2.5 min-w-0">
@@ -71,7 +71,7 @@ const ProfilePinnedPosts = memo(({
   }
 
   return (
-    <section aria-label="Pinned Posts" className={cn("w-full rounded-[24px] border backdrop-blur-xl p-4 sm:p-5", isDark ? "bg-[#0B1234]/34 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white/45 border-white/85")}>
+    <section aria-label="Pinned Posts" className={cn("w-full rounded-[24px] border backdrop-blur-xl p-4 sm:p-5", isDark ? "bg-white/[0.025] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white/45 border-white/85")}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Pin className="w-4 h-4 text-arvdoul-purple rotate-45" />

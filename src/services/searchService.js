@@ -878,7 +878,7 @@ class UltimateSearchService {
           firestoreLimit(limitCount)
         );
         if (cursorSnapshot) tokenPostQ = firestoreQuery(tokenPostQ, startAfter(cursorSnapshot));
-        const tokenPostSnap = await getDocs(tokenPostQ);
+        const tokenPostSnap = await getDocs(firestoreQuery(tokenPostQ, firestoreLimit(limitCount)));
         if (!tokenPostSnap.empty) {
           postDocs = tokenPostSnap.docs;
           lastSnapshot = postDocs[postDocs.length - 1];
@@ -900,7 +900,7 @@ class UltimateSearchService {
           firestoreLimit(limitCount)
         );
         if (cursorSnapshot) fallbackPostQ = firestoreQuery(fallbackPostQ, startAfter(cursorSnapshot));
-        const fallbackSnap = await getDocs(fallbackPostQ);
+        const fallbackSnap = await getDocs(firestoreQuery(fallbackPostQ, firestoreLimit(limitCount)));
         postDocs = fallbackSnap.docs;
         lastSnapshot = postDocs.length === limitCount ? postDocs[postDocs.length - 1] : null;
       } catch (_e) {
@@ -914,7 +914,7 @@ class UltimateSearchService {
         const legacyQ = tokens.length > 0
           ? firestoreQuery(videosRef, where('isDeleted', '==', false), where('status', '==', 'ready'), where('visibility', '==', 'public'), where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount))
           : firestoreQuery(videosRef, where('isDeleted', '==', false), where('status', '==', 'ready'), where('visibility', '==', 'public'), firestoreLimit(limitCount));
-        const legacySnap = await getDocs(legacyQ);
+        const legacySnap = await getDocs(firestoreQuery(legacyQ, firestoreLimit(limitCount)));
         legacyDocs = legacySnap.docs;
       } catch (_e) {
         legacyDocs = [];

@@ -24,7 +24,7 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import { LayoutGrid, Rows3 } from 'lucide-react';
-import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, brandRgba } from '../../design-system/tokens.js';
 import { getAdaptiveTuning } from '../../utils/deviceCapabilities.js';
 
 /* -------------------------------------------------------------------------------------------
@@ -139,16 +139,16 @@ const STYLES = `
 }
 .ptb-root *,.ptb-root *::before,.ptb-root *::after{box-sizing:border-box}
 
-/* Dark: low-contrast translucent deep-navy liquid glass */
+/* Dark: zero-contrast transparent liquid glass over #03071B */
 .ptb-root[data-theme='dark']{
   --ptb-surface:
-    radial-gradient(120% 90% at 14% -40%,rgba(255,255,255,0.10),transparent 60%),
-    linear-gradient(90deg,rgba(139,30,243,0.06),transparent 38%,transparent 62%,rgba(0,136,255,0.06)),
-    linear-gradient(90deg,transparent,rgba(255,255,255,0.10) 50%,transparent) top/100% 1px no-repeat,
-    linear-gradient(180deg,rgba(14,20,60,0.28),rgba(6,10,38,0.34));
-  --ptb-hairline:inset 0 0 0 1px rgba(165,175,255,0.12),inset 0 1px 0 rgba(255,255,255,0.12),0 14px 26px -20px rgba(0,0,0,0.55);
+    radial-gradient(120% 90% at 14% -40%,rgba(255,255,255,0.12),transparent 60%),
+    linear-gradient(90deg,${brandRgba(0.06)},transparent 38%,transparent 62%,rgba(0,136,255,0.06)),
+    linear-gradient(90deg,transparent,rgba(255,255,255,0.12) 50%,transparent) top/100% 1px no-repeat,
+    linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015));
+  --ptb-hairline:inset 0 0 0 1px rgba(255,255,255,0.10),inset 0 1px 0 rgba(255,255,255,0.14),0 14px 26px -20px rgba(0,0,0,0.55);
   --ptb-active:#FFFFFF;--ptb-muted:#98A4C6;--ptb-hover:#D8E0F6;--ptb-count:#8591B6;
-  --ptb-accent:#4431F7;--ptb-focus:#A79BFF;
+  --ptb-accent:var(--arv-brand-indigo);--ptb-focus:#A79BFF;
   --ptb-sig-rim:inset 0 0 0 1px rgba(255,255,255,0.34),inset 0 1px 0 rgba(255,255,255,0.58),inset 0 -8px 14px -10px rgba(5,20,120,0.55);
   --ptb-sig-shadow:0 10px 22px -10px rgba(68,49,247,0.72),0 0 18px -6px rgba(0,136,255,0.48);
   --ptb-hover-bg:rgba(255,255,255,0.05);--ptb-mode-on:rgba(255,255,255,0.11);
@@ -159,12 +159,12 @@ const STYLES = `
 .ptb-root[data-theme='light']{
   --ptb-surface:
     radial-gradient(120% 90% at 14% -40%,rgba(255,255,255,0.95),transparent 60%),
-    linear-gradient(90deg,rgba(139,30,243,0.04),transparent 38%,transparent 62%,rgba(5,91,251,0.05)),
+    linear-gradient(90deg,${brandRgba(0.04)},transparent 38%,transparent 62%,rgba(5,91,251,0.05)),
     linear-gradient(90deg,transparent,rgba(255,255,255,0.95) 50%,transparent) top/100% 1px no-repeat,
     linear-gradient(180deg,rgba(255,255,255,0.76),rgba(246,248,252,0.68));
   --ptb-hairline:inset 0 0 0 1px rgba(100,116,170,0.20),inset 0 1px 0 rgba(255,255,255,0.95),0 12px 24px -18px rgba(40,50,150,0.28);
   --ptb-active:#FFFFFF;--ptb-muted:#4F5B7C;--ptb-hover:#18233F;--ptb-count:#5C6886;
-  --ptb-accent:#4431F7;--ptb-focus:#4431F7;
+  --ptb-accent:var(--arv-brand-indigo);--ptb-focus:var(--arv-brand-indigo);
   --ptb-sig-rim:inset 0 0 0 1px rgba(255,255,255,0.38),inset 0 1px 0 rgba(255,255,255,0.65),inset 0 -8px 14px -10px rgba(5,20,120,0.45);
   --ptb-sig-shadow:0 10px 20px -10px rgba(68,49,247,0.52),0 0 14px -6px rgba(5,91,251,0.36);
   --ptb-hover-bg:rgba(40,60,140,0.06);--ptb-mode-on:rgba(68,49,247,0.10);
@@ -267,17 +267,17 @@ const STYLES = `
 
 /* ---------- Fallbacks ---------- */
 @supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
-  .ptb-root[data-theme='dark']{--ptb-surface:linear-gradient(180deg,rgba(14,20,60,0.88),rgba(6,10,38,0.92))}
+  .ptb-root[data-theme='dark']{--ptb-surface:linear-gradient(180deg,rgba(3,7,27,0.92),rgba(3,7,27,0.96))}
   .ptb-root[data-theme='light']{--ptb-surface:linear-gradient(180deg,rgba(255,255,255,0.94),rgba(246,248,252,0.92))}
 }
 @media (prefers-reduced-transparency:reduce){
   .ptb-root{--ptb-blur:none}
-  .ptb-root[data-theme='dark']{--ptb-surface:linear-gradient(180deg,rgba(14,20,60,0.92),rgba(6,10,38,0.94))}
+  .ptb-root[data-theme='dark']{--ptb-surface:linear-gradient(180deg,rgba(3,7,27,0.95),rgba(3,7,27,0.98))}
   .ptb-root[data-theme='light']{--ptb-surface:linear-gradient(180deg,rgba(255,255,255,0.96),rgba(246,248,252,0.95))}
 }
 /* Device lite mode: no backdrop blur, denser surface. Tabs and behaviour are unchanged. */
 .ptb-root[data-lite='true']{--ptb-blur:none}
-.ptb-root[data-lite='true'][data-theme='dark']{--ptb-surface:linear-gradient(180deg,rgba(14,20,60,0.90),rgba(6,10,38,0.94))}
+.ptb-root[data-lite='true'][data-theme='dark']{--ptb-surface:linear-gradient(180deg,rgba(3,7,27,0.94),rgba(3,7,27,0.97))}
 .ptb-root[data-lite='true'][data-theme='light']{--ptb-surface:linear-gradient(180deg,rgba(255,255,255,0.95),rgba(246,248,252,0.94))}
 
 @media (prefers-reduced-motion:reduce){

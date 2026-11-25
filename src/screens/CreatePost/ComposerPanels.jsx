@@ -1,5 +1,5 @@
 // src/screens/CreatePost/ComposerPanels.jsx
-import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Icons from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';

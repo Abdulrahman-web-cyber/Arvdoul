@@ -510,7 +510,7 @@ const VideoBottomSheet = memo(({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className={`absolute inset-0 rounded-t-3xl backdrop-blur-2xl p-6 flex flex-col ${
-                  isDark ? 'bg-[#080F2E]/98' : 'bg-white/98'
+                  isDark ? 'bg-[#080F2E]/95' : 'bg-white/95'
                 }`}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -587,7 +587,7 @@ const VideoBottomSheet = memo(({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className={`absolute inset-0 rounded-t-3xl backdrop-blur-2xl p-6 flex flex-col ${
-                  isDark ? 'bg-[#080F2E]/98' : 'bg-white/98'
+                  isDark ? 'bg-[#080F2E]/95' : 'bg-white/95'
                 }`}
                 onClick={(e) => e.stopPropagation()}
               >
