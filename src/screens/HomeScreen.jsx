@@ -1319,6 +1319,19 @@ export default function HomeScreen() {
     return () => window.removeEventListener('arvdoul:new_post_published', handleNewPost);
   }, [hydratePost]);
 
+  // Smooth scroll-to-top when TopAppBar brand is tapped
+  useEffect(() => {
+    const handleScrollTop = () => {
+      try {
+        virtuosoRef.current?.scrollToIndex({ index: 0, align: 'start', behavior: 'smooth' });
+      } catch {
+        scrollerRootEl?.scrollTo?.({ top: 0, behavior: 'smooth' });
+      }
+    };
+    window.addEventListener('arvdoul:scroll_top', handleScrollTop);
+    return () => window.removeEventListener('arvdoul:scroll_top', handleScrollTop);
+  }, [scrollerRootEl]);
+
   // Online/offline with debounced refresh. Connection banners are owned by the
   // global `OfflineIndicator` / `TopAppBar`; the screen only re-syncs the feed.
   useEffect(() => {

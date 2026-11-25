@@ -1,6 +1,6 @@
 // src/layouts/MainLayout.jsx
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@context/ThemeContext";
 import TopAppBar from "@components/Shared/TopAppBar";
@@ -29,6 +29,7 @@ export default function MainLayout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const isDark = theme === "dark";
+  const mainContentRef = useRef(null);
 
   // Screen-view analytics + RUM route timing for every routed screen
   useScreenView();
@@ -46,7 +47,11 @@ export default function MainLayout({ children }) {
     return () => window.removeEventListener("arvdoul:navigate", handleNavigate);
   }, [navigate]);
 
-  const isImmersiveVideo = location.pathname.startsWith("/videos") || location.pathname.startsWith("/reels");
+  const isImmersiveVideo = (
+    location.pathname === "/sparks" ||
+    location.pathname.startsWith("/videos") ||
+    location.pathname.startsWith("/reels")
+  );
   const isMessagesRoute = location.pathname === "/messages" || location.pathname.startsWith("/messages/");
   const isMessagesSubroute = location.pathname.startsWith("/messages/");
   const isIndividualChat = isMessagesSubroute && location.pathname !== "/messages/new";
@@ -60,12 +65,12 @@ export default function MainLayout({ children }) {
   );
   const isAdminRoute = location.pathname.startsWith("/admin");
 
-  const isCreatePost = location.pathname.startsWith("/create-post");
+  const isCreatePost = location.pathname.startsWith("/create-post") || location.pathname.startsWith("/edit/");
   const isCreateStory = location.pathname.startsWith("/create-story");
 
-  // TopAppBar stays active across all messaging screens and coordinates via
-  // LayoutChromeProvider so chat & inbox never render duplicate headers.
-  const hideTopAppBar = isImmersiveVideo || isDedicatedStudioOrCall || isCreateStory;
+  // TopAppBar stays active across messaging and Sparks/Reels screens, coordinating
+  // via LayoutChromeProvider so screens never render duplicate stacked headers.
+  const hideTopAppBar = isDedicatedStudioOrCall || isCreateStory;
   const hideTopAppBarOnDesktop = isAdminRoute || location.pathname === "/home" || location.pathname === "/";
   const hideBottomNav = isMessagesSubroute || isDedicatedStudioOrCall || isCreateStory;
   const showDesktopRail = !isDedicatedStudioOrCall && !isCreateStory;
@@ -105,38 +110,39 @@ export default function MainLayout({ children }) {
         <div className="flex flex-1 min-h-0 w-full overflow-hidden">
           {showDesktopRail && <DesktopNavRail />}
 
-          <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
-            {/* Top App Bar (Hidden on immersive full-screen video feeds and studio/call views;
+          <div className="relative flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
+            {/* Top App Bar (Hidden on dedicated studios/calls and story creation;
                 desktop /home and /admin* rely on DesktopNavRail / AdminNavHeader) */}
             {!hideTopAppBar && (
               hideTopAppBarOnDesktop ? (
                 <div className="lg:hidden shrink-0">
-                  <TopAppBar />
+                  <TopAppBar contained scrollContainerRef={mainContentRef} />
                 </div>
               ) : (
-                <TopAppBar />
+                <TopAppBar contained scrollContainerRef={mainContentRef} />
               )
             )}
 
             {/* Main Content */}
             {isImmersiveVideo ? (
-              <main id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
+              <main ref={mainContentRef} id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
                 {children}
               </main>
             ) : isIndividualChat || isDedicatedStudioOrCall || isCreateStory ? (
-              <main id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
+              <main ref={mainContentRef} id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
                 {children}
               </main>
             ) : isCreatePost ? (
-              <main id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-y-auto pb-20 lg:pb-8">
+              <main ref={mainContentRef} id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-y-auto pb-20 lg:pb-8">
                 {children}
               </main>
             ) : isFullHeightFeed ? (
-              <main id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-hidden flex flex-col">
+              <main ref={mainContentRef} id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-hidden flex flex-col">
                 {children}
               </main>
             ) : (
               <main
+                ref={mainContentRef}
                 id="main-content"
                 tabIndex={-1}
                 className={cn(

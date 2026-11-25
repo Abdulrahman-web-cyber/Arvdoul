@@ -6,6 +6,7 @@ import { motion, useMotionValue } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext';
+import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import firestoreService from '../services/firestoreService.js';
 import { trackAnalyticsEvent } from '../services/analyticsService';
 import PostCard from './PostCard.jsx';
@@ -17,13 +18,13 @@ import { triggerHaptic } from '../utils/haptics';
 const CommentsDrawer = React.lazy(() => import('./CommentsDrawer.jsx'));
 const PostOptionsDrawer = React.lazy(() => import('./PostOptionsDrawer.jsx'));
 
-const cn = (...classes) => classes.filter(Boolean).join(' ');
-
 export default function PostDetails() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const { theme } = useTheme();
+  const { hasTopAppBar } = useLayoutChrome();
+  const isDark = theme === 'dark';
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -40,8 +41,11 @@ export default function PostDetails() {
       const result = await firestoreService.getPost(postId);
       if (result.success) setPost(result.post);
       else setError('Post not found');
-    } catch (err) { setError('Failed to load post'); }
-    finally { setLoading(false); }
+    } catch {
+      setError('Failed to load post');
+    } finally {
+      setLoading(false);
+    }
   }, [postId]);
 
   useEffect(() => { loadPost(); }, [loadPost]);
@@ -53,7 +57,7 @@ export default function PostDetails() {
     } else dragX.set(0);
   };
 
-  const handleShare = async () => {
+  const handleShare = useCallback(async () => {
     triggerHaptic('light');
     if (navigator.share) {
       try {
@@ -61,24 +65,76 @@ export default function PostDetails() {
       } catch {
         /* the user dismissed the native share sheet — not an error */
       }
+    } else {
+      await navigator.clipboard?.writeText?.(window.location.href);
+      toast.success('Link copied');
     }
-    else { navigator.clipboard.writeText(window.location.href); toast.success('Link copied'); }
-  };
+  }, [post?.content]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center dark:bg-black"><div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>;
-  if (error || !post) return (
-    <div className="min-h-screen flex items-center justify-center p-4 dark:bg-black">
-      <div className="text-center max-w-md"><h2 className="text-xl font-bold mb-2 dark:text-white">{error || 'Post not found'}</h2><button onClick={() => navigate('/home')} className="px-4 py-2 rounded-xl bg-indigo-500 text-white">Back to Home</button></div>
-    </div>
-  );
+  useEffect(() => {
+    const onDetailShare = () => {
+      handleShare();
+    };
+    window.addEventListener('arvdoul:share_detail', onDetailShare);
+    return () => window.removeEventListener('arvdoul:share_detail', onDetailShare);
+  }, [handleShare]);
+
+  if (loading) {
+    return (
+      <div className={hasTopAppBar ? 'min-h-[60vh] flex items-center justify-center' : `min-h-screen flex items-center justify-center ${isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'}`}>
+        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (error || !post) {
+    return (
+      <div className={hasTopAppBar ? 'min-h-[60vh] flex items-center justify-center p-4' : `min-h-screen flex items-center justify-center p-4 ${isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'}`}>
+        <div className="text-center max-w-md">
+          <h2 className="text-xl font-bold mb-3 text-slate-900 dark:text-white">{error || 'Post not found'}</h2>
+          <button
+            type="button"
+            onClick={() => navigate('/home')}
+            className="px-4 py-2 rounded-xl bg-arvdoul-gradient text-white font-semibold text-sm shadow-md"
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col ${theme === 'dark' ? 'bg-black' : 'bg-white'}`}>
-      <div className="absolute top-4 left-4 z-20"><button onClick={() => navigate(-1)} className="p-2 rounded-full bg-black/50 backdrop-blur-sm text-white"><ArrowLeft className="w-6 h-6" /></button></div>
-      <button onClick={handleShare} aria-label="Share" className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/50 backdrop-blur-sm text-white"><Share2 className="w-6 h-6" /></button>
+    <div
+      className={
+        hasTopAppBar
+          ? 'flex-1 min-h-full flex flex-col'
+          : `fixed inset-0 z-50 flex flex-col ${isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'}`
+      }
+    >
+      {!hasTopAppBar && (
+        <>
+          <div className="absolute top-4 left-4 z-20">
+            <button type="button" onClick={() => navigate(-1)} aria-label="Back" className="p-2 rounded-full bg-black/50 backdrop-blur-sm text-white">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+          </div>
+          <button type="button" onClick={handleShare} aria-label="Share" className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/50 backdrop-blur-sm text-white">
+            <Share2 className="w-6 h-6" />
+          </button>
+        </>
+      )}
 
-      <motion.div drag="x" dragConstraints={{ left: 0, right: 0 }} dragElastic={0.1} onDragEnd={handleDragEnd} style={{ x: dragX }} className={`flex-1 overflow-y-auto ${exitAnimating ? 'pointer-events-none' : ''}`} animate={exitAnimating ? { x: winWidth } : {}} transition={{ duration: 0.3 }}>
-        <div className="max-w-3xl mx-auto pt-16 pb-24 px-4">
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.1}
+        onDragEnd={handleDragEnd}
+        style={{ x: dragX }}
+        className={`flex-1 overflow-y-auto ${exitAnimating ? 'pointer-events-none' : ''}`}
+        animate={exitAnimating ? { x: winWidth } : {}}
+        transition={{ duration: 0.3 }}
+      >
+        <div className={hasTopAppBar ? 'max-w-3xl mx-auto pt-3 sm:pt-5 pb-24 px-3 sm:px-4' : 'max-w-3xl mx-auto pt-16 pb-24 px-4'}>
           <ErrorBoundary>
             <PostCard
               post={post}

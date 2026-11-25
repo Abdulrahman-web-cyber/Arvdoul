@@ -830,7 +830,11 @@ const ProfileFeedGrid = memo(({
               onPostClick(item);
               return;
             }
-            navigate(isReel ? `/reels?reelId=${item.id}` : `/post/${item.id}`);
+            if (item.type === 'reel' || item.subType === 'reel') {
+              navigate(`/reels?reelId=${item.id}`);
+              return;
+            }
+            navigate(isVid ? `/sparks/${item.id}` : `/post/${item.id}`);
           };
 
           return (
@@ -995,7 +999,11 @@ const ProfileFeedGrid = memo(({
               onPostClick(item);
               return;
             }
-            navigate(item.type === 'reel' || item.type === 'spark' ? `/reels?reelId=${item.id}` : `/post/${item.id}`);
+            if (item.type === 'reel' || item.subType === 'reel') {
+              navigate(`/reels?reelId=${item.id}`);
+              return;
+            }
+            navigate(isVid ? `/sparks/${item.id}` : `/post/${item.id}`);
           };
 
           return (
@@ -1143,7 +1151,11 @@ const ProfileFeedGrid = memo(({
             onPostClick(item);
             return;
           }
-          navigate(item.type === 'reel' || item.type === 'spark' ? `/reels?reelId=${item.id}` : `/post/${item.id}`);
+          if (item.type === 'reel' || item.subType === 'reel') {
+            navigate(`/reels?reelId=${item.id}`);
+            return;
+          }
+          navigate(isVid ? `/sparks/${item.id}` : `/post/${item.id}`);
         };
 
         return (

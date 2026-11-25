@@ -38,6 +38,7 @@ const MOTION = Object.freeze({
 
 const NAVIGATION_PATHS = Object.freeze({
   home: "/home",
+  sparks: "/sparks",
   videos: "/videos",
   reels: "/reels",
   messages: "/messages",
@@ -58,10 +59,10 @@ const NAV_ITEMS = Object.freeze([
   },
   {
     id: "sparks",
-    label: "Reels",
-    path: NAVIGATION_PATHS.reels,
+    label: "Sparks",
+    path: NAVIGATION_PATHS.sparks,
     icon: "sparks",
-    matchPaths: ["/reels", "/reels/*", "/videos", "/videos/*", "/sparks/*"],
+    matchPaths: ["/sparks", "/sparks/*", "/videos", "/videos/*", "/video/*", "/reels", "/reels/*"],
   },
   {
     id: "chat",

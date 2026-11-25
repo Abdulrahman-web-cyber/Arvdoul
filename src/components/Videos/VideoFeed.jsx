@@ -6,6 +6,7 @@ import { useRef, useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSwipeable } from 'react-swipeable';
 import { useVideoStore } from '../../store/videoStore';
+import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import VideoCard from './VideoCard';
 import VideoComments from './VideoComments';
@@ -38,7 +39,17 @@ const VideoFeed = memo(({
   onOpenReels,
 }) => {
   const containerRef = useRef(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const { isDark } = useTheme();
+  const {
+    currentIndex: storeIndex,
+    setCurrentIndex: storeSetIndex,
+    updateVideo,
+    removeVideo,
+    addToWatchLater,
+    removeFromWatchLater,
+    notInterestedIds,
+  } = useVideoStore();
+  const [currentIndex, setCurrentIndex] = useState(() => Math.max(0, storeIndex || 0));
   const [showComments, setShowComments] = useState(false);
   const [showShareSheet, setShowShareSheet] = useState(false);
   const [showGiftModal, setShowGiftModal] = useState(false);
@@ -47,14 +58,6 @@ const VideoFeed = memo(({
 
   const { user } = useAuth();
   const autoPlayEnabled = settingsService.getCachedSettings(user?.uid)?.playback?.autoPlayVideos !== false;
-  const {
-    setCurrentIndex: storeSetIndex,
-    updateVideo,
-    removeVideo,
-    addToWatchLater,
-    removeFromWatchLater,
-    notInterestedIds,
-  } = useVideoStore();
 
   const videos = useMemo(() => {
     if (!Array.isArray(notInterestedIds) || notInterestedIds.length === 0) return rawVideos;
@@ -62,25 +65,50 @@ const VideoFeed = memo(({
     return rawVideos.filter((v) => v?.id && !blocked.has(v.id));
   }, [rawVideos, notInterestedIds]);
 
+  const videosSignature = useMemo(() => videos.map((v) => v.id).join(','), [videos]);
+
+  // Restore scroll position when returning from GridView with a selected video index.
+  useEffect(() => {
+    if (!containerRef.current || videos.length === 0) return;
+    const target = Math.max(0, Math.min(storeIndex || 0, videos.length - 1));
+    if (target !== currentIndex) setCurrentIndex(target);
+    const { clientHeight, scrollTop } = containerRef.current;
+    if (clientHeight > 0 && Math.abs(scrollTop - target * clientHeight) > 8) {
+      containerRef.current.scrollTo({ top: target * clientHeight, behavior: 'auto' });
+    }
+  }, [storeIndex, videos.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const viewStartRef = useRef(null);
+  const flushedViewRef = useRef(null);
   const activeVideoId = videos[currentIndex]?.id;
   useEffect(() => {
     if (!activeVideoId || !user?.uid) return undefined;
     viewStartRef.current = Date.now();
-    return () => {
+    flushedViewRef.current = null;
+    const flushView = () => {
+      if (!viewStartRef.current || flushedViewRef.current === activeVideoId) return;
       const seconds = Math.round((Date.now() - viewStartRef.current) / 1000);
       viewStartRef.current = null;
       if (seconds >= 1) {
-        videoService.recordVideoView(activeVideoId, { duration: seconds }).catch((e) => {
+        flushedViewRef.current = activeVideoId;
+        videoService.recordVideoView(activeVideoId, { watchDuration: seconds, duration: seconds }).catch((e) => {
           console.warn('[VideoFeed] view not recorded', e?.message);
         });
       }
+    };
+    window.addEventListener('pagehide', flushView);
+    return () => {
+      window.removeEventListener('pagehide', flushView);
+      flushView();
     };
   }, [activeVideoId, user?.uid]);
 
   const [followStates, setFollowStates] = useState(() => new Map());
   useEffect(() => {
-    if (!user?.uid || videos.length === 0) return undefined;
+    if (!user?.uid || videos.length === 0) {
+      setFollowStates(new Map());
+      return undefined;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -98,9 +126,12 @@ const VideoFeed = memo(({
       }
     })();
     return () => { cancelled = true; };
-  }, [user?.uid, videos.length]);
+  }, [user?.uid, videosSignature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentVideo = videos[currentIndex] || videos[0] || null;
+  const activeModalVideo = selectedVideo
+    ? videos.find((v) => v.id === selectedVideo.id) || selectedVideo
+    : currentVideo;
 
   // Preload a small, bounded window of adjacent progressive assets (skipping signed HLS manifests
   // which are fetched and tokenized on demand by useHlsVideo).
@@ -206,11 +237,17 @@ const VideoFeed = memo(({
 
   const handleLike = useCallback(async (video) => {
     if (!video) return;
+    if (!user?.uid) {
+      toast.error('Sign in to like Sparks');
+      return;
+    }
     const wasLiked = video.isLiked;
     const knownLikes = typeof video.likes === 'number' ? video.likes : null;
     const shift = (base) => (base === null ? null : Math.max(0, base + (wasLiked ? -1 : 1)));
     const withFormatted = (n) => (
-      n === null ? { likes: null, likesFormatted: null } : { likes: n, likesFormatted: n > 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}` }
+      n === null
+        ? { likes: null, likesFormatted: null, stats: { ...(video.stats || {}), likes: null } }
+        : { likes: n, likesFormatted: n > 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}`, stats: { ...(video.stats || {}), likes: n } }
     );
 
     updateVideo(video.id, { isLiked: !wasLiked, ...withFormatted(shift(knownLikes)) });
@@ -226,23 +263,17 @@ const VideoFeed = memo(({
       updateVideo(video.id, { isLiked: wasLiked, ...withFormatted(knownLikes) });
       toast.error('Could not update like');
     }
-  }, [updateVideo]);
+  }, [updateVideo, user?.uid]);
 
   const handleComment = useCallback((video) => {
     setSelectedVideo(video);
     setShowComments(true);
   }, []);
 
-  const handleShare = useCallback(async (video) => {
+  const handleShare = useCallback((video) => {
     setSelectedVideo(video);
     setShowShareSheet(true);
-    if (video) {
-      try {
-        const res = await videoService.shareVideo(video.id);
-        if (res?.success && typeof video.shares === 'number') updateVideo(video.id, { shares: video.shares + 1 });
-      } catch { /* share sheet still works; counter stays authoritative */ }
-    }
-  }, [updateVideo]);
+  }, []);
 
   const handleSave = useCallback(async (video) => {
     if (!video) return;
@@ -251,9 +282,16 @@ const VideoFeed = memo(({
       return;
     }
     const wasSaved = video.isSaved;
-    const knownSaves = typeof video.saves === 'number' ? video.saves : null;
+    const knownSaves = typeof video.saves === 'number'
+      ? video.saves
+      : (typeof video.stats?.saves === 'number' ? video.stats.saves : null);
     const shiftSaves = (base) => (base === null ? null : Math.max(0, base + (wasSaved ? -1 : 1)));
-    updateVideo(video.id, { isSaved: !wasSaved, saves: shiftSaves(knownSaves) });
+    const nextSaves = shiftSaves(knownSaves);
+    updateVideo(video.id, {
+      isSaved: !wasSaved,
+      saves: nextSaves,
+      stats: { ...(video.stats || {}), saves: nextSaves },
+    });
     if (!wasSaved) {
       addToWatchLater(video);
       toast.success('Saved to your collection');
@@ -269,7 +307,11 @@ const VideoFeed = memo(({
         await videoService.saveVideo(video.id, user.uid);
       }
     } catch (err) {
-      updateVideo(video.id, { isSaved: wasSaved, saves: knownSaves });
+      updateVideo(video.id, {
+        isSaved: wasSaved,
+        saves: knownSaves,
+        stats: { ...(video.stats || {}), saves: knownSaves },
+      });
       if (wasSaved) addToWatchLater(video);
       else removeFromWatchLater(video.id);
       toast.error(err?.message || 'Could not sync save');
@@ -286,8 +328,24 @@ const VideoFeed = memo(({
     setShowReportSheet(true);
   }, []);
 
+  const adjustCounter = useCallback((target, field, delta) => {
+    if (!target?.id) return;
+    const cur = typeof target[field] === 'number' ? target[field] : target.stats?.[field];
+    if (typeof cur === 'number') {
+      const nextVal = Math.max(0, cur + delta);
+      updateVideo(target.id, {
+        [field]: nextVal,
+        stats: { ...(target.stats || {}), [field]: nextVal },
+      });
+    }
+  }, [updateVideo]);
+
   return (
-    <div className="relative w-full h-full bg-[#03071B] overflow-hidden select-none">
+    <div
+      className={`relative w-full h-full overflow-hidden select-none ${
+        isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'
+      }`}
+    >
       {/* Floating Top Bar Navigation */}
       <VideoTopBar
         activeTab={feedType}
@@ -339,12 +397,14 @@ const VideoFeed = memo(({
             </div>
           ))
         ) : !loading && !error ? (
-          <EmptyState onRefresh={onRefresh} />
+          <EmptyState onRefresh={onRefresh} isDark={isDark} />
         ) : null}
 
         {loading && videos.length > 0 && (
-          <div className="h-24 flex items-center justify-center bg-black/80 backdrop-blur-xl">
-            <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+          <div className={`h-24 flex items-center justify-center backdrop-blur-xl ${
+            isDark ? 'bg-black/80' : 'bg-[#F6F8FC]/90'
+          }`}>
+            <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
           </div>
         )}
       </div>
@@ -356,41 +416,44 @@ const VideoFeed = memo(({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-[#03071B] z-30 flex flex-col justify-between p-6 animate-pulse select-none"
+            className={`absolute inset-0 z-30 flex flex-col justify-between p-6 pb-28 lg:pb-8 animate-pulse select-none ${
+              isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
+            }`}
           >
             <div className="flex items-center justify-between pt-2">
-              <div className="w-20 h-6 rounded-full bg-white/10" />
+              <div className={`w-20 h-6 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
               <div className="flex gap-4">
-                <div className="w-16 h-6 rounded-full bg-white/10" />
-                <div className="w-16 h-6 rounded-full bg-white/10" />
+                <div className={`w-16 h-6 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                <div className={`w-16 h-6 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
               </div>
-              <div className="w-8 h-8 rounded-full bg-white/10" />
+              <div className={`w-8 h-8 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
             </div>
 
             <div className="flex-1 flex items-center justify-center">
-              <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
-                <div className="w-6 h-6 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" />
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center border ${
+                isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-sm'
+              }`}>
+                <div className="w-6 h-6 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
               </div>
             </div>
 
-            <div className="flex items-end justify-between pb-12">
+            <div className="flex items-end justify-between pb-6">
               <div className="space-y-3 max-w-[70%]">
                 <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-white/15" />
+                  <div className={`w-10 h-10 rounded-full ${isDark ? 'bg-white/15' : 'bg-slate-200'}`} />
                   <div className="space-y-1">
-                    <div className="w-24 h-4 rounded-lg bg-white/15" />
-                    <div className="w-16 h-3 rounded-lg bg-white/10" />
+                    <div className={`w-24 h-4 rounded-lg ${isDark ? 'bg-white/15' : 'bg-slate-200'}`} />
+                    <div className={`w-16 h-3 rounded-lg ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
                   </div>
                 </div>
-                <div className="w-48 h-3.5 rounded-lg bg-white/10" />
-                <div className="w-32 h-3 rounded-lg bg-white/10" />
+                <div className={`w-48 h-3.5 rounded-lg ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                <div className={`w-32 h-3 rounded-lg ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
               </div>
 
               <div className="flex flex-col items-center gap-5 pr-2">
-                <div className="w-11 h-11 rounded-full bg-white/10" />
-                <div className="w-11 h-11 rounded-full bg-white/10" />
-                <div className="w-11 h-11 rounded-full bg-white/10" />
-                <div className="w-11 h-11 rounded-full bg-white/10" />
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className={`w-11 h-11 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                ))}
               </div>
             </div>
           </motion.div>
@@ -404,11 +467,13 @@ const VideoFeed = memo(({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 backdrop-blur-2xl p-8 z-30"
+            className={`absolute inset-0 flex flex-col items-center justify-center backdrop-blur-2xl p-8 z-30 ${
+              isDark ? 'bg-[#03071B]/95' : 'bg-[#F6F8FC]/95'
+            }`}
           >
             <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
-            <h3 className="text-white text-xl font-black mb-2">Could Not Load Sparks</h3>
-            <p className="text-white/60 text-center mb-6 max-w-sm text-sm">{error}</p>
+            <h3 className={`text-xl font-black mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>Could Not Load Sparks</h3>
+            <p className={`text-center mb-6 max-w-sm text-sm ${isDark ? 'text-white/60' : 'text-slate-600'}`}>{error}</p>
             <motion.button
               type="button"
               whileTap={{ scale: 0.95 }}
@@ -426,13 +491,28 @@ const VideoFeed = memo(({
       <VideoComments
         isOpen={showComments}
         onClose={() => setShowComments(false)}
-        video={selectedVideo || currentVideo}
+        video={activeModalVideo}
+        onCommentAdded={() => adjustCounter(activeModalVideo, 'comments', 1)}
+        onCommentDeleted={() => adjustCounter(activeModalVideo, 'comments', -1)}
       />
 
       <VideoBottomSheet
         isOpen={showShareSheet}
         onClose={() => setShowShareSheet(false)}
-        video={selectedVideo || currentVideo}
+        video={activeModalVideo}
+        onShared={(sharedVideo) => adjustCounter(sharedVideo, 'shares', 1)}
+        onSaveStateChange={(vidId, nextSaved) => {
+          const v = videos.find((item) => item.id === vidId);
+          if (!v) return;
+          const knownSaves = typeof v.saves === 'number' ? v.saves : (typeof v.stats?.saves === 'number' ? v.stats.saves : null);
+          const delta = nextSaved === Boolean(v.isSaved) ? 0 : (nextSaved ? 1 : -1);
+          const nextSaves = knownSaves === null ? null : Math.max(0, knownSaves + delta);
+          updateVideo(vidId, {
+            isSaved: nextSaved,
+            saves: nextSaves,
+            stats: { ...(v.stats || {}), saves: nextSaves },
+          });
+        }}
         onDeleted={(deletedId) => {
           removeVideo(deletedId);
           setSelectedVideo(null);
@@ -442,8 +522,9 @@ const VideoFeed = memo(({
       <VideoBottomSheet
         isOpen={showReportSheet}
         onClose={() => setShowReportSheet(false)}
-        video={selectedVideo || currentVideo}
+        video={activeModalVideo}
         initialView="report"
+        onShared={(sharedVideo) => adjustCounter(sharedVideo, 'shares', 1)}
         onDeleted={(deletedId) => {
           removeVideo(deletedId);
           setSelectedVideo(null);
@@ -453,8 +534,9 @@ const VideoFeed = memo(({
       <VideoGiftModal
         isOpen={showGiftModal}
         onClose={() => setShowGiftModal(false)}
-        creator={selectedVideo?.creator || currentVideo?.creator}
-        video={selectedVideo || currentVideo}
+        creator={activeModalVideo?.creator}
+        video={activeModalVideo}
+        onGiftSent={() => adjustCounter(activeModalVideo, 'gifts', 1)}
       />
     </div>
   );
@@ -462,13 +544,17 @@ const VideoFeed = memo(({
 
 VideoFeed.displayName = 'VideoFeed';
 
-const EmptyState = memo(({ onRefresh }) => (
-  <div className="h-full flex flex-col items-center justify-center bg-[#03071B] p-8 text-center">
-    <div className="w-24 h-24 mb-6 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center shadow-2xl">
-      <RefreshCw className="w-10 h-10 text-white/30" />
+const EmptyState = memo(({ onRefresh, isDark }) => (
+  <div className={`h-full flex flex-col items-center justify-center p-8 text-center ${
+    isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
+  }`}>
+    <div className={`w-24 h-24 mb-6 rounded-3xl border flex items-center justify-center shadow-2xl ${
+      isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'
+    }`}>
+      <RefreshCw className={`w-10 h-10 ${isDark ? 'text-white/30' : 'text-slate-400'}`} />
     </div>
-    <h3 className="text-white text-2xl font-black mb-2 tracking-tight">No Sparks in Feed</h3>
-    <p className="text-white/60 text-sm max-w-xs mb-6">
+    <h3 className={`text-2xl font-black mb-2 tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>No Sparks in Feed</h3>
+    <p className={`text-sm max-w-xs mb-6 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
       Explore trending creators and discover fresh Sparks across Arvdoul
     </p>
     <motion.button
@@ -484,6 +570,10 @@ const EmptyState = memo(({ onRefresh }) => (
 ));
 
 EmptyState.displayName = 'EmptyState';
+EmptyState.propTypes = {
+  onRefresh: PropTypes.func,
+  isDark: PropTypes.bool,
+};
 
 VideoFeed.propTypes = {
   videos: PropTypes.arrayOf(PropTypes.object),

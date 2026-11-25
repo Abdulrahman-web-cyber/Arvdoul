@@ -9,12 +9,14 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import videoService from '../services/videoService';
 import useHlsVideo from '../hooks/useHlsVideo.js';
 import VideoCreatorInfo from '../components/Videos/VideoCreatorInfo';
 import VideoActionRail from '../components/Videos/VideoActionRail';
 import VideoComments from '../components/Videos/VideoComments';
 import VideoBottomSheet from '../components/Videos/VideoBottomSheet';
+import VideoGiftModal from '../components/Videos/VideoGiftModal';
 import { cn } from '../lib/utils';
 import { formatDuration, generateShareUrl } from '../utils/videoUtils';
 import { ArrowLeft, Volume2, VolumeX, Loader2, Play, Trash2, Clock } from 'lucide-react';
@@ -27,6 +29,7 @@ export default function VideoDetailScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
 
   const [video, setVideo] = useState(null);
@@ -36,6 +39,7 @@ export default function VideoDetailScreen() {
   const [isPlaying, setIsPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [showGiftModal, setShowGiftModal] = useState(false);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(null);
   const [saved, setSaved] = useState(false);
@@ -44,7 +48,8 @@ export default function VideoDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [watchNext, setWatchNext] = useState({ loading: false, items: [], error: null });
-  const viewedRef = useRef(false);
+  const viewStartRef = useRef(null);
+  const flushedViewIdRef = useRef(null);
   const videoRef = useRef(null);
 
   const canonicalId = video?.canonicalPostId || video?.id;
@@ -60,7 +65,7 @@ export default function VideoDetailScreen() {
 
   useEffect(() => {
     const urlParam = searchParams.get('url');
-    viewedRef.current = false;
+    flushedViewIdRef.current = null;
     (async () => {
       setLoading(true);
       setError(null);
@@ -112,13 +117,6 @@ export default function VideoDetailScreen() {
           setFollowState({ isFollowing: false, requestStatus: null });
         }
 
-        if (!viewedRef.current && user?.uid && data.id) {
-          viewedRef.current = true;
-          videoService.recordVideoView(data.id, { duration: 3 }).catch((e) => {
-            console.warn('[VideoDetail] view not recorded', e?.message);
-          });
-        }
-
         if (user?.uid && data.id) {
           try {
             const state = await videoService.getViewerVideoState(data.id, user.uid);
@@ -135,6 +133,32 @@ export default function VideoDetailScreen() {
       }
     })();
   }, [videoId, searchParams, user?.uid]);
+
+  // Flush real elapsed watch duration when leaving or hiding the page
+  useEffect(() => {
+    const activeId = video?.id;
+    if (!activeId || !user?.uid) return undefined;
+    viewStartRef.current = Date.now();
+    flushedViewIdRef.current = null;
+
+    const flushView = () => {
+      if (!viewStartRef.current || flushedViewIdRef.current === activeId) return;
+      const seconds = Math.round((Date.now() - viewStartRef.current) / 1000);
+      viewStartRef.current = null;
+      if (seconds >= 1) {
+        flushedViewIdRef.current = activeId;
+        videoService.recordVideoView(activeId, { watchDuration: seconds, duration: seconds }).catch((e) => {
+          console.warn('[VideoDetail] view not recorded', e?.message);
+        });
+      }
+    };
+
+    window.addEventListener('pagehide', flushView);
+    return () => {
+      window.removeEventListener('pagehide', flushView);
+      flushView();
+    };
+  }, [video?.id, user?.uid]);
 
   const handleFollowToggle = async () => {
     if (!user?.uid) { toast.info('Sign in to follow creators.'); return; }
@@ -268,28 +292,38 @@ export default function VideoDetailScreen() {
 
   return (
     <div className={cn('min-h-screen pb-16', colors.bg)}>
-      {/* Header */}
-      <div className={cn('sticky top-0 z-30 border-b backdrop-blur-xl', isDark ? 'bg-[#03071B]/90 border-white/[0.08]' : 'bg-[#F6F8FC]/90 border-slate-200/80')}>
-        <div className="max-w-4xl mx-auto px-4 py-2.5 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            aria-label="Back"
-            className="min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors"
-          >
-            <ArrowLeft className={cn('w-5 h-5', colors.text)} />
-          </button>
-          <h1 className={cn('font-bold truncate flex-1', colors.text)}>{video?.title || 'Spark'}</h1>
-          {isOwner && video?.processingState && video.processingState !== 'PUBLISHED' && (
-            <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-1 shrink-0">
+      {/* Header (shown only when TopAppBar is absent) */}
+      {!hasTopAppBar && (
+        <div className={cn('sticky top-0 z-30 border-b backdrop-blur-xl', isDark ? 'bg-[#03071B]/90 border-white/[0.08]' : 'bg-[#F6F8FC]/90 border-slate-200/80')}>
+          <div className="max-w-4xl mx-auto px-4 py-2.5 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              aria-label="Back"
+              className="min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors"
+            >
+              <ArrowLeft className={cn('w-5 h-5', colors.text)} />
+            </button>
+            <h1 className={cn('font-bold truncate flex-1', colors.text)}>{video?.title || 'Spark'}</h1>
+            {isOwner && video?.processingState && video.processingState !== 'PUBLISHED' && (
+              <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-1 shrink-0">
+                <Clock className="w-3.5 h-3.5" />
+                {video.processingState.replace(/_/g, ' ')}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <main className="max-w-4xl mx-auto px-4 py-5">
+        {hasTopAppBar && isOwner && video?.processingState && video.processingState !== 'PUBLISHED' && (
+          <div className="mb-3 flex items-center justify-end">
+            <span className="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-500 dark:text-amber-300 border border-amber-500/30 text-xs font-bold inline-flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
               {video.processingState.replace(/_/g, ' ')}
             </span>
-          )}
-        </div>
-      </div>
-
-      <main className="max-w-4xl mx-auto px-4 py-5">
+          </div>
+        )}
         {loading ? (
           <div className="flex justify-center py-24"><Loader2 className="w-8 h-8 text-violet-500 animate-spin" /></div>
         ) : error ? (
@@ -437,17 +471,19 @@ export default function VideoDetailScreen() {
             </div>
 
             {/* Engagement rail */}
-            <div className={cn('rounded-2xl p-4 border flex items-center justify-around bg-[#080F2E]', colors.card)}>
+            <div className={cn('rounded-2xl p-4 border flex items-center justify-around', colors.card)}>
               <VideoActionRail
                 likes={likeCount}
                 comments={video.stats?.comments ?? video.comments ?? null}
                 shares={video.stats?.shares ?? video.shares ?? null}
+                gifts={video.stats?.gifts ?? video.gifts ?? null}
                 isLiked={liked}
                 isSaved={saved}
                 onLike={handleLike}
                 onComment={() => setShowComments(true)}
                 onShare={handleShare}
                 onSave={handleSave}
+                onGift={ownerId ? () => setShowGiftModal(true) : undefined}
                 onMore={handleMore}
               />
             </div>
@@ -478,7 +514,7 @@ export default function VideoDetailScreen() {
                           onClick={() => navigate(`/sparks/${item.canonicalPostId || item.id}`)}
                           className="text-left group"
                         >
-                          <div className="aspect-video rounded-xl overflow-hidden bg-black/40 border border-white/10">
+                          <div className={cn('aspect-video rounded-xl overflow-hidden border', isDark ? 'bg-black/40 border-white/10' : 'bg-slate-100 border-slate-200')}>
                             {thumb ? (
                               <LazyImage src={thumb} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                             ) : (
@@ -503,6 +539,27 @@ export default function VideoDetailScreen() {
               isOpen={showComments}
               onClose={() => setShowComments(false)}
               video={video}
+              onCommentAdded={() => setVideo((prev) => {
+                if (!prev) return prev;
+                const current = prev.stats?.comments ?? prev.comments;
+                if (typeof current !== 'number') return prev;
+                return {
+                  ...prev,
+                  comments: current + 1,
+                  stats: prev.stats ? { ...prev.stats, comments: current + 1 } : prev.stats,
+                };
+              })}
+              onCommentDeleted={() => setVideo((prev) => {
+                if (!prev) return prev;
+                const current = prev.stats?.comments ?? prev.comments;
+                if (typeof current !== 'number') return prev;
+                const next = Math.max(0, current - 1);
+                return {
+                  ...prev,
+                  comments: next,
+                  stats: prev.stats ? { ...prev.stats, comments: next } : prev.stats,
+                };
+              })}
             />
 
             <VideoBottomSheet
@@ -510,7 +567,35 @@ export default function VideoDetailScreen() {
               onClose={() => setShowMoreMenu(false)}
               video={video}
               initialView="report"
+              onSaveStateChange={(_id, nextSaved) => setSaved(Boolean(nextSaved))}
+              onShared={() => setVideo((prev) => {
+                if (!prev) return prev;
+                const current = prev.stats?.shares ?? prev.shares;
+                if (typeof current !== 'number') return prev;
+                return {
+                  ...prev,
+                  shares: current + 1,
+                  stats: prev.stats ? { ...prev.stats, shares: current + 1 } : prev.stats,
+                };
+              })}
               onDeleted={() => navigate('/sparks')}
+            />
+
+            <VideoGiftModal
+              isOpen={showGiftModal && Boolean(video)}
+              onClose={() => setShowGiftModal(false)}
+              creator={creator}
+              video={video}
+              onGiftSent={() => setVideo((prev) => {
+                if (!prev) return prev;
+                const current = prev.stats?.gifts ?? prev.gifts;
+                const next = typeof current === 'number' ? current + 1 : 1;
+                return {
+                  ...prev,
+                  gifts: next,
+                  stats: prev.stats ? { ...prev.stats, gifts: next } : { gifts: next },
+                };
+              })}
             />
           </div>
         )}

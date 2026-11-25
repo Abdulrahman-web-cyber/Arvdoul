@@ -33,6 +33,7 @@ import {
   Crown,
   ChevronDown,
   ArrowUpRight,
+  Video,
 } from 'lucide-react';
 import { LEVEL_GATES } from '../../services/levelSystemService';
 import { resolveCreatorFlag } from '../../services/profileReadModel.js';
@@ -492,6 +493,7 @@ const ProfileCreatorDashboard = memo(({
   }, [isControlled, onTimeframeChange]);
 
   const openAnalytics = useCallback(() => navigate('/profile/analytics'), [navigate]);
+  const openSparksStudio = useCallback(() => navigate('/video-analytics'), [navigate]);
   const openRankings = useCallback(() => navigate('/rankings'), [navigate]);
   const openProgress = useCallback(() => navigate('/progress'), [navigate]);
 
@@ -557,6 +559,11 @@ const ProfileCreatorDashboard = memo(({
           </div>
 
           <div className="pcd-actions">
+            <button type="button" className="pcd-ctl" onClick={openSparksStudio}>
+              <Video aria-hidden="true" />
+              <span>Sparks Studio</span>
+            </button>
+
             <button type="button" className="pcd-ctl" onClick={openAnalytics}>
               <span>Full Insights</span>
               <ArrowUpRight aria-hidden="true" />

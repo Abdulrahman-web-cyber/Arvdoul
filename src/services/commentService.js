@@ -399,9 +399,9 @@ class UltimateCommentService {
           const data = docSnap.data();
           if (data.isDeleted || data.isHidden) return;
           if (hiddenAuthors.size > 0 && hiddenAuthors.has(data.userId)) return;
-          if (options.parentId === null || options.parentId === undefined) {
+          if (options.nested !== true && (options.parentId === null || options.parentId === undefined)) {
             if (data.parentId) return;
-          } else if (options.parentId !== 'all') {
+          } else if (options.parentId && options.parentId !== 'all') {
             if (data.parentId !== options.parentId) return;
           }
           const comment = {
@@ -423,7 +423,13 @@ class UltimateCommentService {
           if (Array.isArray(localStored)) {
             localStored.forEach(lc => {
               if (lc && lc.id && !commentMap.has(lc.id)) {
+                if (lc.isDeleted || lc.isHidden) return;
                 if (hiddenAuthors.size > 0 && hiddenAuthors.has(lc.userId)) return;
+                if (options.nested !== true && (options.parentId === null || options.parentId === undefined)) {
+                  if (lc.parentId) return;
+                } else if (options.parentId && options.parentId !== 'all') {
+                  if (lc.parentId !== options.parentId) return;
+                }
                 const comment = {
                   ...lc,
                   createdAt: lc.createdAt ? new Date(lc.createdAt) : new Date(),
@@ -442,7 +448,7 @@ class UltimateCommentService {
       await this._overlayReactionCounts(comments);
 
       let processedComments = comments;
-      if (options.nested === true && options.parentId === null) {
+      if (options.nested === true && (options.parentId === null || options.parentId === undefined || options.parentId === 'all')) {
         processedComments = this._buildNestedComments(comments);
       }
 
@@ -617,6 +623,17 @@ class UltimateCommentService {
       this._invalidateCommentCache(commentId);
       if (postId) {
         this._invalidatePostCache(postId);
+        if (typeof window !== 'undefined') {
+          try {
+            const key = `${LOCAL_COMMENTS_PREFIX}${postId}`;
+            const current = JSON.parse(localStorage.getItem(key) || '[]');
+            if (Array.isArray(current)) {
+              localStorage.setItem(key, JSON.stringify(current.filter((c) => c?.id !== commentId)));
+            }
+          } catch (e) {
+            logger.debug('Local comment cache delete cleanup failed', { postId, error: e?.message });
+          }
+        }
       }
 
       return { success: true, commentId };

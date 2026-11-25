@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Video, Play, Smartphone, Flame, Search, Camera, Sparkles } from "lucide-react";
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import { useVideoStore } from '../store/videoStore';
 import { VideoFeed } from '../components/Videos';
 import videoService from '../services/videoService';
@@ -57,9 +58,10 @@ const VideosScreen = () => {
   }, [initialTab, setFeedType, feedType]);
 
   // Load videos from service (non-blocking background sync if videos already cached)
-  const loadVideos = useCallback(async (type = feedType) => {
-    if (!videos || videos.length === 0) {
+  const loadVideos = useCallback(async (type = feedType, { replace = false } = {}) => {
+    if (replace || !videos || videos.length === 0) {
       setLoading(true);
+      if (replace) setVideos([]);
     } else {
       setBackgroundRefreshing(true);
     }
@@ -72,17 +74,12 @@ const VideosScreen = () => {
       });
 
       const feed = result?.feed || result?.videos || [];
-      if (Array.isArray(feed) && feed.length > 0) {
-        setVideos(feed);
-        setHasMore(result.hasMore || false);
-        setNextCursor(result.nextCursor || null);
-      } else if (!videos || videos.length === 0) {
-        setVideos([]);
-        setHasMore(false);
-      }
+      setVideos(Array.isArray(feed) ? feed : []);
+      setHasMore(Boolean(result?.hasMore));
+      setNextCursor(result?.nextCursor || null);
     } catch (err) {
       console.error('Failed to load videos:', err);
-      if (!videos || videos.length === 0) {
+      if (replace || !videos || videos.length === 0) {
         setError(err?.message || 'Could not load videos.');
       }
     } finally {
@@ -120,22 +117,50 @@ const VideosScreen = () => {
 
   // Tab change handler
   const handleTabChange = useCallback((newTab) => {
+    if (newTab === feedType) return;
     setFeedType(newTab);
-    loadVideos(newTab);
-  }, [setFeedType, loadVideos]);
+    setCurrentIndex(0);
+    loadVideos(newTab, { replace: true });
+  }, [feedType, setFeedType, setCurrentIndex, loadVideos]);
 
   // Refresh
   const handleRefresh = useCallback(() => {
-    loadVideos(feedType);
+    loadVideos(feedType, { replace: false });
   }, [loadVideos, feedType]);
 
   // Initial load & URL tab sync
   useEffect(() => {
-    if (videos.length === 0) {
-      loadVideos(initialTab || feedType);
+    if (videos.length === 0 || initialTab !== feedType) {
+      loadVideos(initialTab || feedType, { replace: initialTab !== feedType });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTab]);
+
+  // Keep canonical TopAppBar synchronized with active Sparks channel & view mode
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('arvdoul:sparks_header_state', {
+        detail: { mode: 'sparks', activeTab: feedType, viewMode },
+      })
+    );
+  }, [feedType, viewMode]);
+
+  useEffect(() => {
+    const onChannelChange = (event) => {
+      if (event?.detail?.mode && event.detail.mode !== 'sparks') return;
+      const nextChannel = event?.detail?.channel;
+      if (nextChannel) handleTabChange(nextChannel);
+    };
+    const onToggleView = () => {
+      setViewMode((prev) => (prev === 'feed' ? 'grid' : 'feed'));
+    };
+    window.addEventListener('arvdoul:sparks_channel_change', onChannelChange);
+    window.addEventListener('arvdoul:sparks_toggle_view', onToggleView);
+    return () => {
+      window.removeEventListener('arvdoul:sparks_channel_change', onChannelChange);
+      window.removeEventListener('arvdoul:sparks_toggle_view', onToggleView);
+    };
+  }, [handleTabChange]);
 
   return (
     <div
@@ -208,6 +233,7 @@ const GridView = memo(({
   onCreateVideo,
 }) => {
   const { isDark, spring } = useTheme();
+  const { hasTopAppBar } = useLayoutChrome();
 
   if (error && videos.length === 0) {
     return (
@@ -228,63 +254,65 @@ const GridView = memo(({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className={`text-2xl sm:text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              Explore Videos
+              Explore Sparks
             </h1>
             <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
               Discover trending visual creators and original soundscapes
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={onSwitchToFeed}
-              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
-                isDark
-                  ? 'bg-[#080E27] border-white/10 text-white hover:bg-white/10'
-                  : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm'
-              }`}
-            >
-              <Smartphone className="w-4 h-4 text-purple-400" />
-              <span>Sparks Feed</span>
-            </button>
+          {!hasTopAppBar && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={onSwitchToFeed}
+                className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                  isDark
+                    ? 'bg-[#080E27] border-white/10 text-white hover:bg-white/10'
+                    : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm'
+                }`}
+              >
+                <Smartphone className="w-4 h-4 text-purple-400" />
+                <span>Sparks Feed</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={onOpenReels}
-              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
-                isDark
-                  ? 'bg-pink-500/15 border-pink-500/30 text-pink-300 hover:bg-pink-500/25'
-                  : 'bg-pink-50 border-pink-200 text-pink-700 hover:bg-pink-100'
-              }`}
-            >
-              <Flame className="w-4 h-4 text-pink-500" />
-              <span>Reels</span>
-            </button>
+              <button
+                type="button"
+                onClick={onOpenReels}
+                className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                  isDark
+                    ? 'bg-pink-500/15 border-pink-500/30 text-pink-300 hover:bg-pink-500/25'
+                    : 'bg-pink-50 border-pink-200 text-pink-700 hover:bg-pink-100'
+                }`}
+              >
+                <Flame className="w-4 h-4 text-pink-500" />
+                <span>Reels</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={onOpenSearch}
-              aria-label="Search Videos"
-              className={`min-h-[44px] min-w-[44px] rounded-xl border flex items-center justify-center transition-colors shrink-0 ${
-                isDark
-                  ? 'bg-[#080E27] border-white/10 text-white hover:bg-white/10'
-                  : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm'
-              }`}
-            >
-              <Search className="w-4 h-4" />
-            </button>
+              <button
+                type="button"
+                onClick={onOpenSearch}
+                aria-label="Search Videos"
+                className={`min-h-[44px] min-w-[44px] rounded-xl border flex items-center justify-center transition-colors shrink-0 ${
+                  isDark
+                    ? 'bg-[#080E27] border-white/10 text-white hover:bg-white/10'
+                    : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm'
+                }`}
+              >
+                <Search className="w-4 h-4" />
+              </button>
 
-            <button
-              type="button"
-              onClick={onCreateVideo}
-              aria-label="Create Video"
-              className="min-h-[44px] min-w-[44px] px-3 rounded-xl bg-arvdoul-gradient text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md hover:brightness-110 transition-all shrink-0"
-            >
-              <Camera className="w-4 h-4" />
-              <span className="hidden sm:inline">Create</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={onCreateVideo}
+                aria-label="Create Video"
+                className="min-h-[44px] min-w-[44px] px-3 rounded-xl bg-arvdoul-gradient text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md hover:brightness-110 transition-all shrink-0"
+              >
+                <Camera className="w-4 h-4" />
+                <span className="hidden sm:inline">Create</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tab Filters */}
@@ -340,7 +368,11 @@ const GridView = memo(({
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => onVideoClick(video, index)}
-              className="w-full text-left relative aspect-[9/16] rounded-3xl overflow-hidden group cursor-pointer shadow-xl border border-black/10 dark:border-white/10 bg-[#080E27] focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
+              className={`w-full text-left relative aspect-[9/16] rounded-3xl overflow-hidden group cursor-pointer shadow-xl border focus:outline-none focus:ring-2 focus:ring-arvdoul-purple ${
+                isDark
+                  ? 'border-white/10 bg-[#080E27]'
+                  : 'border-slate-200/80 bg-slate-200'
+              }`}
             >
               <LazyImage
                 src={video.thumbnailUrl || video.thumbnail || '/assets/default-profile.png'}

@@ -46,6 +46,8 @@ const VideoBottomSheet = memo(({
   initialView = 'share',
   onDeleted,
   onNotInterested,
+  onShared,
+  onSaveStateChange,
 }) => {
   const { isDark } = useTheme();
   const { user } = useAuth();
@@ -80,12 +82,26 @@ const VideoBottomSheet = memo(({
     ? 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
     : 'bg-black/[0.04] hover:bg-black/[0.08] text-gray-900 border border-black/10';
 
+  const recordShare = async (platform = 'arvdoul') => {
+    if (!video?.id) return;
+    try {
+      const { getVideoService } = await import('../../services/videoService.js');
+      const res = await getVideoService().shareVideo(video.id, platform);
+      if (res?.success) {
+        onShared?.(video, platform);
+      }
+    } catch {
+      /* counter remains server-authoritative */
+    }
+  };
+
   const handleCopyLink = async () => {
     const url = generateShareUrl(canonicalId);
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       toast.success('Spark link copied!');
+      recordShare('copy_link');
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Failed to copy link');
@@ -100,6 +116,7 @@ const VideoBottomSheet = memo(({
           text: video?.description || '',
           url: generateShareUrl(canonicalId),
         });
+        recordShare('native_share');
       } catch (err) {
         if (err.name !== 'AbortError') {
           toast.error('Failed to share');
@@ -123,6 +140,7 @@ const VideoBottomSheet = memo(({
 
     if (shareUrls[platform]) {
       triggerExternalLink(shareUrls[platform]);
+      recordShare(platform);
     }
   };
 
@@ -153,10 +171,11 @@ const VideoBottomSheet = memo(({
     if (!video?.id || saving) return;
     setSaving(true);
     const store = useVideoStore.getState();
-    const wasSaved = store.isInWatchLater ? store.isInWatchLater(video.id) : false;
+    const wasSaved = Boolean(video?.isSaved) || (store.isInWatchLater ? store.isInWatchLater(video.id) : false);
 
     if (wasSaved) store.removeFromWatchLater(video.id);
     else store.addToWatchLater(video);
+    onSaveStateChange?.(video.id, !wasSaved);
 
     try {
       const { getVideoService } = await import('../../services/videoService.js');
@@ -170,6 +189,7 @@ const VideoBottomSheet = memo(({
     } catch (err) {
       if (wasSaved) store.addToWatchLater(video);
       else store.removeFromWatchLater(video.id);
+      onSaveStateChange?.(video.id, wasSaved);
       toast.error(err?.message || 'Could not update Watch Later. Are you signed in?');
     } finally {
       setSaving(false);
@@ -298,7 +318,7 @@ const VideoBottomSheet = memo(({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-end justify-center"
+        className="fixed inset-0 z-[120] bg-black/65 backdrop-blur-sm flex items-end justify-center"
         onClick={onClose}
       >
         <motion.div
@@ -307,7 +327,7 @@ const VideoBottomSheet = memo(({
           exit={{ y: '100%' }}
           transition={SPRING_ANIMATION.bottomSheet}
           onClick={(e) => e.stopPropagation()}
-          className={`relative w-full max-w-xl rounded-t-3xl backdrop-blur-2xl p-6 border-t shadow-2xl max-h-[85vh] overflow-y-auto ${
+          className={`relative w-full max-w-xl rounded-t-3xl backdrop-blur-2xl p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t shadow-2xl max-h-[85vh] overflow-y-auto ${
             isDark ? 'bg-[#080F2E]/95 border-white/12' : 'bg-white/95 border-gray-200'
           }`}
         >
@@ -522,7 +542,9 @@ const VideoBottomSheet = memo(({
                       onClick={() => setReportReason(reason.value)}
                       className={`w-full flex items-center gap-3 p-4 rounded-xl transition-colors ${
                         reportReason === reason.value
-                          ? 'bg-purple-500/20 border border-purple-500/50 text-white'
+                          ? isDark
+                            ? 'bg-purple-500/20 border border-purple-500/50 text-white'
+                            : 'bg-purple-50 border border-purple-500 text-purple-950'
                           : isDark
                             ? 'bg-white/5 hover:bg-white/10 text-white/85'
                             : 'bg-black/[0.04] hover:bg-black/[0.08] text-gray-800'
@@ -653,6 +675,8 @@ VideoBottomSheet.propTypes = {
   initialView: PropTypes.oneOf(['share', 'report']),
   onDeleted: PropTypes.func,
   onNotInterested: PropTypes.func,
+  onShared: PropTypes.func,
+  onSaveStateChange: PropTypes.func,
 };
 
 export default VideoBottomSheet;

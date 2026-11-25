@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import * as Icons from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import LoadingSpinner from '../components/Shared/LoadingSpinner.jsx';
 import { ErrorBoundary } from '../components/ErrorBoundary.jsx';
 import { CreatePostSkeleton } from '../components/UI/SkeletonLoaders.jsx';
@@ -937,6 +938,71 @@ function CreatePostProvider({ children }) {
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
 
+  const canPublishForTopBar = useMemo(() => canProceedForState(state), [state]);
+
+  useEffect(() => {
+    const typeLabel = POST_TYPES.find((t) => t.id === state.postType)?.label || 'Post';
+    const title = state.editPostId
+      ? `Edit ${typeLabel}`
+      : state.step >= 2 && state.postType
+      ? `Create ${typeLabel}`
+      : 'Create Post';
+    window.dispatchEvent(
+      new CustomEvent('arvdoul:composer_header_state', {
+        detail: {
+          title,
+          step: state.step,
+          canPublish: canPublishForTopBar,
+          isPublishing: Boolean(state.loading),
+          isEditing: Boolean(state.editPostId),
+          scheduledTime: state.scheduledTime || null,
+        },
+      })
+    );
+  }, [
+    state.step,
+    state.postType,
+    state.loading,
+    state.editPostId,
+    state.scheduledTime,
+    canPublishForTopBar,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent('arvdoul:composer_header_state', { detail: null })
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleComposerPublish = () => {
+      if (
+        stateRef.current.step >= 2 &&
+        canProceedForState(stateRef.current) &&
+        !stateRef.current.loading
+      ) {
+        publishPost();
+      }
+    };
+    const handleComposerBack = () => {
+      if (stateRef.current.step > 2) {
+        dispatch({ type: 'SET_STEP', payload: stateRef.current.step - 1 });
+      } else if (stateRef.current.step === 2) {
+        goBackToLauncher();
+      } else {
+        navigate(-1);
+      }
+    };
+    window.addEventListener('arvdoul:composer_publish', handleComposerPublish);
+    window.addEventListener('arvdoul:composer_back', handleComposerBack);
+    return () => {
+      window.removeEventListener('arvdoul:composer_publish', handleComposerPublish);
+      window.removeEventListener('arvdoul:composer_back', handleComposerBack);
+    };
+  }, [publishPost, goBackToLauncher, navigate]);
+
   const servicesValue = useMemo(
     () => ({
       services: services.current,
@@ -1587,26 +1653,29 @@ const LauncherGrid = React.memo(() => {
 function CreatorShell({ children }) {
   const { goBackToLauncher } = useCreatePostServices();
   const { state } = useCreatePostState();
+  const { hasTopAppBar } = useLayoutChrome();
   const typeLabel =
     POST_TYPES.find((t) => t.id === state.postType)?.label || 'Post';
 
   return (
     <div className="flex flex-col min-h-full">
-      <div className="h-14 px-4 sm:px-6 bg-white/80 dark:bg-[#080F2E]/70 backdrop-blur-xl border-b border-slate-200/70 dark:border-white/10 flex items-center justify-between">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <button
-            type="button"
-            onClick={goBackToLauncher}
-            aria-label="Back to post formats"
-            className="min-h-[44px] min-w-[44px] -ml-2 flex items-center justify-center rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-          >
-            <Icons.ArrowLeft className="w-5 h-5" />
-          </button>
-          <span className="font-semibold text-sm sm:text-base text-slate-900 dark:text-white truncate">
-            {state.editPostId ? `Edit ${typeLabel}` : `Create ${typeLabel}`}
-          </span>
+      {!hasTopAppBar && (
+        <div className="h-14 px-4 sm:px-6 bg-white/80 dark:bg-[#080F2E]/70 backdrop-blur-xl border-b border-slate-200/70 dark:border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={goBackToLauncher}
+              aria-label="Back to post formats"
+              className="min-h-[44px] min-w-[44px] -ml-2 flex items-center justify-center rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+            >
+              <Icons.ArrowLeft className="w-5 h-5" />
+            </button>
+            <span className="font-semibold text-sm sm:text-base text-slate-900 dark:text-white truncate">
+              {state.editPostId ? `Edit ${typeLabel}` : `Create ${typeLabel}`}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
       {children}
     </div>
   );

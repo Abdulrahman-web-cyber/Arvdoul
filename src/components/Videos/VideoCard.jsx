@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useVideoStore } from '../../store/videoStore';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { formatDuration, formatViewCount } from '../../utils/videoUtils';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import useDoubleTap from '../../hooks/useDoubleTap.js';
@@ -45,6 +46,7 @@ const VideoCard = memo(({
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const controlsTimeoutRef = useRef(null);
+  const likeTimeoutRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showCenterIcon, setShowCenterIcon] = useState(false);
   const [showLikeAnimation, setShowLikeAnimation] = useState(false);
@@ -66,6 +68,11 @@ const VideoCard = memo(({
     setIsRequested(Boolean(requestPending));
   }, [followedByViewer, requestPending]);
 
+  useEffect(() => () => {
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    if (likeTimeoutRef.current) clearTimeout(likeTimeoutRef.current);
+  }, []);
+
   const {
     volume,
     speed,
@@ -82,6 +89,7 @@ const VideoCard = memo(({
   } = useVideoStore();
 
   const { user } = useAuth();
+  const { isDark = true } = useTheme() || {};
   const navigate = useNavigate();
   const [followBusy, setFollowBusy] = useState(false);
 
@@ -116,6 +124,9 @@ const VideoCard = memo(({
     } else if (!isActive) {
       videoRef.current.pause();
       setIsPlaying(false);
+      setShowSettings(false);
+      setShowQualityMenu(false);
+      setShowSpeedMenu(false);
     }
   }, [isActive, autoPlay, hls.src]);
 
@@ -180,7 +191,8 @@ const VideoCard = memo(({
     });
 
     setShowLikeAnimation(true);
-    setTimeout(() => setShowLikeAnimation(false), 900);
+    if (likeTimeoutRef.current) clearTimeout(likeTimeoutRef.current);
+    likeTimeoutRef.current = setTimeout(() => setShowLikeAnimation(false), 900);
 
     if (!video?.isLiked) {
       onLike?.();
@@ -322,10 +334,18 @@ const VideoCard = memo(({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full h-full bg-[#03071B] overflow-hidden select-none flex items-center justify-center lg:pt-16 lg:pb-4 lg:px-4 ${className}`}
+      className={`relative w-full h-full overflow-hidden select-none flex items-center justify-center lg:pt-3 lg:pb-4 lg:px-4 transition-colors duration-300 ${
+        isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
+      } ${className}`}
       onClick={handleContainerClick}
     >
-      <div className="relative w-full h-full lg:max-w-[440px] lg:aspect-[9/16] lg:max-h-full lg:rounded-3xl lg:border lg:border-white/15 lg:shadow-2xl overflow-hidden bg-black flex items-center justify-center">
+      <div
+        className={`relative w-full h-full lg:max-w-[440px] lg:aspect-[9/16] lg:max-h-full lg:rounded-3xl lg:border overflow-hidden flex items-center justify-center ${
+          isDark
+            ? 'lg:border-white/15 lg:shadow-[0_24px_80px_rgba(0,0,0,0.65)] bg-black'
+            : 'lg:border-slate-200/90 lg:shadow-[0_24px_70px_rgba(15,23,42,0.16)] bg-slate-950'
+        }`}
+      >
         {/* Video Stream Element (bound by useHlsVideo) */}
         <video
           ref={videoRef}
@@ -349,7 +369,7 @@ const VideoCard = memo(({
 
         {/* Owner-only Processing Status Badge */}
         {isOwner && video?.processingState && video.processingState !== 'PUBLISHED' && (
-          <div className="absolute top-16 left-4 z-20 px-3 py-1.5 rounded-full bg-amber-500/20 backdrop-blur-xl border border-amber-400/40 text-amber-200 text-xs font-bold flex items-center gap-1.5">
+          <div className="absolute top-4 left-4 z-20 px-3 py-1.5 rounded-full bg-amber-500/20 backdrop-blur-xl border border-amber-400/40 text-amber-200 text-xs font-bold flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" />
             <span>Status: {video.processingState.replace(/_/g, ' ')}</span>
           </div>
@@ -436,7 +456,11 @@ const VideoCard = memo(({
                   e.stopPropagation();
                   if (ownerId) navigate(`/profile/${ownerId}/friends`);
                 }}
-                className="absolute top-16 sm:top-18 lg:top-4 left-3 sm:left-5 z-20 pointer-events-auto cursor-pointer flex items-center gap-2 px-3 py-1.5 min-h-[40px] rounded-full bg-black/45 backdrop-blur-xl border border-white/20 shadow-lg hover:bg-black/60 transition-all group"
+                className={`absolute top-4 left-3 sm:left-5 z-20 pointer-events-auto cursor-pointer flex items-center gap-2 px-3 py-1.5 min-h-[40px] rounded-full backdrop-blur-xl border shadow-lg transition-all group ${
+                  isDark
+                    ? 'bg-black/45 border-white/20 hover:bg-black/60 text-white'
+                    : 'bg-white/90 border-slate-200/90 hover:bg-white text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.12)]'
+                }`}
               >
                 <div className="flex -space-x-1.5 overflow-hidden">
                   {video.mutualFriends.slice(0, 3).map((friend, i) => (
@@ -444,20 +468,22 @@ const VideoCard = memo(({
                       key={friend?.id || friend?.uid || i}
                       src={friend?.avatar || friend?.photoURL || '/assets/default-profile.png'}
                       alt={friend?.name || friend?.displayName || 'Mutual friend'}
-                      className="w-5 h-5 rounded-full ring-1.5 ring-purple-500 object-cover"
+                      className="w-5 h-5 rounded-full ring-1.5 ring-arvdoul-purple object-cover"
                     />
                   ))}
                 </div>
-                <span className="text-white text-xs font-bold tracking-tight">
+                <span className="text-xs font-bold tracking-tight">
                   {video.mutualFriendsCount} mutual friends
                 </span>
-                <ChevronRight className="w-3.5 h-3.5 text-white/70 group-hover:translate-x-0.5 transition-transform" />
+                <ChevronRight className={`w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform ${
+                  isDark ? 'text-white/70' : 'text-slate-600'
+                }`} />
               </div>
             )}
 
             {/* Right Floating Action Rail */}
             <aside
-              className="absolute right-3 sm:right-4 bottom-20 z-30 flex flex-col items-center gap-3.5 sm:gap-4 pointer-events-auto"
+              className="absolute right-3 sm:right-4 bottom-[154px] lg:bottom-20 z-30 flex flex-col items-center gap-3.5 sm:gap-4 pointer-events-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Creator Avatar & Follow Button */}
@@ -644,7 +670,11 @@ const VideoCard = memo(({
                       initial={{ opacity: 0, scale: 0.9, x: 20 }}
                       animate={{ opacity: 1, scale: 1, x: 0 }}
                       exit={{ opacity: 0, scale: 0.9, x: 20 }}
-                      className="absolute right-14 bottom-0 backdrop-blur-2xl bg-[#080F2E]/95 border border-white/15 rounded-3xl p-3 flex flex-col gap-1.5 min-w-[210px] shadow-2xl z-50 text-white"
+                      className={`absolute right-14 bottom-0 backdrop-blur-2xl border rounded-3xl p-3 flex flex-col gap-1.5 min-w-[216px] shadow-2xl z-50 ${
+                        isDark
+                          ? 'bg-[#080F2E]/95 border-white/15 text-white'
+                          : 'bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_18px_50px_rgba(15,23,42,0.18)]'
+                      }`}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
@@ -653,10 +683,12 @@ const VideoCard = memo(({
                           setShowQualityMenu(!showQualityMenu);
                           setShowSpeedMenu(false);
                         }}
-                        className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl hover:bg-white/10 text-sm font-medium transition-colors"
+                        className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-sm font-medium transition-colors ${
+                          isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                        }`}
                       >
-                        <span className="text-white/80">Quality</span>
-                        <span className="text-purple-400 font-bold uppercase text-xs">{quality}</span>
+                        <span className={isDark ? 'text-white/80' : 'text-slate-700'}>Quality</span>
+                        <span className="text-arvdoul-purple font-bold uppercase text-xs">{quality}</span>
                       </button>
 
                       <button
@@ -665,34 +697,42 @@ const VideoCard = memo(({
                           setShowSpeedMenu(!showSpeedMenu);
                           setShowQualityMenu(false);
                         }}
-                        className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl hover:bg-white/10 text-sm font-medium transition-colors"
+                        className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-sm font-medium transition-colors ${
+                          isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                        }`}
                       >
-                        <span className="text-white/80">Speed</span>
-                        <span className="text-blue-400 font-bold text-xs">{speed}x</span>
+                        <span className={isDark ? 'text-white/80' : 'text-slate-700'}>Speed</span>
+                        <span className="text-arvdoul-blue font-bold text-xs">{speed}x</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={toggleLoop}
-                        className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl hover:bg-white/10 text-sm font-medium transition-colors"
+                        className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-sm font-medium transition-colors ${
+                          isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                        }`}
                       >
-                        <span className="text-white/80">Loop</span>
-                        <Repeat className={`w-4 h-4 ${isLooping ? 'text-cyan-400' : 'text-white/40'}`} />
+                        <span className={isDark ? 'text-white/80' : 'text-slate-700'}>Loop</span>
+                        <Repeat className={`w-4 h-4 ${isLooping ? 'text-cyan-400' : isDark ? 'text-white/40' : 'text-slate-400'}`} />
                       </button>
 
                       <button
                         type="button"
                         onClick={handleFullscreen}
-                        className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl hover:bg-white/10 text-sm font-medium transition-colors"
+                        className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-sm font-medium transition-colors ${
+                          isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                        }`}
                       >
-                        <span className="text-white/80">Fullscreen</span>
-                        <Maximize className={`w-4 h-4 ${isFullscreen ? 'text-cyan-400' : 'text-white/40'}`} />
+                        <span className={isDark ? 'text-white/80' : 'text-slate-700'}>Fullscreen</span>
+                        <Maximize className={`w-4 h-4 ${isFullscreen ? 'text-cyan-400' : isDark ? 'text-white/40' : 'text-slate-400'}`} />
                       </button>
 
                       <button
                         type="button"
                         onClick={handlePiP}
-                        className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl hover:bg-white/10 text-sm font-medium text-white/80 transition-colors"
+                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium transition-colors ${
+                          isDark ? 'hover:bg-white/10 text-white/80' : 'hover:bg-slate-100 text-slate-700'
+                        }`}
                       >
                         <PictureInPicture2 className="w-4 h-4" />
                         <span>Picture-in-Picture</span>
@@ -705,7 +745,9 @@ const VideoCard = memo(({
                             setShowSettings(false);
                             navigate(`/sparks/${canonicalId}`);
                           }}
-                          className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl hover:bg-white/10 text-sm font-medium text-blue-300 transition-colors"
+                          className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium transition-colors ${
+                            isDark ? 'hover:bg-white/10 text-blue-300' : 'hover:bg-slate-100 text-blue-600'
+                          }`}
                         >
                           <ExternalLink className="w-4 h-4" />
                           <span>Spark Details</span>
@@ -715,7 +757,9 @@ const VideoCard = memo(({
                       <button
                         type="button"
                         onClick={handleDownload}
-                        className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl hover:bg-white/10 text-sm font-medium text-emerald-400 transition-colors"
+                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium transition-colors ${
+                          isDark ? 'hover:bg-white/10 text-emerald-400' : 'hover:bg-slate-100 text-emerald-600'
+                        }`}
                       >
                         <Download className="w-4 h-4" />
                         <span>Download MP4</span>
@@ -727,7 +771,9 @@ const VideoCard = memo(({
                           setShowSettings(false);
                           onReport?.();
                         }}
-                        className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl hover:bg-white/10 text-sm font-medium text-red-400 transition-colors"
+                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium transition-colors ${
+                          isDark ? 'hover:bg-white/10 text-red-400' : 'hover:bg-slate-100 text-red-600'
+                        }`}
                       >
                         <Flag className="w-4 h-4" />
                         <span>Report</span>
@@ -760,16 +806,23 @@ const VideoCard = memo(({
 
             {/* Floating Left Creator Card */}
             <div
-              className="absolute bottom-16 left-3 sm:left-4 right-20 max-w-[330px] z-20 pointer-events-auto bg-black/50 backdrop-blur-2xl border border-white/15 rounded-3xl p-3.5 shadow-2xl flex flex-col gap-2 text-left"
+              className={`absolute bottom-[146px] lg:bottom-16 left-3 sm:left-4 right-20 max-w-[330px] z-20 pointer-events-auto backdrop-blur-2xl border rounded-3xl p-3.5 flex flex-col gap-2 text-left transition-colors ${
+                isDark
+                  ? 'bg-black/50 border-white/15 text-white shadow-2xl'
+                  : 'bg-white/88 border-white/80 text-slate-900 shadow-[0_12px_32px_rgba(15,23,42,0.18)]'
+              }`}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className="flex items-center gap-2.5 min-w-0 cursor-pointer"
+                  onClick={() => ownerId && navigate(`/profile/${ownerId}`)}
+                >
                   <div className="relative shrink-0">
                     <LazyImage
                       src={video?.creator?.avatar || video?.creator?.photoURL || '/assets/default-profile.png'}
                       alt={video?.creator?.name || video?.creator?.displayName || 'Video creator'}
-                      className="w-10 h-10 rounded-full ring-2 ring-purple-500/80 object-cover"
+                      className="w-10 h-10 rounded-full ring-2 ring-arvdoul-purple/80 object-cover"
                     />
                     {video?.creator?.isVerified && (
                       <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-cyan-400 flex items-center justify-center">
@@ -780,14 +833,18 @@ const VideoCard = memo(({
 
                   <div className="flex flex-col min-w-0">
                     <div className="flex items-center gap-1">
-                      <span className="text-white font-extrabold text-sm sm:text-base tracking-tight truncate">
+                      <span className={`font-extrabold text-sm sm:text-base tracking-tight truncate ${
+                        isDark ? 'text-white' : 'text-slate-950'
+                      }`}>
                         {video?.creator?.name || video?.creator?.displayName || 'Video creator'}
                       </span>
                       {video?.creator?.isVerified && (
                         <BadgeCheck className="w-4 h-4 text-cyan-400 fill-cyan-400/20 shrink-0" />
                       )}
                     </div>
-                    <span className="text-purple-300/85 text-xs font-semibold tracking-tight truncate">
+                    <span className={`text-xs font-semibold tracking-tight truncate ${
+                      isDark ? 'text-purple-300/85' : 'text-arvdoul-purple'
+                    }`}>
                       {video?.creator?.username ? `@${video.creator.username}` : ''}
                     </span>
                   </div>
@@ -798,8 +855,12 @@ const VideoCard = memo(({
                     type="button"
                     whileTap={{ scale: 0.92 }}
                     onClick={handleFollowClick}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold text-white shadow-md transition-all shrink-0 ${
-                      isFollowing ? 'bg-white/20 hover:bg-white/30 text-white' : 'hover:opacity-90'
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold shadow-md transition-all shrink-0 ${
+                      isFollowing
+                        ? isDark
+                          ? 'bg-white/20 hover:bg-white/30 text-white'
+                          : 'bg-slate-200 hover:bg-slate-300 text-slate-900'
+                        : 'text-white hover:opacity-90'
                     }`}
                     style={isFollowing ? undefined : { background: BRAND_GRADIENT }}
                   >
@@ -809,7 +870,9 @@ const VideoCard = memo(({
               </div>
 
               {/* Spark Caption & Hashtags */}
-              <div className="text-white/95 text-xs sm:text-sm font-medium leading-relaxed">
+              <div className={`text-xs sm:text-sm font-medium leading-relaxed ${
+                isDark ? 'text-white/95' : 'text-slate-800'
+              }`}>
                 {video?.description ? (
                   <p>
                     {isCaptionExpanded
@@ -819,7 +882,9 @@ const VideoCard = memo(({
                       <button
                         type="button"
                         onClick={() => setIsCaptionExpanded(!isCaptionExpanded)}
-                        className="text-purple-300 font-bold ml-1 text-xs hover:underline"
+                        className={`font-bold ml-1 text-xs hover:underline ${
+                          isDark ? 'text-purple-300' : 'text-arvdoul-purple'
+                        }`}
                       >
                         {isCaptionExpanded ? 'less' : 'more'}
                       </button>
@@ -835,7 +900,9 @@ const VideoCard = memo(({
                         <span
                           key={clean}
                           onClick={() => navigate(`/search?q=${encodeURIComponent(clean.replace(/^#/, ''))}`)}
-                          className="text-purple-300 hover:text-purple-200 font-bold text-xs cursor-pointer transition-colors"
+                          className={`font-bold text-xs cursor-pointer transition-colors ${
+                            isDark ? 'text-purple-300 hover:text-purple-200' : 'text-arvdoul-blue hover:text-arvdoul-purple'
+                          }`}
                         >
                           {clean}
                         </span>
@@ -855,7 +922,11 @@ const VideoCard = memo(({
                         key={`${sec}-${idx}`}
                         type="button"
                         onClick={(e) => handleChapterJump(sec, e)}
-                        className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-[11px] text-white/90 font-medium whitespace-nowrap shrink-0"
+                        className={`px-2 py-0.5 rounded-full border text-[11px] font-medium whitespace-nowrap shrink-0 transition-colors ${
+                          isDark
+                            ? 'bg-white/10 hover:bg-white/20 border-white/15 text-white/90'
+                            : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800'
+                        }`}
                       >
                         {formatDuration(sec)} {ch?.title || `Ch ${idx + 1}`}
                       </button>
@@ -866,18 +937,24 @@ const VideoCard = memo(({
 
               {/* Audio Track with Equalizer */}
               {video?.audio?.title ? (
-                <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/10">
+                <div className={`flex items-center justify-between gap-2 pt-1 border-t ${
+                  isDark ? 'border-white/10' : 'border-slate-200/80'
+                }`}>
                   <div
                     onClick={() => navigate(`/search?q=${encodeURIComponent(video.audio.title)}`)}
                     className="flex items-center gap-2 cursor-pointer group min-w-0"
                   >
-                    <Music className="w-3.5 h-3.5 text-purple-400 group-hover:rotate-12 transition-transform" />
-                    <span className="text-white/90 text-xs font-semibold truncate max-w-[200px] sm:max-w-[240px]">
+                    <Music className="w-3.5 h-3.5 text-arvdoul-purple group-hover:rotate-12 transition-transform" />
+                    <span className={`text-xs font-semibold truncate max-w-[200px] sm:max-w-[240px] ${
+                      isDark ? 'text-white/90' : 'text-slate-800'
+                    }`}>
                       {video.audio.title}
                     </span>
                   </div>
 
-                  <div className="flex items-end gap-0.5 px-2 py-1 rounded-lg bg-purple-950/50 border border-purple-500/30 h-5 shrink-0">
+                  <div className={`flex items-end gap-0.5 px-2 py-1 rounded-lg border h-5 shrink-0 ${
+                    isDark ? 'bg-slate-900/70 border-white/15' : 'bg-slate-100 border-slate-200'
+                  }`}>
                     <motion.div
                       animate={{ height: isPlaying ? ['25%', '100%', '40%'] : '30%' }}
                       transition={{ duration: 0.5, repeat: Infinity, ease: 'easeInOut' }}
@@ -886,17 +963,17 @@ const VideoCard = memo(({
                     <motion.div
                       animate={{ height: isPlaying ? ['85%', '20%', '95%'] : '50%' }}
                       transition={{ duration: 0.45, repeat: Infinity, ease: 'easeInOut', delay: 0.1 }}
-                      className="w-1 bg-purple-300 rounded-full"
+                      className="w-1 bg-arvdoul-purple rounded-full"
                     />
                     <motion.div
                       animate={{ height: isPlaying ? ['40%', '90%', '30%'] : '25%' }}
                       transition={{ duration: 0.6, repeat: Infinity, ease: 'easeInOut', delay: 0.2 }}
-                      className="w-1 bg-purple-400 rounded-full"
+                      className="w-1 bg-arvdoul-blue rounded-full"
                     />
                     <motion.div
                       animate={{ height: isPlaying ? ['70%', '30%', '80%'] : '45%' }}
                       transition={{ duration: 0.55, repeat: Infinity, ease: 'easeInOut', delay: 0.15 }}
-                      className="w-1 bg-indigo-400 rounded-full"
+                      className="w-1 bg-arvdoul-indigo rounded-full"
                     />
                   </div>
                 </div>
@@ -905,7 +982,7 @@ const VideoCard = memo(({
 
             {/* Scrubber / Timeline Bar */}
             <div
-              className="absolute bottom-4 left-3 right-3 sm:left-4 sm:right-4 z-20 pointer-events-auto flex items-center gap-3 select-none"
+              className="absolute bottom-[98px] lg:bottom-4 left-3 right-3 sm:left-4 sm:right-4 z-20 pointer-events-auto flex items-center gap-3 select-none"
               onClick={(e) => e.stopPropagation()}
             >
               <span className="text-white/90 text-xs font-mono font-bold tabular-nums shrink-0">
@@ -919,6 +996,17 @@ const VideoCard = memo(({
                 aria-valuemax={Math.round(duration) || 0}
                 aria-valuenow={Math.round(currentTime)}
                 tabIndex={0}
+                onKeyDown={(e) => {
+                  if (!videoRef.current || !duration) return;
+                  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    const delta = e.key === 'ArrowRight' ? 5 : -5;
+                    const nextTime = Math.max(0, Math.min(duration, videoRef.current.currentTime + delta));
+                    videoRef.current.currentTime = nextTime;
+                    setCurrentTime(nextTime);
+                    setProgress((nextTime / duration) * 100);
+                  }
+                }}
                 className="relative flex-1 h-1.5 hover:h-2.5 transition-all bg-white/20 rounded-full cursor-pointer overflow-visible group"
                 onClick={handleProgressClick}
               >
@@ -946,7 +1034,7 @@ const VideoCard = memo(({
                   );
                 })}
                 <div
-                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_10px_rgba(168,85,247,0.9)] ring-2 ring-purple-500 transition-transform group-hover:scale-125"
+                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_10px_rgba(139,30,243,0.85)] ring-2 ring-arvdoul-purple transition-transform group-hover:scale-125"
                   style={{ left: `${progress}%` }}
                 />
               </div>

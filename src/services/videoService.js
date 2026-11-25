@@ -620,6 +620,10 @@ class UltimateVideoService {
       shares: item.stats?.shares ?? item.shares ?? null,
       saves: item.stats?.saves ?? item.saves ?? null,
       views: item.stats?.views ?? item.views ?? null,
+      gifts: item.stats?.gifts ?? item.gifts ?? null,
+      giftValue: item.stats?.giftValue ?? item.giftValue ?? null,
+      totalWatchTime: item.stats?.totalWatchTime ?? item.totalWatchTime ?? null,
+      viewerCount: item.viewerCount ?? null,
     };
   }
 
@@ -671,14 +675,15 @@ class UltimateVideoService {
       await countersManager.applyAll({
         items: [video],
         collection: 'posts',
-        fields: ['likes', 'comments', 'shares', 'saves', 'views'],
+        fields: ['likes', 'comments', 'shares', 'saves', 'views', 'gifts'],
         scope: 'stats',
       }).catch(() => {});
-      video.likes = video.stats?.likes ?? video.likes ?? 0;
-      video.comments = video.stats?.comments ?? video.comments ?? 0;
-      video.shares = video.stats?.shares ?? video.shares ?? 0;
-      video.saves = video.stats?.saves ?? video.saves ?? 0;
-      video.views = video.stats?.views ?? video.views ?? 0;
+      video.likes = video.stats?.likes ?? video.likes ?? null;
+      video.comments = video.stats?.comments ?? video.comments ?? null;
+      video.shares = video.stats?.shares ?? video.shares ?? null;
+      video.saves = video.stats?.saves ?? video.saves ?? null;
+      video.views = video.stats?.views ?? video.views ?? null;
+      video.gifts = video.stats?.gifts ?? video.gifts ?? null;
     }
 
     if (
@@ -822,15 +827,16 @@ class UltimateVideoService {
       await countersManager.applyAll({
         items: canonicalItems,
         collection: 'posts',
-        fields: ['likes', 'comments', 'shares', 'saves', 'views'],
+        fields: ['likes', 'comments', 'shares', 'saves', 'views', 'gifts'],
         scope: 'stats',
       }).catch(() => {});
       canonicalItems.forEach((item) => {
-        item.likes = item.stats?.likes ?? item.likes ?? 0;
-        item.comments = item.stats?.comments ?? item.comments ?? 0;
-        item.shares = item.stats?.shares ?? item.shares ?? 0;
-        item.saves = item.stats?.saves ?? item.saves ?? 0;
-        item.views = item.stats?.views ?? item.views ?? 0;
+        item.likes = item.stats?.likes ?? item.likes ?? null;
+        item.comments = item.stats?.comments ?? item.comments ?? null;
+        item.shares = item.stats?.shares ?? item.shares ?? null;
+        item.saves = item.stats?.saves ?? item.saves ?? null;
+        item.views = item.stats?.views ?? item.views ?? null;
+        item.gifts = item.stats?.gifts ?? item.gifts ?? null;
       });
     }
 
@@ -982,15 +988,16 @@ class UltimateVideoService {
           await countersManager.applyAll({
             items: pageItems,
             collection: 'posts',
-            fields: ['likes', 'comments', 'shares', 'saves', 'views'],
+            fields: ['likes', 'comments', 'shares', 'saves', 'views', 'gifts'],
             scope: 'stats',
           }).catch(() => {});
           pageItems.forEach((item) => {
-            item.likes = item.stats?.likes ?? item.likes ?? 0;
-            item.comments = item.stats?.comments ?? item.comments ?? 0;
-            item.shares = item.stats?.shares ?? item.shares ?? 0;
-            item.saves = item.stats?.saves ?? item.saves ?? 0;
-            item.views = item.stats?.views ?? item.views ?? 0;
+            item.likes = item.stats?.likes ?? item.likes ?? null;
+            item.comments = item.stats?.comments ?? item.comments ?? null;
+            item.shares = item.stats?.shares ?? item.shares ?? null;
+            item.saves = item.stats?.saves ?? item.saves ?? null;
+            item.views = item.stats?.views ?? item.views ?? null;
+            item.gifts = item.stats?.gifts ?? item.gifts ?? null;
           });
         }
         const hydrated = await this._hydrateViewerVideoState(pageItems, safeUserId);
@@ -1102,15 +1109,16 @@ class UltimateVideoService {
         await countersManager.applyAll({
           items: canonicalItems,
           collection: 'posts',
-          fields: ['likes', 'comments', 'shares', 'saves', 'views'],
+          fields: ['likes', 'comments', 'shares', 'saves', 'views', 'gifts'],
           scope: 'stats',
         }).catch(() => {});
         canonicalItems.forEach((item) => {
-          item.likes = item.stats?.likes ?? item.likes ?? 0;
-          item.comments = item.stats?.comments ?? item.comments ?? 0;
-          item.shares = item.stats?.shares ?? item.shares ?? 0;
-          item.saves = item.stats?.saves ?? item.saves ?? 0;
-          item.views = item.stats?.views ?? item.views ?? 0;
+          item.likes = item.stats?.likes ?? item.likes ?? null;
+          item.comments = item.stats?.comments ?? item.comments ?? null;
+          item.shares = item.stats?.shares ?? item.shares ?? null;
+          item.saves = item.stats?.saves ?? item.saves ?? null;
+          item.views = item.stats?.views ?? item.views ?? null;
+          item.gifts = item.stats?.gifts ?? item.gifts ?? null;
         });
       }
 
@@ -1150,6 +1158,7 @@ class UltimateVideoService {
     }
     try {
       const res = await this.fns.shareVideo({ videoId, postId: videoId, platform });
+      this.cache.invalidateVideo(videoId);
       return res.data;
     } catch (e) {
       logger.warn('Video share counter not recorded', { videoId, platform, error: e?.message });

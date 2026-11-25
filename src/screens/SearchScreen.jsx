@@ -134,6 +134,14 @@ const SearchScreen = memo(() => {
     };
   }, [updateQuery, search, query]);
 
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('arvdoul:search_header_state', {
+        detail: { filtersActive: showFilters },
+      })
+    );
+  }, [showFilters]);
+
   // Resolve the viewer's real follow state for the trending creators. The
   // search index does not carry a per-viewer `isFollowing` flag, so a card that
   // read `creator.isFollowing` always showed "Follow" for a creator the viewer

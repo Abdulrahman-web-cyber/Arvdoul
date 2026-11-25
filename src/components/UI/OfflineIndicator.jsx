@@ -25,10 +25,8 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
 
   // TopAppBar owns the inline responsive offline/sync banner on all screens where it renders.
   // OfflineIndicator acts strictly as a lightweight fallback on full-bleed routes where TopAppBar
-  // is suppressed (immersive video/reels, studios, live, auth screens) or hidden on desktop (/home, /admin*).
+  // is suppressed (studios, calls, live, auth screens) or hidden on desktop (/home, /admin*).
   const isNoTopBarRoute = (
-    pathname.startsWith('/videos') ||
-    pathname.startsWith('/reels') ||
     pathname.startsWith('/call') ||
     pathname.startsWith('/video-editor') ||
     pathname.startsWith('/audio-editor') ||

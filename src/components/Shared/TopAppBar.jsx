@@ -7,7 +7,7 @@ import { useSound } from "../../hooks/useSound.js";
 import { useAnalytics } from "../../hooks/useAnalytics.js";
 import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
-import { Search, Menu, X, ChevronLeft, SlidersHorizontal, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2, Camera, Calendar, Settings, WifiOff } from "lucide-react";
+import { Search, Menu, X, ChevronLeft, SlidersHorizontal, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2, Camera, Calendar, Settings, WifiOff, Flame, LayoutGrid, Smartphone, Sparkles } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
 import { resolveActorName } from "../../services/profileReadModel.js";
@@ -287,6 +287,11 @@ export const TopAppBar = ({
   const [networkHeaderState, setNetworkHeaderState] = useState(null);
   const [networkSearchOpen, setNetworkSearchOpen] = useState(false);
   const [networkSearchQuery, setNetworkSearchQuery] = useState("");
+  const [sparksHeaderState, setSparksHeaderState] = useState({
+    mode: "sparks",
+    activeTab: "sparks",
+    viewMode: "feed",
+  });
   const inboxSearchInputRef = useRef(null);
   const storiesSearchInputRef = useRef(null);
   const notificationsSearchInputRef = useRef(null);
@@ -336,17 +341,30 @@ export const TopAppBar = ({
       setInboxSearchOpen(true);
       requestAnimationFrame(() => inboxSearchInputRef.current?.focus?.());
     };
+    const onSparksState = (e) => {
+      if (e?.detail === null) {
+        setSparksHeaderState({ mode: "sparks", activeTab: "sparks", viewMode: "feed" });
+      } else if (e?.detail && typeof e.detail === "object") {
+        setSparksHeaderState((prev) => ({
+          mode: e.detail.mode || prev.mode || "sparks",
+          activeTab: e.detail.activeTab || prev.activeTab || "sparks",
+          viewMode: e.detail.viewMode || prev.viewMode || "feed",
+        }));
+      }
+    };
     window.addEventListener("arvdoul:inbox_header_state", onInboxState);
     window.addEventListener("arvdoul:chat_header_state", onChatState);
     window.addEventListener("arvdoul:notifications_header_state", onNotificationsState);
     window.addEventListener("arvdoul:network_header_state", onNetworkState);
     window.addEventListener("arvdoul:focus_inbox_search", onFocusInboxSearch);
+    window.addEventListener("arvdoul:sparks_header_state", onSparksState);
     return () => {
       window.removeEventListener("arvdoul:inbox_header_state", onInboxState);
       window.removeEventListener("arvdoul:chat_header_state", onChatState);
       window.removeEventListener("arvdoul:notifications_header_state", onNotificationsState);
       window.removeEventListener("arvdoul:network_header_state", onNetworkState);
       window.removeEventListener("arvdoul:focus_inbox_search", onFocusInboxSearch);
+      window.removeEventListener("arvdoul:sparks_header_state", onSparksState);
     };
   }, []);
 
@@ -442,6 +460,14 @@ export const TopAppBar = ({
     if (path === "/" || path === "/home" || path === "") return "brand";
     if (path.startsWith("/search")) return "search";
     if (
+      path === "/sparks" ||
+      path === "/videos" ||
+      path.startsWith("/videos/") ||
+      path === "/reels" ||
+      path.startsWith("/reels/")
+    )
+      return "sparks";
+    if (
       path.startsWith("/stories") ||
       path.startsWith("/vibes") ||
       path.startsWith("/highlight/")
@@ -507,6 +533,9 @@ export const TopAppBar = ({
       setNetworkSearchQuery("");
       setNetworkHeaderState(null);
     }
+    if (currentMode !== "sparks") {
+      setSparksHeaderState({ mode: "sparks", activeTab: "sparks", viewMode: "feed" });
+    }
   }, [currentMode]);
 
   // Title
@@ -516,6 +545,9 @@ export const TopAppBar = ({
     if (path === "/profile" || path === "/profile/me") return "Profile";
     if (path.startsWith("/profile/edit")) return "Edit Profile";
     if (path.startsWith("/profile/analytics")) return "Creator Analytics";
+    if (path.startsWith("/video-analytics")) return "Sparks Analytics";
+    if (path.startsWith("/post/") && path.endsWith("/analytics")) return "Post Analytics";
+    if (path.startsWith("/sparks/") || path.startsWith("/video/")) return "Spark";
     if (path.startsWith("/profile/highlights")) return "Highlights Studio";
     if (
       path.includes("/connections") ||
@@ -602,7 +634,7 @@ export const TopAppBar = ({
         <div
           className={cn(
             "mx-auto flex flex-col items-center gap-1.5 pointer-events-auto",
-            currentMode === "messages_inbox" || currentMode === "messages_chat" || currentMode === "stories"
+            currentMode === "messages_inbox" || currentMode === "messages_chat" || currentMode === "stories" || currentMode === "sparks"
               ? "max-w-6xl"
               : currentMode === "profile_me" || currentMode === "profile_visitor"
                 ? "max-w-[1040px]"
@@ -1291,6 +1323,188 @@ export const TopAppBar = ({
                   </div>
                 )
               )}
+
+              {currentMode === "sparks" && (() => {
+                const isReelsMode = sparksHeaderState.mode === "reels" || location.pathname.startsWith("/reels");
+                const activeChannel = sparksHeaderState.activeTab || (isReelsMode ? "for_you" : "sparks");
+                const channels = isReelsMode
+                  ? [
+                      { id: "following", label: "Following" },
+                      { id: "for_you", label: "For You" },
+                    ]
+                  : [
+                      { id: "following", label: "Following" },
+                      { id: "friends", label: "Friends" },
+                      { id: "sparks", label: "Sparks", featured: true },
+                      { id: "for_you", label: "For You" },
+                      ...(activeChannel === "trending" ? [{ id: "trending", label: "Trending" }] : []),
+                    ];
+
+                return (
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    {/* Left: Emblem / Back + Title */}
+                    <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                      {isReelsMode ? (
+                        <CircularButton
+                          icon={ChevronLeft}
+                          label="Back"
+                          theme={theme}
+                          onClick={handleBack}
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isReelsMode) {
+                            navigate("/sparks");
+                          } else {
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }
+                        }}
+                        aria-label={isReelsMode ? "Open Sparks" : "Arvdoul Sparks"}
+                        className="flex items-center gap-2 text-left rounded-xl focus:outline-none group"
+                      >
+                        <ArvdoulEmblem
+                          size={30}
+                          theme={theme}
+                          animate={false}
+                          showPlate={false}
+                          className="group-hover:scale-105 transition-transform shrink-0"
+                        />
+                        <div className="hidden md:flex flex-col min-w-0">
+                          <h2
+                            className="text-base font-black truncate leading-tight tracking-tight"
+                            style={{ color: tokens.textPrimary }}
+                          >
+                            {isReelsMode ? "Reels" : "Sparks"}
+                          </h2>
+                          <BrandBaseline visible={!isHidden} gradient={tokens.brandLine} />
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Center: Channel Switcher */}
+                    <nav
+                      aria-label={isReelsMode ? "Reels feed channels" : "Sparks feed channels"}
+                      className={cn(
+                        "flex items-center gap-0.5 sm:gap-1 px-1 py-0.5 rounded-full border overflow-x-auto no-scrollbar min-w-0",
+                        isDark
+                          ? "bg-white/[0.06] border-white/10"
+                          : "bg-slate-100/90 border-slate-200/80"
+                      )}
+                    >
+                      {channels.map((tab) => {
+                        const isActive = activeChannel === tab.id;
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            aria-pressed={isActive}
+                            onClick={() => {
+                              setSparksHeaderState((prev) => ({ ...prev, activeTab: tab.id }));
+                              window.dispatchEvent(
+                                new CustomEvent("arvdoul:sparks_channel_change", {
+                                  detail: { channel: tab.id, mode: isReelsMode ? "reels" : "sparks" },
+                                })
+                              );
+                            }}
+                            className={cn(
+                              "relative min-h-[34px] sm:min-h-[38px] px-2.5 sm:px-3.5 text-xs font-extrabold tracking-wide whitespace-nowrap shrink-0 rounded-full flex items-center gap-1 transition-all",
+                              isActive
+                                ? isDark ? "text-white" : "text-slate-950"
+                                : isDark ? "text-white/60 hover:text-white/95" : "text-slate-600 hover:text-slate-950"
+                            )}
+                          >
+                            {tab.featured && (
+                              <Sparkles
+                                className={cn(
+                                  "w-3.5 h-3.5",
+                                  isActive
+                                    ? isDark ? "text-amber-300 fill-amber-300" : "text-amber-500 fill-amber-500"
+                                    : "text-amber-400"
+                                )}
+                                aria-hidden="true"
+                              />
+                            )}
+                            <span>{tab.label}</span>
+                            {isActive && (
+                              <motion.span
+                                layoutId="topBarSparksTabIndicator"
+                                className="absolute bottom-0.5 left-2 right-2 h-0.5 rounded-full"
+                                style={{
+                                  background: BRAND_GRADIENT,
+                                  boxShadow: `0 0 8px ${brandRgba(0.65)}`,
+                                }}
+                                transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                              />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </nav>
+
+                    {/* Right: Actions */}
+                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                      {!isReelsMode ? (
+                        <>
+                          <CircularButton
+                            icon={sparksHeaderState.viewMode === "feed" ? LayoutGrid : Smartphone}
+                            label={sparksHeaderState.viewMode === "feed" ? "Switch to Grid view" : "Switch to Sparks feed"}
+                            theme={theme}
+                            active={sparksHeaderState.viewMode === "grid"}
+                            onClick={() =>
+                              window.dispatchEvent(
+                                new CustomEvent("arvdoul:sparks_toggle_view", {
+                                  detail: { source: "top_app_bar" },
+                                })
+                              )
+                            }
+                          />
+                          <CircularButton
+                            icon={Flame}
+                            label="Open Reels"
+                            theme={theme}
+                            onClick={() => navigate("/reels")}
+                          />
+                        </>
+                      ) : (
+                        <div className="hidden sm:block">
+                          <CircularButton
+                            icon={Sparkles}
+                            label="Open Sparks Feed"
+                            theme={theme}
+                            onClick={() => navigate("/sparks")}
+                          />
+                        </div>
+                      )}
+                      <div className={isReelsMode ? "block" : "hidden sm:block"}>
+                        <CircularButton
+                          icon={Search}
+                          label={isReelsMode ? "Search Reels" : "Search Sparks"}
+                          theme={theme}
+                          onClick={() => navigate("/search")}
+                        />
+                      </div>
+                      <CircularButton
+                        icon={Camera}
+                        label="Create Spark"
+                        theme={theme}
+                        active
+                        onClick={() => navigate("/create-post?type=video")}
+                      />
+                      <CircularButton
+                        icon={Menu}
+                        label="Menu"
+                        theme={theme}
+                        onClick={() => {
+                          if (onOpenMenu) onOpenMenu();
+                          else navigate(ROUTES.menu);
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
 
               {currentMode === "messages_chat" && (
                 <div className="flex items-center justify-between gap-2">

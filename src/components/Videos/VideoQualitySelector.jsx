@@ -3,6 +3,7 @@
 import { memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check } from 'lucide-react';
+import { useTheme } from '../../context/ThemeContext';
 import { SPRING_ANIMATION, QUALITY_OPTIONS } from '../../utils/videoUtils';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import PropTypes from 'prop-types';
@@ -17,6 +18,8 @@ const VideoQualitySelector = memo(({
   onSelect,
   onClose,
 }) => {
+  const { isDark } = useTheme();
+
   const options = useMemo(() => {
     if (Array.isArray(levels) && levels.length > 0) {
       const seen = new Set();
@@ -41,7 +44,11 @@ const VideoQualitySelector = memo(({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 10 }}
           transition={SPRING_ANIMATION.button}
-          className="absolute right-20 bottom-32 backdrop-blur-2xl bg-[#080F2E]/90 border border-white/15 rounded-2xl p-2 flex flex-col gap-1 min-w-[156px] z-50 shadow-2xl"
+          className={`absolute right-14 bottom-12 lg:bottom-16 backdrop-blur-2xl border rounded-2xl p-2 flex flex-col gap-1 min-w-[164px] z-50 shadow-2xl ${
+            isDark
+              ? 'bg-[#080F2E]/95 border-white/15'
+              : 'bg-white/95 border-slate-200 shadow-[0_18px_40px_rgba(15,23,42,0.16)]'
+          }`}
         >
           {options.map((option) => {
             const active = currentQuality === option.value;
@@ -55,7 +62,11 @@ const VideoQualitySelector = memo(({
                   onClose?.();
                 }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-semibold text-left flex items-center justify-between gap-3 transition-colors ${
-                  active ? 'text-white' : 'text-white/80 hover:bg-white/10'
+                  active
+                    ? 'text-white'
+                    : isDark
+                      ? 'text-white/80 hover:bg-white/10'
+                      : 'text-slate-700 hover:bg-slate-100'
                 }`}
                 style={active ? { background: BRAND_GRADIENT } : undefined}
               >

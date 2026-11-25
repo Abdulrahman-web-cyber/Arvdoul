@@ -61,8 +61,8 @@ export default function DesktopNavRail() {
 
   const navItems = [
     { label: 'Home', path: '/home', icon: Home, match: (p) => p === '/' || p === '/home' },
-    { label: 'Reels', path: '/reels', icon: Film, match: (p) => p.startsWith('/reels') },
-    { label: 'Videos', path: '/videos', icon: Video, match: (p) => p.startsWith('/videos') || p.startsWith('/video/') },
+    { label: 'Sparks', path: '/sparks', icon: Film, match: (p) => p === '/sparks' || p.startsWith('/sparks/') || p.startsWith('/videos') || p.startsWith('/video/') },
+    { label: 'Reels', path: '/reels', icon: Video, match: (p) => p.startsWith('/reels') },
     { label: 'Messages', path: '/messages', icon: MessageSquare, badge: badges.messages, match: (p) => p.startsWith('/messages') },
     { label: 'Vibes', path: '/vibes', icon: Sparkles, match: (p) => p.startsWith('/vibes') },
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: badges.notifications, match: (p) => p.startsWith('/notifications') },
