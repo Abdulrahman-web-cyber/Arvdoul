@@ -74,6 +74,7 @@ export default function ProfilePublicScreen() {
   const storePostsLikesCount = useProfileStore((state) => state.postsLikesCount);
   const storeFriendCount = useProfileStore((state) => state.friendCount);
   const storePostsLoading = useProfileStore((state) => state.postsLoading);
+  const storePostsError = useProfileStore((state) => state.postsError);
   const storePostsHasMore = useProfileStore((state) => state.postsHasMore);
   const storePostsCursor = useProfileStore((state) => state.postsCursor);
   const storeLoading = useProfileStore((state) => state.loading);
@@ -83,6 +84,7 @@ export default function ProfilePublicScreen() {
   const storeMutualFriends = useProfileStore((state) => state.mutualFriends);
   const storeMutualFriendsResolved = useProfileStore((state) => state.mutualFriendsResolved);
   const storeHighlights = useProfileStore((state) => state.highlights);
+  const storeHighlightsLoading = useProfileStore((state) => state.highlightsLoading);
   const storeStories = useProfileStore((state) => state.stories);
   const storeStoriesLoading = useProfileStore((state) => state.storiesLoading);
 
@@ -157,7 +159,8 @@ export default function ProfilePublicScreen() {
       const resolvedUid = currentProfile?.id || currentProfile?.uid || cleanUserId;
       const store = useProfileStore.getState();
 
-      // 2. Load posts, highlights, and relationship context in parallel
+      // 2. Verify relationship before rendering content/actions, then paint immediately
+      // while posts, highlights, and stories stream into their section skeletons.
       if (currentUserId && resolvedUid !== currentUserId) {
         const userService = getUserService();
         const relSettled = await Promise.allSettled([
@@ -175,6 +178,7 @@ export default function ProfilePublicScreen() {
         if (isMountedRef.current) {
           setRelationship(rel);
           setRelationshipResolved(true);
+          setLocalLoading(false);
         }
 
         if (rel.isBlockedBy || rel.isBlocking) {
@@ -184,18 +188,19 @@ export default function ProfilePublicScreen() {
         const areFriends = Boolean(rel.isMutualFriend);
         if (areFriends) {
           if (isMountedRef.current) setFriendshipStatus('friends');
-          await Promise.allSettled([
-            store.loadPosts(resolvedUid, { limit: 30 }),
+          void Promise.allSettled([
+            store.loadPosts(resolvedUid, { limit: 12 }),
             store.loadHighlights(resolvedUid),
             store.loadStories(resolvedUid),
           ]);
         } else {
-          const [, , , reqResult] = await Promise.allSettled([
-            store.loadPosts(resolvedUid, { limit: 30 }),
+          const secondaryTasks = Promise.allSettled([
+            store.loadPosts(resolvedUid, { limit: 12 }),
             store.loadHighlights(resolvedUid),
             store.loadStories(resolvedUid),
             userService.getFriendRequestStatus(currentUserId, resolvedUid),
           ]);
+          const [, , , reqResult] = await secondaryTasks;
           if (reqResult?.status === 'fulfilled' && reqResult.value) {
             const requestState = reqResult.value;
             if (isMountedRef.current) {
@@ -215,9 +220,12 @@ export default function ProfilePublicScreen() {
           }
         }
       } else {
-        if (isMountedRef.current) setRelationshipResolved(true);
-        await Promise.allSettled([
-          store.loadPosts(resolvedUid, { limit: 30 }),
+        if (isMountedRef.current) {
+          setRelationshipResolved(true);
+          setLocalLoading(false);
+        }
+        void Promise.allSettled([
+          store.loadPosts(resolvedUid, { limit: 12 }),
           store.loadHighlights(resolvedUid),
           store.loadStories(resolvedUid),
         ]);
@@ -948,13 +956,27 @@ export default function ProfilePublicScreen() {
           ) : (
             <>
               {/* 4. Content-First Showcase: Vibes Highlights & Featured Creations */}
-              <ProfileHighlightsSection
-                highlights={highlightsForTarget}
-                userId={targetUid}
-                isOwner={false}
-                managedByParent={true}
-                theme={theme}
-              />
+              {storeHighlightsLoading && highlightsForTarget.length === 0 ? (
+                <div className={cn(
+                  "rounded-[22px] border px-4 py-3 flex items-center gap-3 overflow-hidden animate-pulse",
+                  isDark ? "bg-white/[0.025] border-white/[0.08]" : "bg-white/75 border-white/90"
+                )}>
+                  {[1, 2, 3, 4].map((n) => (
+                    <div key={n} className="flex flex-col items-center gap-1.5 shrink-0">
+                      <div className={cn("w-14 h-14 rounded-full", isDark ? "bg-white/[0.06]" : "bg-slate-200/75")} />
+                      <div className={cn("h-2.5 w-11 rounded", isDark ? "bg-white/[0.06]" : "bg-slate-200/75")} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <ProfileHighlightsSection
+                  highlights={highlightsForTarget}
+                  userId={targetUid}
+                  isOwner={false}
+                  managedByParent={true}
+                  theme={theme}
+                />
+              )}
 
               <ProfileFeaturedSection
                 profile={effectiveProfile}
@@ -1028,20 +1050,37 @@ export default function ProfilePublicScreen() {
                 />
               )}
 
-              <ProfileFeedGrid
-                posts={posts}
-                stories={storiesForTarget}
-                activeTab={activeTab}
-                viewMode={viewMode}
-                loading={storePostsLoading || (activeTab === 'stories' && storeStoriesLoading)}
-                theme={theme}
-                profile={effectiveProfile}
-                onPostClick={(post) => navigate(`/post/${post.id}`)}
-                onOpenTipModal={() => setShowTipModal(true)}
-                hasMore={Boolean(storePostsCursor && storePostsHasMore)}
-                loadingMore={storePostsLoading}
-                onLoadMore={handleLoadMorePosts}
-              />
+              {storePostsError && posts.length === 0 ? (
+                <div className={cn(
+                  "rounded-[24px] p-6 border text-center space-y-3",
+                  isDark ? "bg-white/[0.025] border-white/[0.08]" : "bg-white border-slate-200"
+                )}>
+                  <p className="text-sm font-semibold">We couldn&apos;t load posts for this profile.</p>
+                  <button
+                    type="button"
+                    onClick={() => useProfileStore.getState().loadPosts(targetUid, { limit: 12, force: true })}
+                    className="min-h-[44px] px-5 py-2 rounded-xl font-semibold text-sm text-white bg-arvdoul-gradient inline-flex items-center gap-2 cursor-pointer"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Retry posts</span>
+                  </button>
+                </div>
+              ) : (
+                <ProfileFeedGrid
+                  posts={posts}
+                  stories={storiesForTarget}
+                  activeTab={activeTab}
+                  viewMode={viewMode}
+                  loading={storePostsLoading || (activeTab === 'stories' && storeStoriesLoading)}
+                  theme={theme}
+                  profile={effectiveProfile}
+                  onPostClick={(post) => navigate(`/post/${post.id}`)}
+                  onOpenTipModal={() => setShowTipModal(true)}
+                  hasMore={Boolean(storePostsCursor && storePostsHasMore)}
+                  loadingMore={storePostsLoading}
+                  onLoadMore={handleLoadMorePosts}
+                />
+              )}
 
               {/* 6. Civic Standing & Patronage Ledger */}
               <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-12 items-stretch pt-2">

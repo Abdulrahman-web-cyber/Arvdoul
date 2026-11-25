@@ -4,7 +4,6 @@ import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import * as Icons from 'lucide-react';
 import { useCreatePostState } from './CreatePostContext.jsx';
 import { POST_TYPES } from './createPostConstants.js';
-import { mediaUrlToFile } from './postMediaPipeline.js';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner.jsx';
 
 export default function EditPostLoader() {
@@ -132,6 +131,7 @@ export default function EditPostLoader() {
           });
         } else if (!resolvedFile && audioDataUrl) {
           try {
+            const { mediaUrlToFile } = await import('./postMediaPipeline.js');
             resolvedFile = await mediaUrlToFile(
               audioDataUrl,
               `${title || 'audio_mix'}.wav`,
@@ -303,6 +303,29 @@ export default function EditPostLoader() {
               chapters: Array.isArray(p.chapters) ? p.chapters : [],
             },
           },
+          identityMeta: p.identityMeta || undefined,
+          distributionSettings: p.distributionSettings || undefined,
+          engagementControls: p.engagementControls || undefined,
+          commercialSettings: p.commercialDisclosure || p.partnership ? {
+            disclosureType: p.commercialDisclosure?.type || 'none',
+            affiliateLinkId: p.commercialDisclosure?.affiliateLinkId || null,
+            affiliateUrl: p.commercialDisclosure?.affiliateUrl || '',
+            affiliateLabel: p.commercialDisclosure?.affiliateLabel || '',
+            promoCode: p.commercialDisclosure?.promoCode || '',
+            productTag: p.commercialDisclosure?.productTag || '',
+            ctaLabel: p.commercialDisclosure?.ctaLabel || 'Learn More',
+            ctaUrl: p.commercialDisclosure?.ctaUrl || '',
+            brandPartnerId: p.partnership?.brandPartnerId || '',
+            brandPartnerName: p.partnership?.brandPartnerName || '',
+            brandPartnerHandle: p.partnership?.brandPartnerHandle || '',
+            partnershipId: p.partnership?.partnershipId || null,
+            adAuthorizationId: p.partnership?.adAuthorizationId || null,
+            adAuthorizationCode: p.partnership?.adAuthorizationCode || '',
+            allowPartnerPromotion: Boolean(p.partnership?.allowPartnerPromotion),
+          } : undefined,
+          creatorPrograms: p.creatorPrograms || undefined,
+          safetyAccessibility: p.safetyAccessibility || undefined,
+          lifecycleSettings: p.lifecycleSettings || undefined,
           draftId: null,
           isDraftLoaded: true,
           isDirty: false,

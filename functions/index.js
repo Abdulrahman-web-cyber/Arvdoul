@@ -107,6 +107,9 @@ merge(require('./communityPostCounters.js'));
 // review/publish). Membership is privilege data; the client never writes the
 // project document or its team/content subcollections.
 merge(require('./collaboration.js'));
+// Server-authoritative Advertising Center (ad accounts, billing ledger,
+// Spark post-preserve campaigns, moderation reviews & disputes).
+merge(require('./advertising.js'));
 // Scheduled-post publisher: the composer writes `status: 'scheduled'` with a
 // future `scheduledTime`; this scheduled job is the only writer that flips a
 // due post to `published` (otherwise a scheduled post never surfaces anywhere).

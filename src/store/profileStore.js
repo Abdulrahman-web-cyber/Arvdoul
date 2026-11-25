@@ -81,10 +81,12 @@ const initialState = {
   // Highlights
   highlights: [],
   highlightsLoading: false,
+  highlightsError: null,
   
   // Stories
   stories: [],
   storiesLoading: false,
+  storiesError: null,
   
   // Creator info
   level: null,
@@ -104,6 +106,7 @@ const initialState = {
   // Saved Posts
   savedPosts: [],
   savedLoading: false,
+  savedError: null,
 
   // Shop Items
   shopItems: [],
@@ -138,6 +141,19 @@ let _activeSwrKey = null;
 let _activeSwrAliasKey = null;
 const _swrProfileCache = new Map();
 const _trackedProfileViews = new Set();
+const _secondaryInflight = new Map();
+
+function withStoreTimeout(promise, ms, label = 'Profile request') {
+  let timerId;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timerId = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    }),
+  ]).finally(() => {
+    if (timerId) clearTimeout(timerId);
+  });
+}
 
 function buildViewTrackKey(viewerId, targetUid) {
   const today = new Date().toISOString().slice(0, 10);
@@ -423,24 +439,89 @@ export const useProfileStore = create(
         const profile = await userService.getUserProfile(userId, currentUserId, options);
         const resolvedUid = profile?.id || profile?.uid || userId;
 
+        // Drop a stale response (account switch / newer navigation) — N013.
+        if (get().requestSeq !== requestId) return;
+
+        // Resolve base profile immediately so Hero + Metrics render without waiting
+        // for Cloud Functions (getMutualFriends) or secondary economy calls.
+        const appStoreUser = useAppStore.getState().currentUser;
+        const appCurrentUser = isOwner && appStoreUser?.uid === currentUserId ? appStoreUser : null;
+        const effectiveUid = isOwner ? currentUserId : null;
+        const fallbackDisplayName = isOwner
+          ? pickDisplayName(
+              [appCurrentUser?.displayName, appCurrentUser?.name, deriveHandle(appCurrentUser?.email)],
+              { fallback: resolveActorName([], effectiveUid || userId) }
+            )
+          : resolveActorName([], userId);
+        const fallbackUsername = isOwner
+          ? pickHandle([appCurrentUser?.username, deriveHandle(appCurrentUser?.email)])
+          : null;
+
+        const baseResolvedProfile = profile ? {
+          ...profile,
+          displayName: isOwner
+            ? pickDisplayName([profile.displayName, appCurrentUser?.displayName], { fallback: fallbackDisplayName })
+            : pickDisplayName([profile.displayName, profile.name], { fallback: resolveActorName([], resolvedUid || userId) }),
+          username: pickHandle([profile.username]) || fallbackUsername,
+        } : {
+          id: userId || effectiveUid || null,
+          uid: userId || effectiveUid || null,
+          username: fallbackUsername,
+          displayName: fallbackDisplayName,
+          bio: isOwner && typeof appCurrentUser?.bio === 'string' ? appCurrentUser.bio : '',
+          photoURL: isOwner ? (appCurrentUser?.photoURL || null) : null,
+          isVerified: false,
+          isCreator: false,
+          canViewActivity: false,
+          canViewAchievements: false,
+          canViewTitles: false,
+          canViewFollowersList: false,
+          canViewFollowingList: false,
+          canViewFriendsList: false,
+        };
+
+        const existingLikesCount = get().postsLikesCount;
+        if (typeof existingLikesCount === 'number' && (baseResolvedProfile.id === userId || baseResolvedProfile.uid === userId)) {
+          baseResolvedProfile.likesReceived = existingLikesCount;
+        }
+
+        const initialBalance = isOwner && typeof baseResolvedProfile.coins === 'number' && Number.isFinite(baseResolvedProfile.coins)
+          ? baseResolvedProfile.coins
+          : null;
+        const rawBaseXp = baseResolvedProfile.experience ?? baseResolvedProfile.xp ?? null;
+
+        set((state) => {
+          state.profile = baseResolvedProfile;
+          state.loading = false;
+          state.error = null;
+          state.isOwner = isOwner;
+          state.followStatusTargetId = resolvedUid || userId;
+          state.level = baseResolvedProfile.level ?? null;
+          state.experience = rawBaseXp !== null && Number.isFinite(Number(rawBaseXp)) ? Number(rawBaseXp) : null;
+          if (initialBalance !== null) state.balance = initialBalance;
+        });
+
         const canReadFriendsCount =
           Boolean(resolvedUid) &&
           !profile?.isBlocked &&
           (isOwner || profile?.canViewFriendsList === true);
 
         // Fetch viewer-scoped follow status, mutual friends, friend count, balance, and position in parallel
+        // with bounded timeouts so slow Cloud Functions or Remote Config never block completion.
         const [followSettled, mutualSettled, friendCountSettled, balanceSettled, positionSettled] = await Promise.allSettled([
           (!isOwner && currentUserId)
-            ? userService.getFollowStatus(currentUserId, resolvedUid)
+            ? withStoreTimeout(userService.getFollowStatus(currentUserId, resolvedUid), 4500, 'followStatus')
             : Promise.resolve(null),
           (!isOwner && currentUserId && canReadFriendsCount)
-            ? userService.getMutualFriends(currentUserId, resolvedUid)
+            ? withStoreTimeout(userService.getMutualFriends(currentUserId, resolvedUid), 4500, 'mutualFriends')
             : Promise.resolve({ mutualFriends: [] }),
           canReadFriendsCount && typeof socialGraphService.getFriendCount === 'function'
-            ? socialGraphService.getFriendCount(resolvedUid)
+            ? withStoreTimeout(socialGraphService.getFriendCount(resolvedUid), 4500, 'friendCount')
             : Promise.resolve(null),
           isOwner
-            ? monetizationService.getBalance(resolvedUid)
+            ? (initialBalance !== null && !options?.force
+                ? Promise.resolve(initialBalance)
+                : monetizationService.getBalance(resolvedUid, { forceRefresh: Boolean(options?.force) }))
             : Promise.resolve(null),
           monetizationService.getUserPosition(resolvedUid, profile?.gender),
         ]);
@@ -471,7 +552,7 @@ export const useProfileStore = create(
             ? friendCountSettled.value
             : null;
 
-        const level = profile?.level || null;
+        const level = baseResolvedProfile?.level ?? null;
 
         let balance = null;
         if (isOwner) {
@@ -490,49 +571,10 @@ export const useProfileStore = create(
           console.warn('Could not fetch position:', positionSettled.reason);
         }
 
-        // Resolve profile strictly separating owner auth context from visited public profiles.
-        const appStoreUser = useAppStore.getState().currentUser;
-        const appCurrentUser = isOwner && appStoreUser?.uid === currentUserId ? appStoreUser : null;
-        const effectiveUid = isOwner ? currentUserId : null;
-        const fallbackDisplayName = isOwner
-          ? pickDisplayName(
-              [appCurrentUser?.displayName, appCurrentUser?.name, deriveHandle(appCurrentUser?.email)],
-              { fallback: resolveActorName([], effectiveUid || userId) }
-            )
-          : resolveActorName([], userId);
-        const fallbackUsername = isOwner
-          ? pickHandle([appCurrentUser?.username, deriveHandle(appCurrentUser?.email)])
-          : null;
-
         const resolvedProfile = profile ? {
-          ...profile,
-          displayName: isOwner
-            ? pickDisplayName([profile.displayName, appCurrentUser?.displayName], { fallback: fallbackDisplayName })
-            : pickDisplayName([profile.displayName, profile.name], { fallback: resolveActorName([], resolvedUid || userId) }),
-          username: pickHandle([profile.username]) || fallbackUsername,
+          ...baseResolvedProfile,
           ...(friendCount !== null && canReadFriendsCount ? { friendCount } : {}),
-        } : {
-          id: userId || effectiveUid || null,
-          uid: userId || effectiveUid || null,
-          username: fallbackUsername,
-          displayName: fallbackDisplayName,
-          bio: isOwner && typeof appCurrentUser?.bio === 'string' ? appCurrentUser.bio : '',
-          photoURL: isOwner ? (appCurrentUser?.photoURL || null) : null,
-          isVerified: false,
-          isCreator: false,
-          canViewActivity: false,
-          canViewAchievements: false,
-          canViewTitles: false,
-          canViewFollowersList: false,
-          canViewFollowingList: false,
-          canViewFriendsList: false,
-        };
-
-        // Preserve previously computed post likes if posts loaded faster than profile
-        const existingLikesCount = get().postsLikesCount;
-        if (typeof existingLikesCount === 'number' && (resolvedProfile.id === userId || resolvedProfile.uid === userId)) {
-          resolvedProfile.likesReceived = existingLikesCount;
-        }
+        } : baseResolvedProfile;
 
         // Drop a stale response (account switch / newer navigation) — N013.
         if (get().requestSeq !== requestId) return;
@@ -750,114 +792,132 @@ export const useProfileStore = create(
      */
     loadPosts: async (userId, options = {}) => {
       if (!userId) return;
-      const __seq = get()._startLoad('posts');      
+      const viewerId = get().viewerUid || useAppStore.getState().currentUser?.uid || null;
+      const inflightKey = `posts::${userId}::${viewerId || 'anon'}::${options.viewAs || 'default'}::${options.limit || 12}`;
+      if (!options.force && _secondaryInflight.has(inflightKey)) {
+        return _secondaryInflight.get(inflightKey);
+      }
+
+      const __seq = get()._startLoad('posts');
       set((state) => {
         state.postsLoading = true;
         state.postsError = null;
       });
-      
-      try {
-        const viewerId = get().viewerUid || useAppStore.getState().currentUser?.uid || null;
-        const constrainAuthorIsPrivate = !isApprovedFollowerView(get, userId, options);
-        const queryOpts = {
-          limit: options.limit || 12,
-          viewerId,
-          constrainAuthorIsPrivate,
-          ...options,
-          ...(options.force ? { cacheFirst: false, forceRefresh: true } : {}),
-        };
-        const result = await firestoreService.getPostsByUser(userId, queryOpts);
 
-        let userPosts = result?.posts || [];
+      const task = (async () => {
         try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            const localPosts = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
-            const localUserPosts = viewerId === userId && (!options.viewAs || options.viewAs === 'owner')
-              ? localPosts.filter((p) => p && p.authorId === userId &&
-                  p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled')
-              : [];
-            if (localUserPosts.length > 0) {
-              const existingIds = new Set(userPosts.map(p => p.id));
-              for (const lp of localUserPosts) {
-                if (!existingIds.has(lp.id)) {
-                  userPosts.unshift(lp);
-                  existingIds.add(lp.id);
+          const constrainAuthorIsPrivate = !isApprovedFollowerView(get, userId, options);
+          const queryOpts = {
+            limit: options.limit || 12,
+            viewerId,
+            constrainAuthorIsPrivate,
+            ...options,
+            ...(options.force ? { cacheFirst: false, forceRefresh: true } : {}),
+          };
+          const result = await withStoreTimeout(
+            firestoreService.getPostsByUser(userId, queryOpts),
+            8000,
+            'posts'
+          );
+
+          let userPosts = result?.posts || [];
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              const localPosts = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
+              const localUserPosts = viewerId === userId && (!options.viewAs || options.viewAs === 'owner')
+                ? localPosts.filter((p) => p && p.authorId === userId &&
+                    p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled')
+                : [];
+              if (localUserPosts.length > 0) {
+                const existingIds = new Set(userPosts.map(p => p.id));
+                for (const lp of localUserPosts) {
+                  if (!existingIds.has(lp.id)) {
+                    userPosts.unshift(lp);
+                    existingIds.add(lp.id);
+                  }
                 }
               }
             }
+          } catch (e) {
+            console.warn('Local post merge into profile failed', e?.message);
           }
-        } catch (e) {
-          console.warn('Local post merge into profile failed', e?.message);
-        }
 
-        const livePosts = (userPosts || []).filter(
-          (p) => p && p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled'
-        );
-        const liveLoadedCount = livePosts.length;
-        let nextPostsCount = null;
-        if (result && result.hasMore === false) {
-          // When all pages are loaded (including 0 posts), the loaded count is exact.
-          nextPostsCount = liveLoadedCount;
-        } else if (typeof firestoreService.getUserPostsCount === 'function') {
-          const counted = await firestoreService.getUserPostsCount(userId, queryOpts).catch(() => null);
-          if (typeof counted === 'number' && Number.isFinite(counted)) {
-            nextPostsCount = Math.max(counted, liveLoadedCount);
-          } else if (liveLoadedCount > 0) {
+          const livePosts = (userPosts || []).filter(
+            (p) => p && p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled'
+          );
+          const liveLoadedCount = livePosts.length;
+          let nextPostsCount = null;
+          if (result && result.hasMore === false) {
+            // When all pages are loaded (including 0 posts), the loaded count is exact.
             nextPostsCount = liveLoadedCount;
+          } else if (typeof firestoreService.getUserPostsCount === 'function') {
+            const counted = await firestoreService.getUserPostsCount(userId, queryOpts).catch(() => null);
+            if (typeof counted === 'number' && Number.isFinite(counted)) {
+              nextPostsCount = Math.max(counted, liveLoadedCount);
+            } else if (liveLoadedCount > 0) {
+              nextPostsCount = liveLoadedCount;
+            }
           }
-        }
 
-        const loadedLikesTotal = livePosts.reduce((sum, p) => {
-          const likes = Number(p?.likes ?? p?.stats?.likes ?? p?.likesCount ?? 0);
-          return sum + (Number.isFinite(likes) && likes > 0 ? likes : 0);
-        }, 0);
-        let nextLikesCount = null;
-        if (result && result.hasMore === false) {
-          nextLikesCount = loadedLikesTotal;
-        } else if (typeof firestoreService.getUserTotalPostLikes === 'function') {
-          const aggregatedLikes = await firestoreService.getUserTotalPostLikes(userId, queryOpts).catch(() => null);
-          if (typeof aggregatedLikes === 'number' && Number.isFinite(aggregatedLikes)) {
-            nextLikesCount = Math.max(aggregatedLikes, loadedLikesTotal);
+          const loadedLikesTotal = livePosts.reduce((sum, p) => {
+            const likes = Number(p?.likes ?? p?.stats?.likes ?? p?.likesCount ?? 0);
+            return sum + (Number.isFinite(likes) && likes > 0 ? likes : 0);
+          }, 0);
+          let nextLikesCount = null;
+          if (result && result.hasMore === false) {
+            nextLikesCount = loadedLikesTotal;
+          } else if (typeof firestoreService.getUserTotalPostLikes === 'function') {
+            const aggregatedLikes = await firestoreService.getUserTotalPostLikes(userId, queryOpts).catch(() => null);
+            if (typeof aggregatedLikes === 'number' && Number.isFinite(aggregatedLikes)) {
+              nextLikesCount = Math.max(aggregatedLikes, loadedLikesTotal);
+            }
           }
-        }
-        
-        if (!get()._isLoadCurrent('posts', __seq)) return;
-        set((state) => {
-          state.posts = userPosts;
-          if (nextPostsCount !== null) {
-            state.postsCount = nextPostsCount;
-            if (state.profile && (state.profile.id === userId || state.profile.uid === userId)) {
-              const existingCount = Number(state.profile.postCount);
-              if (!result?.hasMore || !Number.isFinite(existingCount) || nextPostsCount > existingCount) {
-                state.profile.postCount = nextPostsCount;
+
+          if (!get()._isLoadCurrent('posts', __seq)) return;
+          set((state) => {
+            state.posts = userPosts;
+            if (nextPostsCount !== null) {
+              state.postsCount = nextPostsCount;
+              if (state.profile && (state.profile.id === userId || state.profile.uid === userId)) {
+                const existingCount = Number(state.profile.postCount);
+                if (!result?.hasMore || !Number.isFinite(existingCount) || nextPostsCount > existingCount) {
+                  state.profile.postCount = nextPostsCount;
+                }
               }
             }
-          }
-          if (typeof nextLikesCount === 'number' && Number.isFinite(nextLikesCount)) {
-            state.postsLikesCount = nextLikesCount;
-            if (state.profile && (state.profile.id === userId || state.profile.uid === userId)) {
-              state.profile.likesReceived = nextLikesCount;
+            if (typeof nextLikesCount === 'number' && Number.isFinite(nextLikesCount)) {
+              state.postsLikesCount = nextLikesCount;
+              if (state.profile && (state.profile.id === userId || state.profile.uid === userId)) {
+                state.profile.likesReceived = nextLikesCount;
+              }
             }
+            state.postsLoading = false;
+            state.postsHasMore = result.hasMore || false;
+            state.postsCursor = result.nextCursor || null;
+          });
+          syncActiveSwrCache(userId, {
+            posts: userPosts,
+            postsCount: nextPostsCount,
+            postsLikesCount: nextLikesCount,
+            postsHasMore: result?.hasMore || false,
+            postsCursor: result?.nextCursor || null,
+          });
+        } catch (error) {
+          console.error('❌ Load posts failed:', error);
+          if (!get()._isLoadCurrent('posts', __seq)) return;
+          set((state) => {
+            state.postsLoading = false;
+            state.postsError = error.message || 'Failed to load posts';
+          });
+        } finally {
+          if (_secondaryInflight.get(inflightKey) === task) {
+            _secondaryInflight.delete(inflightKey);
           }
-          state.postsLoading = false;
-          state.postsHasMore = result.hasMore || false;
-          state.postsCursor = result.nextCursor || null;
-        });
-        syncActiveSwrCache(userId, {
-          posts: userPosts,
-          postsCount: nextPostsCount,
-          postsLikesCount: nextLikesCount,
-          postsHasMore: result?.hasMore || false,
-          postsCursor: result?.nextCursor || null,
-        });
-      } catch (error) {
-        console.error('❌ Load posts failed:', error);
-        if (!get()._isLoadCurrent('posts', __seq)) return;
-        set((state) => {
-          state.postsLoading = false;
-          state.postsError = error.message || 'Failed to load posts';
-        });
-      }
+        }
+      })();
+
+      _secondaryInflight.set(inflightKey, task);
+      return task;
     },
     
     /**
@@ -935,31 +995,41 @@ export const useProfileStore = create(
      */
     loadHighlights: async (userId) => {
       if (!userId) return;
-      const __seq = get()._startLoad('highlights');      
+      const inflightKey = `highlights::${userId}`;
+      if (_secondaryInflight.has(inflightKey)) return _secondaryInflight.get(inflightKey);
+      const __seq = get()._startLoad('highlights');
       set((state) => {
         state.highlightsLoading = true;
+        state.highlightsError = null;
       });
-      
-      try {
-        const storyService = getStoryService();
-        const highlightsRes = await storyService.getHighlights(userId);
-        const highlights = Array.isArray(highlightsRes)
-          ? highlightsRes
-          : (Array.isArray(highlightsRes?.highlights) ? highlightsRes.highlights : []);
-        
-        if (!get()._isLoadCurrent('highlights', __seq)) return;
-        set((state) => {
-          state.highlights = highlights;
-          state.highlightsLoading = false;
-        });
-        syncActiveSwrCache(userId, { highlights });
-      } catch (error) {
-        console.error('❌ Load highlights failed:', error);
-        if (!get()._isLoadCurrent('highlights', __seq)) return;
-        set((state) => {
-          state.highlightsLoading = false;
-        });
-      }
+
+      const task = (async () => {
+        try {
+          const storyService = getStoryService();
+          const highlightsRes = await withStoreTimeout(storyService.getHighlights(userId), 6000, 'highlights');
+          const highlights = Array.isArray(highlightsRes)
+            ? highlightsRes
+            : (Array.isArray(highlightsRes?.highlights) ? highlightsRes.highlights : []);
+
+          if (!get()._isLoadCurrent('highlights', __seq)) return;
+          set((state) => {
+            state.highlights = highlights;
+            state.highlightsLoading = false;
+          });
+          syncActiveSwrCache(userId, { highlights });
+        } catch (error) {
+          console.error('❌ Load highlights failed:', error);
+          if (!get()._isLoadCurrent('highlights', __seq)) return;
+          set((state) => {
+            state.highlightsLoading = false;
+            state.highlightsError = error.message || 'Failed to load highlights';
+          });
+        } finally {
+          if (_secondaryInflight.get(inflightKey) === task) _secondaryInflight.delete(inflightKey);
+        }
+      })();
+      _secondaryInflight.set(inflightKey, task);
+      return task;
     },
 
     /**
@@ -968,26 +1038,36 @@ export const useProfileStore = create(
      */
     loadSavedPosts: async (userId) => {
       if (!userId) return;
+      const inflightKey = `saved::${userId}`;
+      if (_secondaryInflight.has(inflightKey)) return _secondaryInflight.get(inflightKey);
       const __seq = get()._startLoad('saved');
       set((state) => {
         state.savedLoading = true;
+        state.savedError = null;
       });
-      try {
-        const { getFirestoreService } = await import('../services/firestoreService.js');
-        const res = await getFirestoreService().getSavedPosts(userId);
-        const posts = Array.isArray(res) ? res : res?.posts || [];
-        if (!get()._isLoadCurrent('saved', __seq)) return;
-        set((state) => {
-          state.savedPosts = posts;
-          state.savedLoading = false;
-        });
-      } catch (error) {
-        console.error('❌ Load saved posts failed:', error);
-        if (!get()._isLoadCurrent('saved', __seq)) return;
-        set((state) => {
-          state.savedLoading = false;
-        });
-      }
+      const task = (async () => {
+        try {
+          const { getFirestoreService } = await import('../services/firestoreService.js');
+          const res = await withStoreTimeout(getFirestoreService().getSavedPosts(userId), 6000, 'saved posts');
+          const posts = Array.isArray(res) ? res : res?.posts || [];
+          if (!get()._isLoadCurrent('saved', __seq)) return;
+          set((state) => {
+            state.savedPosts = posts;
+            state.savedLoading = false;
+          });
+        } catch (error) {
+          console.error('❌ Load saved posts failed:', error);
+          if (!get()._isLoadCurrent('saved', __seq)) return;
+          set((state) => {
+            state.savedLoading = false;
+            state.savedError = error.message || 'Failed to load saved posts';
+          });
+        } finally {
+          if (_secondaryInflight.get(inflightKey) === task) _secondaryInflight.delete(inflightKey);
+        }
+      })();
+      _secondaryInflight.set(inflightKey, task);
+      return task;
     },
 
     /**
@@ -1022,47 +1102,61 @@ export const useProfileStore = create(
      */
     loadStories: async (userId) => {
       if (!userId) return;
-      const __seq = get()._startLoad('stories');      
+      const inflightKey = `stories::${userId}`;
+      if (_secondaryInflight.has(inflightKey)) return _secondaryInflight.get(inflightKey);
+      const __seq = get()._startLoad('stories');
       set((state) => {
         state.storiesLoading = true;
+        state.storiesError = null;
       });
-      
-      try {
-        const storyService = getStoryService();
-        const storiesRes = typeof storyService.getUserStories === 'function'
-          ? await storyService.getUserStories(userId)
-          : await storyService.getStoriesFeed(userId, {});
 
-        const rawList = Array.isArray(storiesRes)
-          ? storiesRes
-          : Array.isArray(storiesRes?.stories)
-            ? storiesRes.stories
-            : Array.isArray(storiesRes?.groups)
-              ? storiesRes.groups.flatMap((g) => (Array.isArray(g?.stories) ? g.stories : [g]))
-              : [];
+      const task = (async () => {
+        try {
+          const storyService = getStoryService();
+          const storiesRes = await withStoreTimeout(
+            typeof storyService.getUserStories === 'function'
+              ? storyService.getUserStories(userId)
+              : storyService.getStoriesFeed(userId, {}),
+            6000,
+            'stories'
+          );
 
-        const userStories = rawList.filter(
-          (s) => s && (
-            s.userId === userId ||
-            s.authorId === userId ||
-            s.ownerId === userId ||
-            s.uid === userId
-          )
-        );
+          const rawList = Array.isArray(storiesRes)
+            ? storiesRes
+            : Array.isArray(storiesRes?.stories)
+              ? storiesRes.stories
+              : Array.isArray(storiesRes?.groups)
+                ? storiesRes.groups.flatMap((g) => (Array.isArray(g?.stories) ? g.stories : [g]))
+                : [];
 
-        if (!get()._isLoadCurrent('stories', __seq)) return;
-        set((state) => {
-          state.stories = userStories;
-          state.storiesLoading = false;
-        });
-        syncActiveSwrCache(userId, { stories: userStories });
-      } catch (error) {
-        console.error('❌ Load stories failed:', error);
-        if (!get()._isLoadCurrent('stories', __seq)) return;
-        set((state) => {
-          state.storiesLoading = false;
-        });
-      }
+          const userStories = rawList.filter(
+            (s) => s && (
+              s.userId === userId ||
+              s.authorId === userId ||
+              s.ownerId === userId ||
+              s.uid === userId
+            )
+          );
+
+          if (!get()._isLoadCurrent('stories', __seq)) return;
+          set((state) => {
+            state.stories = userStories;
+            state.storiesLoading = false;
+          });
+          syncActiveSwrCache(userId, { stories: userStories });
+        } catch (error) {
+          console.error('❌ Load stories failed:', error);
+          if (!get()._isLoadCurrent('stories', __seq)) return;
+          set((state) => {
+            state.storiesLoading = false;
+            state.storiesError = error.message || 'Failed to load stories';
+          });
+        } finally {
+          if (_secondaryInflight.get(inflightKey) === task) _secondaryInflight.delete(inflightKey);
+        }
+      })();
+      _secondaryInflight.set(inflightKey, task);
+      return task;
     },
     
     /**

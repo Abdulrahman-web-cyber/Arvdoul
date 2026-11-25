@@ -8,6 +8,94 @@ import {
   uploadAudioCoverIfNeeded,
 } from './postMediaPipeline.js';
 
+function buildControlMetadata(current = {}) {
+  const commercial = current.commercialSettings || {};
+  const safety = current.safetyAccessibility || {};
+  const engagement = current.engagementControls || {};
+  const lifecycle = current.lifecycleSettings || {};
+  const disclosureType = commercial.disclosureType || 'none';
+
+  return {
+    identityMeta: {
+      publishAs: current.identityMeta?.publishAs || 'personal',
+      collaborators: Array.isArray(current.identityMeta?.collaborators)
+        ? current.identityMeta.collaborators.slice(0, 10)
+        : [],
+      communityDestinationId: current.identityMeta?.communityDestinationId || null,
+    },
+    distributionSettings: {
+      allowDiscovery: current.distributionSettings?.allowDiscovery !== false,
+      allowReposts: current.distributionSettings?.allowReposts !== false,
+      allowRemixes: current.distributionSettings?.allowRemixes !== false,
+      allowDownloads: current.distributionSettings?.allowDownloads !== false,
+      category: String(current.distributionSettings?.category || 'general').slice(0, 60),
+      mentions: Array.isArray(current.distributionSettings?.mentions)
+        ? current.distributionSettings.mentions.slice(0, 20)
+        : [],
+    },
+    engagementControls: {
+      enableComments: engagement.commentMode === 'off' ? false : engagement.enableComments !== false,
+      commentMode: engagement.commentMode || 'everyone',
+      enableReactions: engagement.enableReactions !== false,
+      enableGifts: engagement.enableGifts !== false,
+      enableSaves: engagement.enableSaves !== false,
+      enableShares: engagement.enableShares !== false,
+    },
+    commercialDisclosure: {
+      type: disclosureType,
+      isPromotional: disclosureType !== 'none',
+      isPaidPartnership: disclosureType === 'paid_partnership',
+      isSponsoredAd: disclosureType === 'sponsored_ad',
+      affiliateLinkId: commercial.affiliateLinkId || null,
+      affiliateUrl: String(commercial.affiliateUrl || '').slice(0, 500),
+      affiliateLabel: String(commercial.affiliateLabel || '').slice(0, 120),
+      promoCode: String(commercial.promoCode || '').slice(0, 40),
+      productTag: String(commercial.productTag || '').slice(0, 120),
+      ctaLabel: String(commercial.ctaLabel || 'Learn More').slice(0, 40),
+      ctaUrl: String(commercial.ctaUrl || '').slice(0, 500),
+      regionalStandard: safety.regionalStandard || 'global',
+    },
+    partnership:
+      disclosureType === 'paid_partnership' || commercial.brandPartnerId || commercial.brandPartnerName
+        ? {
+            brandPartnerId: commercial.brandPartnerId || null,
+            brandPartnerName: String(commercial.brandPartnerName || '').slice(0, 120),
+            brandPartnerHandle: String(commercial.brandPartnerHandle || '').slice(0, 60),
+            partnershipId: commercial.partnershipId || null,
+            adAuthorizationId: commercial.adAuthorizationId || null,
+            adAuthorizationCode: commercial.adAuthorizationCode || '',
+            allowPartnerPromotion: Boolean(commercial.allowPartnerPromotion),
+          }
+        : null,
+    creatorPrograms: {
+      enableGiftsForPost: current.creatorPrograms?.enableGiftsForPost !== false,
+      enableAdRevenueShare: Boolean(current.creatorPrograms?.enableAdRevenueShare),
+      enableAffiliateTracking: Boolean(current.creatorPrograms?.enableAffiliateTracking),
+      enableSponsorshipAttribution: Boolean(current.creatorPrograms?.enableSponsorshipAttribution),
+    },
+    safetyAccessibility: {
+      contentWarning: String(safety.contentWarning || '').slice(0, 200),
+      isSensitiveMedia: Boolean(safety.isSensitiveMedia),
+      ageRating: safety.ageRating || 'all',
+      regionalStandard: safety.regionalStandard || 'global',
+      copyrightConfirmed: safety.copyrightConfirmed !== false,
+      captionsText: String(safety.captionsText || '').slice(0, 2000),
+      transcriptText: String(safety.transcriptText || '').slice(0, 4000),
+      language: String(safety.language || 'en').slice(0, 12),
+      allowAutoTranslation: safety.allowAutoTranslation !== false,
+    },
+    lifecycleSettings: {
+      timezone: String(lifecycle.timezone || 'UTC').slice(0, 80),
+      expiresAt: lifecycle.expiresAt || null,
+      notifyFollowers: lifecycle.notifyFollowers !== false,
+      priorityAlert: Boolean(lifecycle.priorityAlert),
+    },
+    enableComments: engagement.commentMode === 'off' ? false : engagement.enableComments !== false,
+    enableGifts: engagement.enableGifts !== false && current.creatorPrograms?.enableGiftsForPost !== false,
+    expiresAt: lifecycle.expiresAt || null,
+  };
+}
+
 export function extractMergedHashtags(text, explicitHashtags = []) {
   const fromText =
     typeof text === 'string'
@@ -178,6 +266,7 @@ export async function executePostPublish({
           })
         : '';
 
+    const controlMeta = buildControlMetadata(current);
     const updatePayload = {
       type: effectiveType,
       content: effectiveText,
@@ -190,6 +279,7 @@ export async function executePostPublish({
       hashtags: extractMergedHashtags(effectiveText, current.hashtags),
       location: current.location || null,
       scheduledTime: current.scheduledTime || null,
+      ...controlMeta,
     };
 
     if (effectiveType === 'poll') {
@@ -336,6 +426,7 @@ export async function executePostPublish({
 
       if (uploadRes?.postId || uploadRes?.videoId) {
         const canonicalId = uploadRes.postId || uploadRes.videoId;
+        const controlMeta = buildControlMetadata(current);
         result = { postId: canonicalId };
         finalPostData = {
           id: canonicalId,
@@ -361,6 +452,7 @@ export async function executePostPublish({
           location: current.location || null,
           hashtags: mergedTags,
           scheduledTime: null,
+          ...controlMeta,
           video: {
             url: '',
             duration: sparkDuration || 0,
@@ -411,6 +503,7 @@ export async function executePostPublish({
           ? current.typeData.video.url
           : '');
 
+      const controlMeta = buildControlMetadata(current);
       finalPostData = {
         id: clientPostId,
         clientPostId,
@@ -433,6 +526,7 @@ export async function executePostPublish({
         location: current.location || null,
         hashtags: extractMergedHashtags(effectiveText, current.hashtags),
         scheduledTime: current.scheduledTime || null,
+        ...controlMeta,
         poll:
           effectiveType === 'poll'
             ? {
@@ -555,12 +649,93 @@ export async function executePostPublish({
       console.warn('[postPublishPipeline] Feed cache clear failed:', e?.message);
     }
 
+    let adAuthorizationCode = current.commercialSettings?.adAuthorizationCode || '';
+    if (
+      current.commercialSettings?.allowPartnerPromotion &&
+      current.commercialSettings?.brandPartnerId &&
+      !adAuthorizationCode &&
+      result?.postId
+    ) {
+      try {
+        const { default: collaborationService } = await import('../../services/collaborationService.js');
+        const authRes = await collaborationService.grantAdAuthorization({
+          postId: result.postId,
+          partnerId: current.commercialSettings.brandPartnerId,
+          partnerName: current.commercialSettings.brandPartnerName || 'Brand Partner',
+          expiresInDays: 30,
+        });
+        if (authRes?.authCode) adAuthorizationCode = authRes.authCode;
+      } catch (authErr) {
+        console.warn('[postPublishPipeline] Post-publish ad authorization grant failed:', authErr?.message);
+      }
+    }
+
+    let linkedCampaignId = null;
+    let promotionError = null;
+    if (current.promotionIntent?.enabled && !isScheduled && result?.postId) {
+      try {
+        const { default: advertisingService } = await import('../../services/advertisingService.js');
+        const promo = current.promotionIntent;
+        const kindMap = {
+          boost_post: 'post',
+          promote_profile: 'profile',
+          promote_website: 'website',
+          promote_product: 'product',
+          promote_event: 'event',
+          promote_spark_video: 'spark_video',
+        };
+        const placementMap = {
+          home_feed: 'home',
+          sparks_feed: 'sparks',
+          search_discovery: 'search',
+          community_feed: 'explore',
+          stories_vibes: 'explore',
+        };
+        const resolvedKind =
+          kindMap[promo.promotionKind] ||
+          promo.promotionKind ||
+          (effectiveType === 'video' ? 'spark_video' : 'post');
+        const resolvedPlacements = Array.isArray(promo.placements) && promo.placements.length
+          ? promo.placements.map((p) => placementMap[p] || p)
+          : ['home'];
+
+        const campaignRes = await advertisingService.createAdCampaign({
+          title: `${(effectiveText || 'Post Promotion').slice(0, 48)} Campaign`,
+          promotionKind: resolvedKind,
+          objective: promo.objective || 'reach',
+          sourcePostId: result.postId,
+          placements: resolvedPlacements,
+          targeting: {
+            locations: promo.targetLocations || [],
+            interests: promo.targetInterests || [],
+            ageMin: Number(promo.targetAgeMin || 18),
+          },
+          budgetType: 'daily',
+          budgetCents: Math.max(100, Number(promo.dailyBudgetCents || 1000)),
+          currency: promo.currency || 'USD',
+          durationDays: Number(promo.durationDays || 7),
+          adAuthorizationCode,
+          destinationUrl: current.commercialSettings?.ctaUrl || current.commercialSettings?.affiliateUrl || '',
+          ctaLabel: current.commercialSettings?.ctaLabel || 'Learn More',
+          disclosureType: current.commercialSettings?.disclosureType || 'sponsored_ad',
+          complianceNotes: promo.complianceNotes || '',
+          submitForReview: Boolean(promo.submitForReview),
+        });
+        linkedCampaignId = campaignRes?.campaignId || null;
+      } catch (promoErr) {
+        console.warn('[postPublishPipeline] Linked campaign draft creation failed:', promoErr?.message);
+        promotionError = promoErr?.message || 'Could not create promotion campaign';
+      }
+    }
+
     return {
       status: isScheduled ? 'scheduled' : 'published',
       postId: result.postId,
       post: confirmedPost,
       isScheduled,
       communityId,
+      linkedCampaignId,
+      promotionError,
     };
   } catch (err) {
     // On transient network failure during live interactive publish, queue cleanly

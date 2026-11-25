@@ -534,6 +534,38 @@ export function PostPreview() {
         </a>
       )}
 
+      {state.commercialSettings?.disclosureType && state.commercialSettings.disclosureType !== 'none' && (
+        <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300">
+            <Icons.Megaphone className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span>
+              {state.commercialSettings.disclosureType === 'own_promotion' && 'Promotional content'}
+              {state.commercialSettings.disclosureType === 'paid_partnership' &&
+                `Paid partnership${state.commercialSettings.brandPartnerName ? ` with ${state.commercialSettings.brandPartnerName}` : ''}`}
+              {state.commercialSettings.disclosureType === 'sponsored_ad' && 'Sponsored'}
+            </span>
+          </div>
+          {state.commercialSettings.promoCode && (
+            <span className="font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+              Code: {state.commercialSettings.promoCode}
+            </span>
+          )}
+        </div>
+      )}
+
+      {(state.commercialSettings?.affiliateUrl || state.commercialSettings?.productTag) && (
+        <div className="p-2.5 rounded-xl bg-slate-100/75 dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/10 flex items-center justify-between gap-2 text-xs">
+          <span className="text-slate-700 dark:text-slate-200 truncate">
+            {state.commercialSettings.productTag || state.commercialSettings.affiliateLabel || 'Featured product or link'}
+          </span>
+          {state.commercialSettings.affiliateUrl && (
+            <span className="text-arvdoul-purple font-semibold shrink-0">
+              {state.commercialSettings.ctaLabel || 'Learn More'}
+            </span>
+          )}
+        </div>
+      )}
+
       {state.hashtags?.length > 0 && (
         <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap gap-x-2 gap-y-1">
           {state.hashtags.map((tag) => (

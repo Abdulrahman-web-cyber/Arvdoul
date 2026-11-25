@@ -674,7 +674,12 @@ service cloud.firestore {
         request.resource.data.get('muxUploadId', null) == null &&
         request.resource.data.get('mediaAssetId', null) == null &&
         request.resource.data.get('rankingScore', 0) == 0 &&
-        request.resource.data.get('viralScore', 0) == 0;
+        request.resource.data.get('viralScore', 0) == 0 &&
+        request.resource.data.get('adReviewStatus', null) == null &&
+        request.resource.data.get('paidStats', null) == null &&
+        request.resource.data.get('sponsoredMetrics', null) == null &&
+        request.resource.data.get('adAttribution', null) == null &&
+        request.resource.data.get('monetizationLedgerRef', null) == null;
       allow update: if isAdmin() || (isSignedIn() && (
         (
           (request.auth.uid == resource.data.authorId &&
@@ -683,6 +688,7 @@ service cloud.firestore {
               'muxAssetId', 'muxPlaybackId', 'muxUploadId', 'mediaAssetId',
               'processingState', 'playbackPolicy', 'audioFingerprint',
               'audioFingerprintStatus', 'viralScore', 'rankingScore', 'videoStats',
+              'adReviewStatus', 'paidStats', 'sponsoredMetrics', 'adAttribution', 'monetizationLedgerRef',
               'poll', 'gifts', 'boostData'
             ])) ||
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -1607,6 +1613,67 @@ service cloud.firestore {
       allow read: if isSignedIn() && resource.data.userId == uid();
       allow write: if false;
     }
+    // ==================== ADVERTISING CENTER & MONETIZATION LEDGERS ====================
+    // Strictly server-authoritative financial, delivery, and review records.
+    // All mutations go through functions/advertising.js, functions/analytics.js,
+    // and functions/monetization.js callables.
+    match /ad_accounts/{accountId} {
+      allow read: if isSignedIn() && (resource.data.ownerId == uid() || accountId == uid() || isAdmin());
+      allow write: if false;
+    }
+    match /ad_campaigns/{campaignId} {
+      allow read: if isSignedIn() && (
+        resource.data.advertiserId == uid() ||
+        resource.data.partnerCreatorId == uid() ||
+        isAdmin() ||
+        (resource.data.status == 'active' && resource.data.reviewStatus == 'approved')
+      );
+      allow write: if false;
+    }
+    match /ad_creatives/{creativeId} {
+      allow read: if isSignedIn() && (
+        resource.data.advertiserId == uid() ||
+        isAdmin() ||
+        resource.data.status == 'active'
+      );
+      allow write: if false;
+    }
+    match /ad_billing_ledger/{entryId} {
+      allow read: if isSignedIn() && (resource.data.advertiserId == uid() || isAdmin());
+      allow write: if false;
+    }
+    match /ad_daily_metrics/{metricId} {
+      allow read: if isSignedIn() && (
+        resource.data.advertiserId == uid() ||
+        resource.data.partnerCreatorId == uid() ||
+        isAdmin()
+      );
+      allow write: if false;
+    }
+    match /ad_conversions/{conversionId} {
+      allow read: if isSignedIn() && (resource.data.advertiserId == uid() || isAdmin());
+      allow write: if false;
+    }
+    match /ad_reviews/{reviewId} {
+      allow read: if isSignedIn() && (resource.data.advertiserId == uid() || isAdmin());
+      allow write: if false;
+    }
+    match /ad_disputes/{disputeId} {
+      allow read: if isSignedIn() && (resource.data.advertiserId == uid() || isAdmin());
+      allow write: if false;
+    }
+    match /creator_earnings_ledger/{entryId} {
+      allow read: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
+      allow write: if false;
+    }
+    match /affiliate_links/{linkId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+    match /promo_codes/{codeId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
     match /idempotency_ledger/{key} {
       allow read, write: if false; // server-only
     }
@@ -1837,6 +1904,23 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         resource.data.invitedBy == uid() ||
         (resource.data.email != null && resource.data.email == request.auth.token.get('email', null))
+      );
+      allow write: if false;
+    }
+    // Revocable expiring ad authorizations & brand sponsorships (server-write-only).
+    match /ad_authorizations/{authId} {
+      allow read: if isSignedIn() && (
+        resource.data.creatorId == uid() ||
+        resource.data.partnerId == uid() ||
+        isAdmin()
+      );
+      allow write: if false;
+    }
+    match /brand_partnerships/{partnershipId} {
+      allow read: if isSignedIn() && (
+        resource.data.creatorId == uid() ||
+        resource.data.brandId == uid() ||
+        isAdmin()
       );
       allow write: if false;
     }

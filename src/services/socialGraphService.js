@@ -209,7 +209,15 @@ class SocialGraphService {
       // Keep the cap inline in the `query(...)` argument list: the Firebase cost
       // analyzer reads the call site textually, so a hoisted limit reads as an
       // unbounded collection read.
-      const snap = await getDocs(query(...constraints, fLimit(chunk.length)));
+      let timerId;
+      const snap = await Promise.race([
+        getDocs(query(...constraints, fLimit(chunk.length))),
+        new Promise((_, reject) => {
+          timerId = setTimeout(() => reject(new Error(`SocialGraph query timeout (${collectionName})`)), 4500);
+        }),
+      ]).finally(() => {
+        if (timerId) clearTimeout(timerId);
+      });
       snap.forEach((d) => {
         const data = d.data() || {};
         const other = data[otherField];
@@ -235,50 +243,60 @@ class SocialGraphService {
     const cached = this._readCache(this.edgeCache, cacheKey, EDGE_CACHE_TTL_MS);
     if (cached) return cached;
 
-    try {
-      await this._ensureInitialized();
-      const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut, pendingOut] = await Promise.all([
-        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.follow.out),
-        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.follow.in),
-        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.out),
-        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.in),
-        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.mute.out),
-        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.restrict.out),
-        // A follow against a private target files `follow_requests/{from}_{to}`
-        // with `status: 'pending'` and no follow edge; the capability engine
-        // needs that state to render Requested rather than an open Follow.
-        this._actorScopedIds(viewerId, [targetId], {
-          collection: 'follow_requests',
-          actorField: 'fromUserId',
-          otherField: 'toUserId',
-          equals: { status: 'pending' },
-        }),
-      ]);
-      const isFollowing = followOut.has(`${viewerId}_${targetId}`);
-      const isFollower = followIn.has(`${viewerId}_${targetId}`);
-      const isBlocking = blockOut.has(`${viewerId}_${targetId}`);
-      const isBlockedBy = blockIn.has(`${viewerId}_${targetId}`);
-      const edge = {
-        uid: targetId,
-        isFollowing,
-        isFollower,
-        isMutualFriend: isFollowing && isFollower,
-        isBlocking,
-        isBlockedBy,
-        isBlocked: isBlocking || isBlockedBy,
-        isMuted: muteOut.has(`${viewerId}_${targetId}`),
-        isRestricted: restrictOut.has(`${viewerId}_${targetId}`),
-        requestStatus: pendingOut.has(`${viewerId}_${targetId}`) ? 'pending' : null,
-      };
-      this._writeCache(this.edgeCache, cacheKey, edge);
-      return edge;
-    } catch (err) {
-      // Relationship state includes blocks/mutes/restricts. Returning an empty
-      // edge on a failed read would turn a permission/network failure into an
-      // authorization bypass. Let callers fail closed instead.
-      logger.warn('[SocialGraph] relationship read failed', { viewerId, targetId, error: err?.message });
-      throw err;
-    }
+    const existingInflight = this.inflight.get(cacheKey);
+    if (existingInflight) return existingInflight;
+
+    const req = (async () => {
+      try {
+        await this._ensureInitialized();
+        const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut, pendingOut] = await Promise.all([
+          this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.follow.out),
+          this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.follow.in),
+          this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.out),
+          this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.in),
+          this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.mute.out),
+          this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.restrict.out),
+          // A follow against a private target files `follow_requests/{from}_{to}`
+          // with `status: 'pending'` and no follow edge; the capability engine
+          // needs that state to render Requested rather than an open Follow.
+          this._actorScopedIds(viewerId, [targetId], {
+            collection: 'follow_requests',
+            actorField: 'fromUserId',
+            otherField: 'toUserId',
+            equals: { status: 'pending' },
+          }),
+        ]);
+        const isFollowing = followOut.has(`${viewerId}_${targetId}`);
+        const isFollower = followIn.has(`${viewerId}_${targetId}`);
+        const isBlocking = blockOut.has(`${viewerId}_${targetId}`);
+        const isBlockedBy = blockIn.has(`${viewerId}_${targetId}`);
+        const edge = {
+          uid: targetId,
+          isFollowing,
+          isFollower,
+          isMutualFriend: isFollowing && isFollower,
+          isBlocking,
+          isBlockedBy,
+          isBlocked: isBlocking || isBlockedBy,
+          isMuted: muteOut.has(`${viewerId}_${targetId}`),
+          isRestricted: restrictOut.has(`${viewerId}_${targetId}`),
+          requestStatus: pendingOut.has(`${viewerId}_${targetId}`) ? 'pending' : null,
+        };
+        this._writeCache(this.edgeCache, cacheKey, edge);
+        return edge;
+      } catch (err) {
+        // Relationship state includes blocks/mutes/restricts. Returning an empty
+        // edge on a failed read would turn a permission/network failure into an
+        // authorization bypass. Let callers fail closed instead.
+        logger.warn('[SocialGraph] relationship read failed', { viewerId, targetId, error: err?.message });
+        throw err;
+      } finally {
+        this.inflight.delete(cacheKey);
+      }
+    })();
+
+    this.inflight.set(cacheKey, req);
+    return req;
   }
 
   /**

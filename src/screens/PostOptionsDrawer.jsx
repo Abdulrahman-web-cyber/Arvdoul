@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef, useMemo, useReducer } from "r
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { X, Trash2, Flag, Ban, Edit, Zap, BarChart2, Share2, Copy, Bookmark, AlertCircle, VolumeX, Pin, Archive, MessageSquareOff, Download, Coins, Gift, UserPlus, UserMinus, Loader2, CheckCircle, Sparkles, Users, Shield, ChevronDown, ChevronUp, BookmarkCheck, EyeOff, ThumbsDown } from "lucide-react";
+import { X, Trash2, Flag, Ban, Edit, Zap, BarChart2, Share2, Copy, Bookmark, AlertCircle, VolumeX, Pin, Archive, MessageSquareOff, Download, Coins, Gift, UserPlus, UserMinus, Loader2, CheckCircle, Sparkles, Users, Shield, ChevronDown, ChevronUp, BookmarkCheck, EyeOff, ThumbsDown, TrendingUp, Handshake } from "lucide-react";
 import { VIRTUAL_GIFTS } from '../data/videoData';
 import { GIFT_VALUES, BOOST_DAILY_RATE_COINS } from '../shared/levelConfig.cjs';
 import firestoreService from '../services/firestoreService.js';
@@ -793,13 +793,27 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     ...(hasMedia && currentUser ? [{ id: 'download', icon: Download, label: 'Download', onClick: handleDownload, secondary: true }] : []),
   ], [isAuthor, hasMedia, currentUser, handleDownload, openModal]);
 
+  const handleOpenAdsCenter = requireAuth(() => {
+    if (!isAuthor) { toast.error('Only author'); return; }
+    navigate(`/ads/create?postId=${encodeURIComponent(post.id)}`);
+    onClose();
+  });
+
+  const handleOpenPartnershipAuth = requireAuth(() => {
+    if (!isAuthor) { toast.error('Only author'); return; }
+    navigate(`/collaboration?tab=partnerships&postId=${encodeURIComponent(post.id)}`);
+    onClose();
+  });
+
   const creatorRow = useMemo(() => isAuthor ? [
     { id: 'edit', icon: Edit, label: 'Edit', onClick: handleEdit, secondary: true },
     { id: 'pin', icon: Pin, label: uiState.pinned ? 'Unpin' : 'Pin', onClick: handlePinToggle, disabled: uiState.pinning, secondary: true },
     { id: 'archive', icon: Archive, label: uiState.archived ? 'Restore' : 'Archive', onClick: handleArchiveToggle, disabled: uiState.archiving, secondary: true },
     { id: 'comments', icon: MessageSquareOff, label: uiState.commentsEnabled ? 'Off comments' : 'On comments', onClick: handleCommentsToggle, disabled: uiState.commentsToggling, secondary: true },
     { id: 'analytics', icon: BarChart2, label: 'Analytics', onClick: handleAnalytics, secondary: true },
-  ] : [], [isAuthor, uiState.pinned, uiState.pinning, uiState.archived, uiState.archiving, uiState.commentsEnabled, uiState.commentsToggling, handleEdit, handlePinToggle, handleArchiveToggle, handleCommentsToggle, handleAnalytics]);
+    { id: 'promote_ads', icon: TrendingUp, label: 'Ads Center', onClick: handleOpenAdsCenter, secondary: true },
+    { id: 'brand_collab', icon: Handshake, label: 'Brand Auth', onClick: handleOpenPartnershipAuth, secondary: true },
+  ] : [], [isAuthor, uiState.pinned, uiState.pinning, uiState.archived, uiState.archiving, uiState.commentsEnabled, uiState.commentsToggling, handleEdit, handlePinToggle, handleArchiveToggle, handleCommentsToggle, handleAnalytics, handleOpenAdsCenter, handleOpenPartnershipAuth]);
 
   const safetyActions = useMemo(() => {
     const actions = [];

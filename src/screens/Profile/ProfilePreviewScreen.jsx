@@ -92,11 +92,27 @@ export default function ProfilePreviewScreen({
     || authUser
     || null;
 
+  const loadPosts = useProfileStore((state) => state.loadPosts);
+  const loadHighlights = useProfileStore((state) => state.loadHighlights);
+  const loadStories = useProfileStore((state) => state.loadStories);
+
   useEffect(() => {
-    if (!rawProfile && currentUserId) {
+    if (!currentUserId) return;
+    const snap = useProfileStore.getState();
+    const matchesOwner = snap.profile && (snap.profile.uid === currentUserId || snap.profile.id === currentUserId);
+    if (!rawProfile || !matchesOwner) {
       loadProfile(currentUserId, currentUserId);
     }
-  }, [rawProfile, currentUserId, loadProfile]);
+    if (!matchesOwner || (!snap.posts?.length && !snap.postsLoading && snap.postsCount === null)) {
+      loadPosts(currentUserId, { limit: 12 });
+    }
+    if (!matchesOwner || (!snap.highlights?.length && !snap.highlightsLoading)) {
+      loadHighlights(currentUserId);
+    }
+    if (!matchesOwner || (!snap.stories?.length && !snap.storiesLoading)) {
+      loadStories(currentUserId);
+    }
+  }, [rawProfile, currentUserId, loadProfile, loadPosts, loadHighlights, loadStories]);
 
   const effectiveProfile = useMemo(() => {
     if (!rawProfile && !currentUserId) return null;

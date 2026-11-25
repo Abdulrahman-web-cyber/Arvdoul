@@ -235,6 +235,39 @@ export default function WalletScreen() {
           </button>
         </div>
 
+        {/* 3-Ledger Architecture Strip */}
+        <nav aria-label="Financial Ledgers" className="grid grid-cols-3 gap-2">
+          <div className={cn(
+            'p-3 rounded-2xl border text-left',
+            isDark ? 'bg-purple-500/15 border-purple-500/40' : 'bg-purple-50 border-purple-300'
+          )}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-500 block">Active Ledger</span>
+            <span className="text-xs font-bold text-slate-900 dark:text-white block truncate mt-0.5">Virtual Coins</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/creator-payout')}
+            className={cn(
+              'p-3 rounded-2xl border text-left transition-colors cursor-pointer',
+              isDark ? 'bg-[#080F2E] border-white/[0.08] hover:border-purple-500/40' : 'bg-white border-slate-200 hover:border-purple-300'
+            )}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Ledger 2</span>
+            <span className="text-xs font-bold text-slate-900 dark:text-white block truncate mt-0.5">Creator Earnings</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/ads/billing')}
+            className={cn(
+              'p-3 rounded-2xl border text-left transition-colors cursor-pointer',
+              isDark ? 'bg-[#080F2E] border-white/[0.08] hover:border-purple-500/40' : 'bg-white border-slate-200 hover:border-purple-300'
+            )}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Ledger 3</span>
+            <span className="text-xs font-bold text-slate-900 dark:text-white block truncate mt-0.5">Ad Spend &amp; Billing</span>
+          </button>
+        </nav>
+
         {/* Sovereign Balance Card */}
         <section
           aria-labelledby="balance-heading"

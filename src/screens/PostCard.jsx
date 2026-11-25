@@ -13,11 +13,13 @@ import { trackAnalyticsEvent } from '../services/analyticsService';
 import commentService from '../services/commentService';
 import * as userService from '../services/userService';
 import * as monetizationService from '../services/monetizationService';
+import advertisingService from '../services/advertisingService';
+import creatorEarningsService from '../services/creatorEarningsService';
 import notificationService from '../services/notificationsService';
 import { triggerHaptic } from '../utils/haptics';
 import { formatDistanceToNow } from 'date-fns';
 import { resolveActorName } from '../services/profileReadModel.js';
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, BarChart3, Coins, Send, AlertTriangle, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink } from "lucide-react";
+import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, BarChart3, Coins, Send, AlertTriangle, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink, Handshake, Tag } from "lucide-react";
 import { FaHeart, FaWhatsapp, FaTelegram, FaTwitter, FaFacebook, FaInstagram } from 'react-icons/fa6';
 
 // Sub‑cards
@@ -526,17 +528,35 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   // that is not identified as sponsored must never render a sponsored label
   // (FTC-style ad disclosure depends on it), so cover all three signals.
   const isAd = post.type === 'ad' || post.isAd === true;
-  const isSponsored = post.isSponsored === true || post.adCampaignId !== undefined || isAd;
+  const activeCampaignId = post.campaignId || post.adCampaignId || null;
+  const commercialDisclosure = post.commercialDisclosure || null;
+  const hasCommercialDisclosure = Boolean(
+    commercialDisclosure?.disclosureType && commercialDisclosure.disclosureType !== 'none'
+  );
+  const isSponsored = post.isSponsored === true || post.adCampaignId !== undefined || isAd || hasCommercialDisclosure;
   const [adDetails, setAdDetails] = useState(null);
   useEffect(() => {
-    if (isSponsored && post.adCampaignId && monetizationService.getAd) {
+    if (isSponsored && post.adCampaignId && !post.campaignId && monetizationService.getAd) {
       monetizationService.getAd('feed', currentUser?.uid, { adId: post.adCampaignId })
         .then(ad => setAdDetails(ad))
         .catch((e) => {
           console.warn('Sponsored post ad detail read failed', e?.message);
         });
     }
-  }, [isSponsored, post.adCampaignId, currentUser?.uid]);
+  }, [isSponsored, post.adCampaignId, post.campaignId, currentUser?.uid]);
+
+  const adImpressionRecordedRef = useRef(false);
+  useEffect(() => {
+    if (!isVisible || !isAd || !activeCampaignId || !currentUser?.uid || adImpressionRecordedRef.current) return;
+    adImpressionRecordedRef.current = true;
+    advertisingService.recordAdDeliveryEvent({
+      campaignId: activeCampaignId,
+      eventType: 'impression',
+      placement: 'home',
+    }).catch((e) => {
+      console.warn('Ad impression delivery recording failed', e?.message);
+    });
+  }, [isVisible, isAd, activeCampaignId, currentUser?.uid]);
 
   // Memoized post data
   // Author standing (verified / creator / premium) lives on the author's
@@ -1162,20 +1182,92 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         </div>
       </div>
 
+      {/* COMMERCIAL DISCLOSURE & PARTNER TAG */}
+      {hasCommercialDisclosure && (
+        <div className="mx-3 mb-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-300 font-semibold">
+            <Handshake className="w-3.5 h-3.5 shrink-0" />
+            <span>
+              {commercialDisclosure.disclosureType === 'paid_partnership' && commercialDisclosure.brandPartnerName
+                ? `Paid partnership with ${commercialDisclosure.brandPartnerName}`
+                : commercialDisclosure.disclosureType === 'sponsored'
+                  ? 'Sponsored content'
+                  : commercialDisclosure.disclosureType === 'gifted'
+                    ? 'Gifted product'
+                    : commercialDisclosure.disclosureType === 'affiliate'
+                      ? 'Affiliate disclosure'
+                      : 'Promotional content'}
+            </span>
+          </div>
+          {commercialDisclosure.promoCode && (
+            <span className="px-2 py-0.5 rounded-md bg-amber-500/15 font-mono text-[11px] font-bold text-amber-600 dark:text-amber-300">
+              Code: {commercialDisclosure.promoCode}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* FEATURED PRODUCT / AFFILIATE TAG */}
+      {(commercialDisclosure?.productTag || commercialDisclosure?.affiliateUrl) && (
+        <div className="mx-3 mb-2 px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 flex items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <Tag className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+            <span className="font-medium truncate" style={{ color: tokens.text }}>
+              {commercialDisclosure.productTag || 'Featured partner link'}
+            </span>
+          </div>
+          {commercialDisclosure.affiliateUrl && (
+            <a
+              href={commercialDisclosure.affiliateUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (commercialDisclosure.affiliateLinkId && currentUser?.uid) {
+                  creatorEarningsService.trackAffiliateConversion(commercialDisclosure.affiliateLinkId, 'click')
+                    .catch((err) => console.warn('Affiliate click tracking failed', err?.message));
+                }
+              }}
+              className="text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 shrink-0"
+            >
+              <span>Shop</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+      )}
+
       {/* SPONSORED CTA BANNER */}
-      {isSponsored && adDetails && (
-        <div className="mx-3 mb-2 p-2 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ShoppingBag className="w-4 h-4 text-arvdoul-purple dark:text-purple-400" />
-            <span className="text-xs font-medium text-slate-800 dark:text-white/90">{adDetails.title || 'Sponsored'}</span>
+      {isSponsored && (adDetails || (isAd && ctaLink)) && (
+        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <ShoppingBag className="w-4 h-4 text-arvdoul-purple dark:text-purple-400 shrink-0" />
+            <span className="text-xs font-medium text-slate-800 dark:text-white/90 truncate">{adDetails?.title || post.title || 'Sponsored'}</span>
           </div>
           {ctaLink && (
             <a
               href={ctaLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="text-xs font-medium text-white bg-purple-600 px-3 py-1 rounded-full hover:bg-purple-700 transition"
+              target={ctaLink.startsWith('/') ? undefined : '_blank'}
+              rel={ctaLink.startsWith('/') ? undefined : 'noopener noreferrer'}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (activeCampaignId && currentUser?.uid) {
+                  advertisingService.recordAdDeliveryEvent({
+                    campaignId: activeCampaignId,
+                    eventType: 'click',
+                    placement: 'home',
+                  }).catch((err) => console.warn('Ad click tracking failed', err?.message));
+                  advertisingService.trackAdConversion({
+                    campaignId: activeCampaignId,
+                    eventType: 'click',
+                  }).catch((err) => console.warn('Ad conversion tracking failed', err?.message));
+                }
+                if (ctaLink.startsWith('/') && navigate) {
+                  e.preventDefault();
+                  navigate(ctaLink);
+                }
+              }}
+              className="text-xs font-medium text-white bg-purple-600 px-3 py-1 rounded-full hover:bg-purple-700 transition shrink-0"
             >
               {ctaText} <ExternalLink className="w-3 h-3 inline ml-1" />
             </a>

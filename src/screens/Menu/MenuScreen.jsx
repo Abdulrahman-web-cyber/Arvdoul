@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Radio, Music, ShoppingBag, TrendingUp, Home, Search, User, MessageCircle, Bell, Bookmark, Video, Image as ImageIcon, Calendar, Layers, PlayCircle, Trophy, Coins, Gift, Settings, Shield, ShieldCheck, Palette, HelpCircle, LogOut, ChevronRight, PlusCircle, Zap, Sliders, Flame, Award, Wallet, CheckCircle2, ArrowUpRight } from "lucide-react";
+import { Sparkles, Radio, Music, ShoppingBag, TrendingUp, Home, Search, User, MessageCircle, Bell, Bookmark, Video, Image as ImageIcon, Calendar, Layers, PlayCircle, Trophy, Coins, Gift, Settings, Shield, ShieldCheck, Palette, HelpCircle, LogOut, ChevronRight, PlusCircle, Zap, Sliders, Flame, Award, Wallet, CheckCircle2, ArrowUpRight, Megaphone, Handshake } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useAppStore } from "../../store/appStore";
@@ -110,9 +110,11 @@ export default function MenuScreen() {
     { id: "thumbnail-designer", category: "creator", icon: Sliders, label: "Thumbnail & Poster Studio", description: "Layer-based typography, gradients & presets", color: "#06b6d4", path: "/thumbnail-designer", badge: "Design" },
     { id: "create-story", category: "creator", icon: Flame, label: "Create 24h Vibe Story", description: "Ephemeral stories with interactive stickers", color: "#f97316", path: "/create-story", badge: null },
     { id: "collaboration", category: "creator", icon: Layers, label: "Collaboration Studio", description: "Multi-creator shared projects & co-authored workspaces", color: "#8b5cf6", path: "/collaboration", badge: "Collab" },
+    { id: "advertising-center", category: "creator", icon: Megaphone, label: "Advertising Center", description: "Launch campaigns, Spark promotions, ad billing & performance", color: "#6366f1", path: "/ads", badge: "Ads" },
+    { id: "brand-partnerships", category: "creator", icon: Handshake, label: "Brand Partnerships & Ad Auth", description: "Manage brand deliverables, disclosures & partner ad codes", color: "#a855f7", path: "/collaboration?tab=partnerships", badge: "Partner" },
     { id: "creator-dashboard", category: "creator", icon: TrendingUp, label: "Creator Dashboard & Analytics", description: "Reach metrics, audience retention & coin revenue", color: "#10b981", path: "/creator/dashboard", badge: "Stats" },
     { id: "creator-onboarding", category: "creator", icon: Award, label: "Creator Verification & Grants", description: "Accreditation, creator payouts & creator status", color: "#ec4899", path: "/creator/onboarding", badge: "Apply" },
-    { id: "creator-payout", category: "creator", icon: Wallet, label: "Monetization & Payouts", description: "Stripe Connect payout balance and tip-jar logs", color: "#f59e0b", path: "/creator-payout", badge: "Earn" },
+    { id: "creator-payout", category: "creator", icon: Wallet, label: "Monetization & Payouts", description: "Stripe Connect payout balance, affiliate links & promo codes", color: "#f59e0b", path: "/creator-payout", badge: "Earn" },
 
     // Social & Feeds
     { id: "home", category: "social", icon: Home, label: "Home Feed", description: "Curated posts, videos & stories from creators", color: "#6366f1", path: "/home", badge: null },

@@ -119,6 +119,11 @@ const MenuScreen = lazy(() => import("../screens/Menu/MenuScreen.jsx"));
 const OfflineStatusScreen = lazy(() => import("../screens/OfflineStatusScreen.jsx"));
 const ConflictResolutionScreen = lazy(() => import("../screens/ConflictResolutionScreen.jsx"));
 const CreatorPayoutScreen = lazy(() => import("../screens/CreatorPayoutScreen.jsx"));
+const AdvertisingDashboardScreen = lazy(() => import("../screens/Advertising/AdvertisingDashboardScreen.jsx"));
+const CampaignBuilderScreen = lazy(() => import("../screens/Advertising/CampaignBuilderScreen.jsx"));
+const AdBillingScreen = lazy(() => import("../screens/Advertising/AdBillingScreen.jsx"));
+const AdAnalyticsScreen = lazy(() => import("../screens/Advertising/AdAnalyticsScreen.jsx"));
+const AdReviewQueueScreen = lazy(() => import("../screens/Advertising/AdReviewQueueScreen.jsx"));
 
 // ARVDOUL ADVANCED SUITE SCREENS
 const AIStudioScreen = lazy(() => import("../screens/AIStudio/AIStudioScreen.jsx"));
@@ -1204,6 +1209,50 @@ export default function AppRoutes() {
             <ProjectDetailScreen />
           </Suspense>
         </ProtectedRoute>
+      } />
+
+      {/* Advertising Center Routes */}
+      <Route path="/ads" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdvertisingDashboardScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/ads/campaigns" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdvertisingDashboardScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/ads/create" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CampaignBuilderScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/ads/billing" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdBillingScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/ads/analytics" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdAnalyticsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/ads/review" element={
+        <AdminRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdReviewQueueScreen />
+          </Suspense>
+        </AdminRoute>
       } />
 
       {/* Menu Route */}

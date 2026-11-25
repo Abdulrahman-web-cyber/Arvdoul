@@ -208,6 +208,42 @@ export const FUNCTIONS = {
   CANCEL_SUBSCRIPTION: 'cancelSubscription',
   GET_PAYOUT_SETTINGS: 'getPayoutSettings',
   CREATE_PAYOUT_ACCOUNT: 'createPayoutAccount',
+
+  // Advertising Center (functions/advertising.js)
+  GET_OR_CREATE_AD_ACCOUNT: 'getOrCreateAdAccount',
+  FUND_AD_ACCOUNT: 'fundAdAccount',
+  CREATE_AD_CAMPAIGN: 'createAdCampaign',
+  UPDATE_AD_CAMPAIGN: 'updateAdCampaign',
+  SET_AD_CAMPAIGN_STATUS: 'setAdCampaignStatus',
+  LIST_AD_CAMPAIGNS: 'listAdCampaigns',
+  SUBMIT_AD_CAMPAIGN_FOR_REVIEW: 'submitAdCampaignForReview',
+  REVIEW_AD_CAMPAIGN: 'reviewAdCampaign',
+  LIST_AD_MODERATION_QUEUE: 'listAdModerationQueue',
+  GET_AD_CAMPAIGN_ANALYTICS: 'getAdCampaignAnalytics',
+  GET_AD_BILLING_LEDGER: 'getAdBillingLedger',
+  REQUEST_AD_REFUND_OR_DISPUTE: 'requestAdRefundOrDispute',
+  ADMIN_RESOLVE_AD_DISPUTE: 'adminResolveAdDispute',
+  RECORD_AD_DELIVERY_EVENT: 'recordAdDeliveryEvent',
+  TRACK_AD_CONVERSION: 'trackAdConversion',
+  GET_ELIGIBLE_FEED_ADS: 'getEligibleFeedAds',
+
+  // Brand Partnerships & Ad Authorizations (functions/collaboration.js)
+  CREATE_BRAND_PARTNERSHIP: 'createBrandPartnership',
+  RESPOND_BRAND_PARTNERSHIP: 'respondBrandPartnership',
+  UPDATE_PARTNERSHIP_DELIVERABLE: 'updatePartnershipDeliverable',
+  LIST_BRAND_PARTNERSHIPS: 'listBrandPartnerships',
+  GRANT_AD_AUTHORIZATION: 'grantAdAuthorization',
+  REVOKE_AD_AUTHORIZATION: 'revokeAdAuthorization',
+  LIST_AD_AUTHORIZATIONS: 'listAdAuthorizations',
+  GET_PARTNERSHIP_ANALYTICS: 'getPartnershipAnalytics',
+
+  // Post Separated Analytics & Creator Earnings / Affiliates (functions/analytics.js, functions/monetization.js)
+  GET_POST_SEPARATED_ANALYTICS: 'getPostSeparatedAnalytics',
+  GET_CREATOR_EARNINGS_LEDGER: 'getCreatorEarningsLedger',
+  CREATE_AFFILIATE_LINK: 'createAffiliateLink',
+  CREATE_PROMO_CODE: 'createPromoCode',
+  LIST_CREATOR_AFFILIATE_ASSETS: 'listCreatorAffiliateAssets',
+  TRACK_AFFILIATE_CONVERSION: 'trackAffiliateConversion',
 };
 
 /**

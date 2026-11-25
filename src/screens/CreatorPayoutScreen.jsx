@@ -1,15 +1,18 @@
 // src/screens/CreatorPayoutScreen.jsx
 
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '@context/ThemeContext';
 import { cn } from '../lib/utils';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
-import { Banknote, DollarSign, TrendingUp, ShieldCheck, CreditCard, Sparkles, Clock, ArrowUpRight, RefreshCw, Wallet } from "lucide-react";
+import { Banknote, DollarSign, TrendingUp, ShieldCheck, CreditCard, Sparkles, Clock, ArrowUpRight, RefreshCw, Wallet, Link2, Tag, Copy, Loader2 } from "lucide-react";
 import { getMonetizationService } from '../services/monetizationService';
 import { getAnalyticsService } from '../services/analyticsService';
+import creatorEarningsService from '../services/creatorEarningsService';
+import { copyToClipboard } from '../utils/shareUtils';
 import { coinsToUsd, formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../shared/levelConfig.cjs';
 import { unknownNumber } from '../lib/unknownNumber.js';
 
@@ -34,6 +37,7 @@ function sumCredits(items, reasons) {
 }
 
 export default function CreatorPayoutScreen() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === 'dark' || theme === 'midnight';
@@ -47,6 +51,16 @@ export default function CreatorPayoutScreen() {
   const [payoutAccountId, setPayoutAccountId] = useState(null);
   const [connectingStripe, setConnectingStripe] = useState(false);
 
+  // Server Creator Earnings Ledger + Affiliate Links & Promo Codes
+  const [ledgerSummary, setLedgerSummary] = useState(null);
+  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [affiliateLinks, setAffiliateLinks] = useState([]);
+  const [promoCodes, setPromoCodes] = useState([]);
+  const [affiliateForm, setAffiliateForm] = useState({ label: '', destinationUrl: '', commissionRatePct: 10 });
+  const [creatingLink, setCreatingLink] = useState(false);
+  const [promoForm, setPromoForm] = useState({ code: '', discountText: '' });
+  const [creatingPromo, setCreatingPromo] = useState(false);
+
   // Request payout state
   const [requestModal, setRequestModal] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -58,19 +72,16 @@ export default function CreatorPayoutScreen() {
     try {
       const monSvc = getMonetizationService();
       const anaSvc = getAnalyticsService();
-      // The analytics summary is deliberately not fetched here: this screen
-      // renders payout data only, and the value was never displayed (a wasted
-      // unbounded read). Views/engagement live on the creator dashboard.
-      const [balRes, histRes, earnRes, spendRes] = await Promise.allSettled([
+      const [balRes, histRes, earnRes, spendRes, ledgerRes, assetsRes] = await Promise.allSettled([
         monSvc.getBalance(user.uid),
         monSvc.getTransactionHistory(user.uid, 20),
         anaSvc?.getCoinEarningHistory?.(user.uid, 200),
         anaSvc?.getCoinSpendingHistory?.(user.uid, 200),
+        creatorEarningsService.getEarningsLedger(30),
+        creatorEarningsService.listAffiliateAssets(),
       ]);
 
       if (balRes.status === 'fulfilled') {
-        // `getBalance` returns null when the balance is unknown; mapping that
-        // to 0 claimed an empty wallet and blocked every payout request.
         const b = balRes.value;
         const resolved = typeof b === 'number' ? b : (b?.coins ?? b?.balance ?? null);
         setBalance(resolved == null ? null : Number(resolved));
@@ -78,9 +89,6 @@ export default function CreatorPayoutScreen() {
       if (histRes.status === 'fulfilled' && Array.isArray(histRes.value?.items)) {
         setPayouts(histRes.value.items.filter(tx => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')));
       }
-      // Real earnings breakdown, summed from the coin ledger — not a fixed ratio.
-      // A failed ledger read leaves the figures unknown (rendered "—"), never a
-      // fabricated "0 Coins earned".
       if (earnRes.status === 'fulfilled' && Array.isArray(earnRes.value)) {
         const earned = earnRes.value;
         setEarnings({
@@ -89,9 +97,6 @@ export default function CreatorPayoutScreen() {
           other: sumCredits(earned, OTHER_EARNING_REASONS),
         });
       }
-      // A failed spend-ledger read leaves lifetime withdrawals unknown ("—"),
-      // never a fabricated "$0.00 withdrawn". A withdrawal row whose amount is
-      // absent is unknown too — summing it as 0 understated the total.
       if (spendRes.status === 'fulfilled' && Array.isArray(spendRes.value)) {
         const withdrawals = spendRes.value.filter(
           (tx) => tx.reason === 'withdrawal_request' || tx.reason === 'withdrawal_completed' || tx.reason === 'withdrawal'
@@ -104,11 +109,16 @@ export default function CreatorPayoutScreen() {
         }
         setLifetimeWithdrawnCoins(total);
       }
-      // payout account status (never simulated).
+      if (ledgerRes.status === 'fulfilled' && ledgerRes.value?.success) {
+        setLedgerSummary(ledgerRes.value.summary || null);
+        setLedgerEntries(Array.isArray(ledgerRes.value.entries) ? ledgerRes.value.entries : []);
+      }
+      if (assetsRes.status === 'fulfilled') {
+        setAffiliateLinks(Array.isArray(assetsRes.value?.affiliateLinks) ? assetsRes.value.affiliateLinks : []);
+        setPromoCodes(Array.isArray(assetsRes.value?.promoCodes) ? assetsRes.value.promoCodes : []);
+      }
       try {
         const settings = await monSvc.getPayoutSettings();
-        // The server marks a payout account `ready` (Stripe `payouts_enabled`)
-        // once onboarding completes; anything else is not yet payable.
         setStripeConnected(settings?.status === 'ready');
         setPayoutAccountId(settings?.stripeAccountId || null);
       } catch (err) {
@@ -126,6 +136,45 @@ export default function CreatorPayoutScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleCreateAffiliateLink = async (e) => {
+    e.preventDefault();
+    if (!affiliateForm.label.trim() || !affiliateForm.destinationUrl.trim() || creatingLink) return;
+    setCreatingLink(true);
+    try {
+      await creatorEarningsService.createAffiliateLink({
+        label: affiliateForm.label.trim(),
+        destinationUrl: affiliateForm.destinationUrl.trim(),
+        commissionRatePct: Number(affiliateForm.commissionRatePct) || 10,
+      });
+      toast.success('Affiliate link created');
+      setAffiliateForm({ label: '', destinationUrl: '', commissionRatePct: 10 });
+      await loadData();
+    } catch (err) {
+      toast.error(err?.message || 'Could not create affiliate link');
+    } finally {
+      setCreatingLink(false);
+    }
+  };
+
+  const handleCreatePromoCode = async (e) => {
+    e.preventDefault();
+    if (!promoForm.code.trim() || creatingPromo) return;
+    setCreatingPromo(true);
+    try {
+      await creatorEarningsService.createPromoCode({
+        code: promoForm.code.trim().toUpperCase(),
+        discountText: promoForm.discountText.trim(),
+      });
+      toast.success('Promo code created');
+      setPromoForm({ code: '', discountText: '' });
+      await loadData();
+    } catch (err) {
+      toast.error(err?.message || 'Could not create promo code');
+    } finally {
+      setCreatingPromo(false);
+    }
+  };
 
   const handleConnectStripe = async () => {
     if (!user?.uid) {
@@ -244,6 +293,39 @@ export default function CreatorPayoutScreen() {
             <span>Refresh</span>
           </button>
         </div>
+
+        {/* 3-Ledger Architecture Strip */}
+        <nav aria-label="Financial Ledgers" className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/wallet')}
+            className={cn(
+              'p-3 rounded-2xl border text-left transition-colors cursor-pointer',
+              isDark ? 'bg-[#080F2E] border-white/[0.08] hover:border-purple-500/40' : 'bg-white border-slate-200 hover:border-purple-300'
+            )}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Ledger 1</span>
+            <span className="text-xs font-bold text-slate-900 dark:text-white block truncate mt-0.5">Virtual Coins</span>
+          </button>
+          <div className={cn(
+            'p-3 rounded-2xl border text-left',
+            isDark ? 'bg-purple-500/15 border-purple-500/40' : 'bg-purple-50 border-purple-300'
+          )}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-500 block">Active Ledger</span>
+            <span className="text-xs font-bold text-slate-900 dark:text-white block truncate mt-0.5">Creator Earnings</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/ads/billing')}
+            className={cn(
+              'p-3 rounded-2xl border text-left transition-colors cursor-pointer',
+              isDark ? 'bg-[#080F2E] border-white/[0.08] hover:border-purple-500/40' : 'bg-white border-slate-200 hover:border-purple-300'
+            )}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Ledger 3</span>
+            <span className="text-xs font-bold text-slate-900 dark:text-white block truncate mt-0.5">Ad Spend &amp; Billing</span>
+          </button>
+        </nav>
 
         {/* Earnings Card */}
         <div
@@ -441,6 +523,183 @@ export default function CreatorPayoutScreen() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Affiliate Links & Promo Codes */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <section className={cn(
+            "rounded-2xl border p-5 space-y-4",
+            isDark ? "bg-[#080F2E] border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
+          )}>
+            <h3 className="font-bold text-base flex items-center gap-2">
+              <Link2 className="w-4 h-4 text-purple-500" />
+              Affiliate Links ({affiliateLinks.length})
+            </h3>
+            <form onSubmit={handleCreateAffiliateLink} className="space-y-2.5">
+              <input
+                aria-label="Affiliate link label"
+                type="text"
+                required
+                value={affiliateForm.label}
+                onChange={(e) => setAffiliateForm((f) => ({ ...f, label: e.target.value }))}
+                placeholder="Product or partner label"
+                className={cn(
+                  "w-full px-3.5 py-2 rounded-xl border text-xs outline-none",
+                  isDark ? "bg-white/[0.04] border-white/[0.1] text-white" : "bg-slate-50 border-slate-200 text-slate-900"
+                )}
+              />
+              <div className="flex gap-2">
+                <input
+                  aria-label="Destination URL"
+                  type="url"
+                  required
+                  value={affiliateForm.destinationUrl}
+                  onChange={(e) => setAffiliateForm((f) => ({ ...f, destinationUrl: e.target.value }))}
+                  placeholder="https://partner.example.com/item"
+                  className={cn(
+                    "flex-1 px-3.5 py-2 rounded-xl border text-xs outline-none",
+                    isDark ? "bg-white/[0.04] border-white/[0.1] text-white" : "bg-slate-50 border-slate-200 text-slate-900"
+                  )}
+                />
+                <input
+                  aria-label="Commission percentage"
+                  type="number"
+                  min="1"
+                  max="80"
+                  value={affiliateForm.commissionRatePct}
+                  onChange={(e) => setAffiliateForm((f) => ({ ...f, commissionRatePct: e.target.value }))}
+                  className={cn(
+                    "w-20 px-3 py-2 rounded-xl border text-xs outline-none tabular-nums",
+                    isDark ? "bg-white/[0.04] border-white/[0.1] text-white" : "bg-slate-50 border-slate-200 text-slate-900"
+                  )}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={creatingLink}
+                style={{ background: BRAND_GRADIENT }}
+                className="w-full py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              >
+                {creatingLink && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{creatingLink ? 'Creating…' : 'Create Affiliate Link'}</span>
+              </button>
+            </form>
+            {affiliateLinks.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+                {affiliateLinks.map((lnk) => (
+                  <div key={lnk.id} className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/10 flex items-center justify-between gap-2 text-xs">
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{lnk.label}</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                        {lnk.clicks ?? 0} clicks · {lnk.conversions ?? 0} conversions · {lnk.commissionRatePct ?? 10}%
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Copy link ${lnk.label}`}
+                      onClick={async () => {
+                        await copyToClipboard(lnk.destinationUrl);
+                        toast.success('Affiliate URL copied');
+                      }}
+                      className="p-2 rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer shrink-0"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className={cn(
+            "rounded-2xl border p-5 space-y-4",
+            isDark ? "bg-[#080F2E] border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
+          )}>
+            <h3 className="font-bold text-base flex items-center gap-2">
+              <Tag className="w-4 h-4 text-amber-500" />
+              Promo Codes &amp; Ledger ({promoCodes.length})
+            </h3>
+            <form onSubmit={handleCreatePromoCode} className="space-y-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  aria-label="Promo code"
+                  type="text"
+                  required
+                  value={promoForm.code}
+                  onChange={(e) => setPromoForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+                  placeholder="ARVDOUL20"
+                  className={cn(
+                    "px-3.5 py-2 rounded-xl border text-xs font-mono uppercase outline-none",
+                    isDark ? "bg-white/[0.04] border-white/[0.1] text-white" : "bg-slate-50 border-slate-200 text-slate-900"
+                  )}
+                />
+                <input
+                  aria-label="Discount description"
+                  type="text"
+                  value={promoForm.discountText}
+                  onChange={(e) => setPromoForm((f) => ({ ...f, discountText: e.target.value }))}
+                  placeholder="20% off first order"
+                  className={cn(
+                    "px-3.5 py-2 rounded-xl border text-xs outline-none",
+                    isDark ? "bg-white/[0.04] border-white/[0.1] text-white" : "bg-slate-50 border-slate-200 text-slate-900"
+                  )}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={creatingPromo}
+                style={{ background: BRAND_GRADIENT }}
+                className="w-full py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              >
+                {creatingPromo && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{creatingPromo ? 'Creating…' : 'Create Promo Code'}</span>
+              </button>
+            </form>
+            {promoCodes.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {promoCodes.map((pc) => (
+                  <button
+                    type="button"
+                    key={pc.id}
+                    onClick={async () => {
+                      await copyToClipboard(pc.code);
+                      toast.success(`Copied ${pc.code}`);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs font-mono font-bold text-amber-500 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>{pc.code}</span>
+                    {pc.discountText && <span className="font-sans font-normal text-slate-400">· {pc.discountText}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-slate-100 dark:border-white/[0.06] space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Creator Earnings Ledger</span>
+                {ledgerSummary && (
+                  <span className="font-bold tabular-nums text-emerald-500">
+                    {ledgerSummary.totalGiftCoins != null ? `${ledgerSummary.totalGiftCoins.toLocaleString()} Coins` : '—'}
+                    {ledgerSummary.totalCashCents ? ` · $${(ledgerSummary.totalCashCents / 100).toFixed(2)}` : ''}
+                  </span>
+                )}
+              </div>
+              {ledgerEntries.length === 0 ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400">No creator earnings ledger entries yet.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {ledgerEntries.map((entry) => (
+                    <div key={entry.id} className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/10 flex items-center justify-between text-xs">
+                      <span className="capitalize truncate">{(entry.source || entry.type || 'earning').replace(/_/g, ' ')}</span>
+                      <span className="font-bold tabular-nums text-emerald-500 shrink-0">
+                        {entry.amountCoins != null ? `+${entry.amountCoins} Coins` : entry.amountCents != null ? `+$${(entry.amountCents / 100).toFixed(2)}` : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
         </div>
       </main>
 

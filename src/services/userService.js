@@ -409,6 +409,20 @@ class ProfessionalUserService {
     return null;
   }
 
+  async _raceTimeout(promise, ms, fallback = null) {
+    let timerId;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((resolve) => {
+          timerId = setTimeout(() => resolve(fallback), ms);
+        }),
+      ]);
+    } finally {
+      if (timerId) clearTimeout(timerId);
+    }
+  }
+
   async getUserProfile(userId, requesterId = null, options = {}) {
     if (!userId) return null;
     await this._ensureInitialized();
@@ -416,10 +430,28 @@ class ProfessionalUserService {
     const cacheKey = requesterId ? `profile_${userId}_${requesterId}_${viewAs || 'normal'}` : `profile_${userId}`;
 
     // L1 Memory cache
-    const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < USER_CONFIG.CACHE_EXPIRY) {
-      return cached.data;
+    if (!options.force && !options.forceRefresh) {
+      const cached = this.cache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < USER_CONFIG.CACHE_EXPIRY) {
+        return cached.data;
+      }
+      const inflight = this.inFlightRequests.get(cacheKey);
+      if (inflight) return inflight;
     }
+
+    const requestPromise = this._loadUserProfileInternal(userId, requesterId, options, cacheKey);
+    this.inFlightRequests.set(cacheKey, requestPromise);
+    try {
+      return await requestPromise;
+    } finally {
+      if (this.inFlightRequests.get(cacheKey) === requestPromise) {
+        this.inFlightRequests.delete(cacheKey);
+      }
+    }
+  }
+
+  async _loadUserProfileInternal(userId, requesterId, options, cacheKey) {
+    const viewAs = options.viewAs || null;
 
     // L2 LocalStorage cache intentionally removed. It was keyed by target only
     // (`arvdoul_prof_${userId}`) and ignored the requester, so an owner's own
@@ -479,29 +511,45 @@ class ProfessionalUserService {
     ]);
 
     const privatePromise = isSelfUser
-      ? fsGetDoc(fsDoc(this.firestore, PRIVATE_PROFILE_COLLECTION, targetUid)).catch((e) => {
-          logger.warn('Private profile merge skipped', { userId: targetUid, error: e?.message });
-          return null;
-        })
+      ? this._raceTimeout(
+          fsGetDoc(fsDoc(this.firestore, PRIVATE_PROFILE_COLLECTION, targetUid)).catch((e) => {
+            logger.warn('Private profile merge skipped', { userId: targetUid, error: e?.message });
+            return null;
+          }),
+          3500,
+          null
+        )
       : Promise.resolve(null);
 
-    const presencePromise = fsGetDoc(fsDoc(this.firestore, 'user_presence', snap.id)).catch((e) => {
-      logger.debug('presence read skipped (scope denied or offline)', { userId: snap.id, error: e?.message });
-      return null;
-    });
+    const presencePromise = this._raceTimeout(
+      fsGetDoc(fsDoc(this.firestore, 'user_presence', snap.id)).catch((e) => {
+        logger.debug('presence read skipped (scope denied or offline)', { userId: snap.id, error: e?.message });
+        return null;
+      }),
+      3000,
+      null
+    );
 
-    const countersPromise = countersManager.apply({
-      data: full,
-      docPath: `users/${targetUid}`,
-      fields: ['followerCount', 'followingCount'],
-      scope: 'top',
-    }).catch(() => full);
+    const countersPromise = this._raceTimeout(
+      countersManager.apply({
+        data: full,
+        docPath: `users/${targetUid}`,
+        fields: ['followerCount', 'followingCount'],
+        scope: 'top',
+      }).catch(() => full),
+      3000,
+      full
+    );
 
     const relationPromise = (requesterId && !isOwner)
       ? socialGraphService.getRelationship(requesterId, targetUid).catch(() => null)
       : Promise.resolve(null);
 
-    const authPromise = firebaseMod.getAuthInstance().catch(() => null);
+    const authPromise = this._raceTimeout(
+      firebaseMod.getAuthInstance().catch(() => null),
+      2000,
+      null
+    );
 
     const [privateSnap, presenceSnap, , relationEdge, auth] = await Promise.all([
       privatePromise,

@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Eye, Heart, MessageCircle, Share2, TrendingUp, BarChart3, Bookmark, Sparkles, Gift, Clock, Film } from "lucide-react";
+import { ArrowLeft, Eye, Heart, MessageCircle, Share2, TrendingUp, BarChart3, Bookmark, Sparkles, Gift, Clock, Film, Megaphone, Coins, ExternalLink } from "lucide-react";
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import { formatWatchTime } from '../utils/videoUtils';
 import { LazyImage } from '../components/Shared/LazyImage';
+import postAnalyticsService from '../services/postAnalyticsService.js';
 
 export default function PostAnalyticsScreen() {
   const { postId } = useParams();
@@ -15,6 +16,7 @@ export default function PostAnalyticsScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [post, setPost] = useState(null);
+  const [separated, setSeparated] = useState(null);
   const [metrics, setMetrics] = useState({
     views: null,
     likes: null,
@@ -33,9 +35,18 @@ export default function PostAnalyticsScreen() {
       if (!postId) return;
       setLoading(true);
       try {
-        const { default: postService } = await import('../services/postService.js');
+        const [{ default: postService }, sepRes] = await Promise.all([
+          import('../services/postService.js'),
+          postAnalyticsService.getPostSeparatedAnalytics(postId).catch((err) => {
+            console.warn('Separated post analytics unavailable:', err?.message);
+            return null;
+          }),
+        ]);
         const postDoc = await postService.getPost(postId);
         if (!active) return;
+        if (sepRes?.success) {
+          setSeparated(sepRes);
+        }
         if (!postDoc) {
           setLoadError('This post could not be found, or you do not have access to its analytics.');
           return;
@@ -107,6 +118,7 @@ export default function PostAnalyticsScreen() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
+                aria-label="Go back"
                 onClick={() => navigate(-1)}
                 className="p-2.5 rounded-xl border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 transition-all text-slate-600 dark:text-slate-300"
               >
@@ -281,6 +293,105 @@ export default function PostAnalyticsScreen() {
                     {metrics.watchTime == null ? '—' : formatWatchTime(metrics.watchTime)}
                   </span>
                 </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Separated Organic vs Paid & Creator Attribution */}
+        {!loadError && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Paid Campaign Delivery */}
+            <div className="p-6 rounded-2xl bg-white dark:bg-white/[0.05] border border-slate-200/80 dark:border-white/10 shadow-sm space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-base font-semibold flex items-center gap-2">
+                  <Megaphone className="w-4 h-4 text-blue-500" />
+                  Paid Campaign Delivery
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/ads/create?postId=${encodeURIComponent(postId)}`)}
+                  className="text-xs font-semibold text-purple-500 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Promote</span>
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                {[
+                  ['Impressions', show(separated?.paid?.impressions)],
+                  ['Unique Reach', show(separated?.paid?.reach)],
+                  ['Clicks', show(separated?.paid?.clicks)],
+                  ['CTR', separated?.paid?.ctr != null ? `${separated.paid.ctr}%` : '—'],
+                  ['Spend', separated?.paid?.spendCents != null ? `$${(separated.paid.spendCents / 100).toFixed(2)}` : '—'],
+                  ['Conversions', show(separated?.paid?.conversions)],
+                  ['CPM', separated?.paid?.cpmCents != null ? `$${(separated.paid.cpmCents / 100).toFixed(2)}` : '—'],
+                  ['CPC', separated?.paid?.cpcCents != null ? `$${(separated.paid.cpcCents / 100).toFixed(2)}` : '—'],
+                  ['Boost Status', separated?.paid?.hasActiveBoost ? 'Active' : 'None'],
+                ].map(([label, val]) => (
+                  <div key={label} className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/10">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block">{label}</span>
+                    <span className="font-bold text-sm tabular-nums mt-0.5 block">{val}</span>
+                  </div>
+                ))}
+              </div>
+              {Array.isArray(separated?.paid?.campaigns) && separated.paid.campaigns.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/10">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Linked Campaigns
+                  </p>
+                  {separated.paid.campaigns.map((camp) => (
+                    <button
+                      type="button"
+                      key={camp.id}
+                      onClick={() => navigate(`/ads/analytics?campaignId=${encodeURIComponent(camp.id)}`)}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/10 flex items-center justify-between text-xs hover:border-purple-500/40 cursor-pointer"
+                    >
+                      <span className="font-semibold truncate">{camp.title || camp.id}</span>
+                      <span className="text-purple-500 font-semibold shrink-0">{camp.status}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Creator Earnings Attribution */}
+            <div className="p-6 rounded-2xl bg-white dark:bg-white/[0.05] border border-slate-200/80 dark:border-white/10 shadow-sm space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-base font-semibold flex items-center gap-2">
+                  <Coins className="w-4 h-4 text-amber-500" />
+                  Creator Earnings Attribution
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => navigate('/creator-payout')}
+                  className="text-xs font-semibold text-purple-500 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Payouts</span>
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/10 flex items-center justify-between">
+                <span className="text-sm font-medium">Gift Value Attributed</span>
+                <span className="font-bold text-base tabular-nums text-amber-500">
+                  {separated?.creatorAttribution?.giftValueCoins == null ? '—' : `${separated.creatorAttribution.giftValueCoins.toLocaleString()} Coins`}
+                </span>
+              </div>
+              {Array.isArray(separated?.creatorAttribution?.ledgerEntries) && separated.creatorAttribution.ledgerEntries.length > 0 ? (
+                <div className="space-y-2">
+                  {separated.creatorAttribution.ledgerEntries.map((entry) => (
+                    <div key={entry.id} className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/10 flex items-center justify-between text-xs">
+                      <span className="font-medium capitalize">{(entry.source || entry.type || 'earning').replace(/_/g, ' ')}</span>
+                      <span className="font-bold tabular-nums text-emerald-500">
+                        {entry.amountCoins != null ? `+${entry.amountCoins} Coins` : entry.amountCents != null ? `+$${(entry.amountCents / 100).toFixed(2)}` : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  No direct creator ledger entries attributed to this post yet.
+                </p>
               )}
             </div>
           </div>

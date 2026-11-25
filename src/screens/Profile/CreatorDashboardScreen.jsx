@@ -320,6 +320,43 @@ export default function CreatorDashboardScreen() {
                 </button>
               </div>
             </div>
+
+            {/* 3-Ledger Architecture & Growth Ecosystem Strip */}
+            <nav aria-label="Creator Economy Ledgers" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                type="button"
+                onClick={() => navigate('/wallet')}
+                className={cn(
+                  'p-4 rounded-2xl border text-left transition-all cursor-pointer',
+                  theme === 'dark' ? 'bg-white/[0.03] border-white/[0.08] hover:border-purple-500/40' : 'bg-white border-slate-200 hover:border-purple-300 shadow-sm'
+                )}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500 block">Ledger 1 · Virtual Coins</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-white block mt-0.5">Wallet &amp; Gifts</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/creator-payout')}
+                className={cn(
+                  'p-4 rounded-2xl border text-left transition-all cursor-pointer',
+                  theme === 'dark' ? 'bg-white/[0.03] border-white/[0.08] hover:border-purple-500/40' : 'bg-white border-slate-200 hover:border-purple-300 shadow-sm'
+                )}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500 block">Ledger 2 · Monetization</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-white block mt-0.5">Earnings, Affiliates &amp; Payouts</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/ads')}
+                className={cn(
+                  'p-4 rounded-2xl border text-left transition-all cursor-pointer',
+                  theme === 'dark' ? 'bg-white/[0.03] border-white/[0.08] hover:border-purple-500/40' : 'bg-white border-slate-200 hover:border-purple-300 shadow-sm'
+                )}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-500 block">Ledger 3 · Advertising</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-white block mt-0.5">Ads Center &amp; Billing</span>
+              </button>
+            </nav>
             
             {/* Daily Stats Chart */}
             <div className={cn(

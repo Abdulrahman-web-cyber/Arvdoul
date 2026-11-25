@@ -403,3 +403,282 @@ exports.publishCollaborationContent = functions.https.onCall(async (data, contex
   });
   return { success: true };
 });
+
+// ==================== BRAND PARTNERSHIPS & AD AUTHORIZATIONS ====================
+const toIsoSafe = (val) => {
+  if (!val) return null;
+  if (typeof val?.toDate === 'function') return val.toDate().toISOString();
+  const d = new Date(val);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+};
+
+exports.createBrandPartnership = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'createBrandPartnership', 20, 60000);
+
+  const {
+    creatorId,
+    brandId,
+    brandName,
+    title,
+    compensationCents = 0,
+    currency = 'USD',
+    deliverables = [],
+    disclosureType = 'paid_partnership',
+  } = data || {};
+
+  const targetCreatorId = cleanText(creatorId || uid, 128);
+  const targetBrandId = cleanText(brandId || uid, 128);
+  const cleanTitle = cleanText(title || '', 200);
+  if (!cleanTitle) throw httpError('invalid-argument', 'Partnership title is required.');
+
+  const ref = db.collection('brand_partnerships').doc();
+  const payload = {
+    creatorId: targetCreatorId,
+    brandId: targetBrandId,
+    initiatedBy: uid,
+    brandName: cleanText(brandName || 'Brand Partner', 160),
+    title: cleanTitle,
+    compensationCents: Math.max(0, Math.round(Number(compensationCents) || 0)),
+    currency: String(currency || 'USD').toUpperCase().slice(0, 6),
+    disclosureType: disclosureType === 'sponsored_ad' ? 'sponsored_ad' : 'paid_partnership',
+    deliverables: Array.isArray(deliverables)
+      ? deliverables.slice(0, 20).map((d, idx) => ({
+          id: cleanText(d?.id || `del_${idx + 1}`, 64),
+          label: cleanText(d?.label || String(d || 'Deliverable'), 160),
+          completed: Boolean(d?.completed),
+          postId: d?.postId ? cleanText(d.postId, 128) : null,
+        }))
+      : [],
+    status: targetCreatorId === uid && targetBrandId === uid ? 'active' : 'proposed',
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  await ref.set(payload);
+  return { success: true, partnershipId: ref.id, status: payload.status };
+});
+
+exports.respondBrandPartnership = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'respondBrandPartnership', 30, 60000);
+
+  const { partnershipId, decision } = data || {};
+  if (!partnershipId || !['accept', 'decline', 'complete', 'cancel'].includes(decision)) {
+    throw httpError('invalid-argument', 'partnershipId and valid decision required.');
+  }
+
+  const ref = db.collection('brand_partnerships').doc(partnershipId);
+  const snap = await ref.get();
+  if (!snap.exists) throw httpError('not-found', 'Partnership not found.');
+  const p = snap.data();
+  if (p.creatorId !== uid && p.brandId !== uid) {
+    throw httpError('permission-denied', 'Only partnership parties can respond.');
+  }
+
+  const statusMap = {
+    accept: 'active',
+    decline: 'declined',
+    complete: 'completed',
+    cancel: 'cancelled',
+  };
+
+  await ref.update({
+    status: statusMap[decision],
+    respondedBy: uid,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return { success: true, partnershipId, status: statusMap[decision] };
+});
+
+exports.updatePartnershipDeliverable = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'updatePartnershipDeliverable', 40, 60000);
+
+  const { partnershipId, deliverableId, completed, postId = null } = data || {};
+  if (!partnershipId || !deliverableId) {
+    throw httpError('invalid-argument', 'partnershipId and deliverableId are required.');
+  }
+
+  const ref = db.collection('brand_partnerships').doc(partnershipId);
+  const snap = await ref.get();
+  if (!snap.exists) throw httpError('not-found', 'Partnership not found.');
+  const p = snap.data();
+  if (p.creatorId !== uid && p.brandId !== uid) {
+    throw httpError('permission-denied', 'Only partnership parties can update deliverables.');
+  }
+
+  const nextDeliverables = (Array.isArray(p.deliverables) ? p.deliverables : []).map((d) =>
+    d.id === deliverableId
+      ? {
+          ...d,
+          completed: completed !== undefined ? Boolean(completed) : d.completed,
+          postId: postId !== undefined && postId !== null ? cleanText(postId, 128) : (d.postId || null),
+        }
+      : d
+  );
+
+  await ref.update({
+    deliverables: nextDeliverables,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return { success: true, partnershipId, deliverables: nextDeliverables };
+});
+
+exports.listBrandPartnerships = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'listBrandPartnerships', 60, 60000);
+
+  const [asCreatorSnap, asBrandSnap] = await Promise.all([
+    db.collection('brand_partnerships').where('creatorId', '==', uid).orderBy('createdAt', 'desc').limit(30).get(),
+    db.collection('brand_partnerships').where('brandId', '==', uid).orderBy('createdAt', 'desc').limit(30).get(),
+  ]);
+
+  const seen = new Map();
+  for (const snap of [asCreatorSnap, asBrandSnap]) {
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+      seen.set(docSnap.id, {
+        id: docSnap.id,
+        ...d,
+        createdAt: toIsoSafe(d.createdAt),
+        updatedAt: toIsoSafe(d.updatedAt),
+      });
+    });
+  }
+
+  return { success: true, partnerships: Array.from(seen.values()) };
+});
+
+exports.grantAdAuthorization = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'grantAdAuthorization', 20, 60000);
+
+  const { postId, partnerId = null, partnerName = '', expiresInDays = 30 } = data || {};
+  if (!postId || typeof postId !== 'string') {
+    throw httpError('invalid-argument', 'postId is required to grant ad authorization.');
+  }
+
+  const postSnap = await db.collection('posts').doc(postId).get();
+  if (!postSnap.exists || postSnap.data()?.isDeleted === true) {
+    throw httpError('not-found', 'Post not found.');
+  }
+  if (postSnap.data().authorId !== uid) {
+    throw httpError('permission-denied', 'Only the post author can grant ad promotion authorization.');
+  }
+
+  const days = Math.min(Math.max(Number(expiresInDays) || 30, 1), 365);
+  const expiresAtIso = new Date(Date.now() + days * 86400000).toISOString();
+  const authCode = `ARV-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
+
+  const authRef = db.collection('ad_authorizations').doc();
+  await authRef.set({
+    creatorId: uid,
+    partnerId: partnerId ? cleanText(partnerId, 128) : null,
+    partnerName: cleanText(partnerName || 'Authorized Partner', 120),
+    postId,
+    authCode,
+    status: 'active',
+    expiresAt: expiresAtIso,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    success: true,
+    authorizationId: authRef.id,
+    authCode,
+    postId,
+    expiresAt: expiresAtIso,
+    status: 'active',
+  };
+});
+
+exports.revokeAdAuthorization = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'revokeAdAuthorization', 30, 60000);
+
+  const { authorizationId } = data || {};
+  if (!authorizationId) throw httpError('invalid-argument', 'authorizationId is required.');
+
+  const ref = db.collection('ad_authorizations').doc(authorizationId);
+  const snap = await ref.get();
+  if (!snap.exists) throw httpError('not-found', 'Ad authorization not found.');
+  if (snap.data().creatorId !== uid) {
+    throw httpError('permission-denied', 'Only the creator can revoke this ad authorization.');
+  }
+
+  await ref.update({
+    status: 'revoked',
+    revokedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return { success: true, authorizationId, status: 'revoked' };
+});
+
+exports.listAdAuthorizations = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'listAdAuthorizations', 60, 60000);
+
+  const [ownedSnap, partnerSnap] = await Promise.all([
+    db.collection('ad_authorizations').where('creatorId', '==', uid).orderBy('createdAt', 'desc').limit(50).get(),
+    db.collection('ad_authorizations').where('partnerId', '==', uid).where('status', '==', 'active').limit(50).get(),
+  ]);
+
+  const byId = new Map();
+  for (const snap of [ownedSnap, partnerSnap]) {
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+      byId.set(docSnap.id, {
+        id: docSnap.id,
+        ...d,
+        createdAt: toIsoSafe(d.createdAt),
+        expiresAt: toIsoSafe(d.expiresAt),
+      });
+    });
+  }
+
+  return { success: true, authorizations: Array.from(byId.values()) };
+});
+
+exports.getPartnershipAnalytics = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'getPartnershipAnalytics', 40, 60000);
+
+  const { partnershipId } = data || {};
+  if (!partnershipId) throw httpError('invalid-argument', 'partnershipId is required.');
+
+  const pSnap = await db.collection('brand_partnerships').doc(partnershipId).get();
+  if (!pSnap.exists) throw httpError('not-found', 'Partnership not found.');
+  const p = pSnap.data();
+  if (p.creatorId !== uid && p.brandId !== uid) {
+    throw httpError('permission-denied', 'Access denied to partnership analytics.');
+  }
+
+  const postIds = (Array.isArray(p.deliverables) ? p.deliverables : [])
+    .map((d) => d.postId)
+    .filter(Boolean)
+    .slice(0, 10);
+
+  const posts = [];
+  if (postIds.length > 0) {
+    const snaps = await db.getAll(...postIds.map((id) => db.collection('posts').doc(id)));
+    snaps.forEach((s) => {
+      if (s.exists) {
+        const pd = s.data();
+        posts.push({
+          postId: s.id,
+          organicStats: pd.stats || {},
+          paidStats: pd.paidStats || null,
+        });
+      }
+    });
+  }
+
+  return {
+    success: true,
+    partnershipId,
+    posts,
+  };
+});
+

@@ -313,6 +313,8 @@ export default function ProjectDetailScreen() {
           
           {/* Back Button */}
           <button
+            type="button"
+            aria-label="Go back"
             onClick={() => navigate(-1)}
             className="absolute top-4 left-4 p-2 rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors"
           >
@@ -322,6 +324,7 @@ export default function ProjectDetailScreen() {
           {/* More Options */}
           <div className="absolute top-4 right-4">
             <button
+              type="button"
               onClick={() => setShowOptions(v => !v)}
               aria-label="Project options"
               aria-expanded={showOptions}
@@ -332,8 +335,16 @@ export default function ProjectDetailScreen() {
             {showOptions && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowOptions(false)} />
-                <div className="absolute right-0 mt-2 z-50 w-48 rounded-xl bg-gray-900 border border-white/15 shadow-xl overflow-hidden">
+                <div className="absolute right-0 mt-2 z-50 w-52 rounded-xl bg-gray-900 border border-white/15 shadow-xl overflow-hidden">
                   <button
+                    type="button"
+                    onClick={() => { setShowOptions(false); navigate('/collaboration?tab=partnerships'); }}
+                    className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                  >
+                    <Users className="w-4 h-4 text-purple-400" /> Brand Partnerships
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => { setShowOptions(false); handleShareProject(); }}
                     className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
                   >
@@ -341,6 +352,7 @@ export default function ProjectDetailScreen() {
                   </button>
                   {isOwner && (
                     <button
+                      type="button"
                       onClick={() => { setShowOptions(false); handleDeleteProject(); }}
                       disabled={deleting}
                       className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"

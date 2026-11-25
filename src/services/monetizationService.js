@@ -72,6 +72,18 @@ function safeJsonParse(str, fallback) {
   }
 }
 
+function withBoundedTimeout(promise, ms, label = 'operation') {
+  let timerId;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timerId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    }),
+  ]).finally(() => {
+    if (timerId) clearTimeout(timerId);
+  });
+}
+
 let cachedConfig = null;
 let configPromise = null;
 async function getMonetizationConfig(forceRefresh = false) {
@@ -87,7 +99,7 @@ async function getMonetizationConfig(forceRefresh = false) {
       if (process.env.NODE_ENV === 'production') {
         setLogLevel(remoteConfig, 'error');
       }
-      await fetchAndActivate(remoteConfig);
+      await withBoundedTimeout(fetchAndActivate(remoteConfig), 2000, 'fetchAndActivate');
       const levelsStr = getValue(remoteConfig, 'monetization_levels').asString();
       const positionsStr = getValue(remoteConfig, 'position_thresholds').asString();
       const popularityStr = getValue(remoteConfig, 'popularity_thresholds').asString();
@@ -97,7 +109,7 @@ async function getMonetizationConfig(forceRefresh = false) {
       const popularityThresholds = safeJsonParse(popularityStr, null);
 
       const db = await getFirestoreInstance();
-      const configDoc = await getDoc(doc(db, 'config', 'monetization'));
+      const configDoc = await withBoundedTimeout(getDoc(doc(db, 'config', 'monetization')), 2000, 'monetization config doc');
       let finalConfig = { ...DEFAULT_CONFIG };
       if (configDoc.exists()) {
         finalConfig = { ...finalConfig, ...configDoc.data() };
@@ -293,12 +305,18 @@ class MonetizationService {
   constructor() {
     this.db = null;
     this.initialized = false;
+    this._initPromise = null;
     this.adCache = new Map();
-    this.config = null;
+    this._balanceCache = new Map();
+    this._balanceInflight = new Map();
+    this._levelCache = new Map();
+    this._levelInflight = new Map();
+    this.config = DEFAULT_CONFIG;
     this.offlineQueue = null; // will be created after _ensureInitialized
     this.cleanupInterval = null;
     this.destroyed = false;
     this.stripe = null;
+    this._stripePromise = null;
 
     // Cloud Functions references
     this.cfAddCoins = null;
@@ -322,9 +340,16 @@ class MonetizationService {
 
   async _ensureInitialized() {
     if (this.destroyed) throw new Error('MonetizationService has been destroyed');
-    if (!this.initialized) {
+    if (this.initialized) return this.db;
+    if (this._initPromise) return this._initPromise;
+
+    this._initPromise = (async () => {
       this.db = await getFirestoreInstance();
-      this.config = await getMonetizationConfig();
+      // Refresh config without ever stalling profile or balance callers beyond defaults.
+      getMonetizationConfig()
+        .then((cfg) => { if (cfg) this.config = cfg; })
+        .catch(() => { this.config = DEFAULT_CONFIG; });
+
       // create offline queue with reference to this service
       this.offlineQueue = new OfflineMonetizationQueue(this);
 
@@ -352,15 +377,19 @@ class MonetizationService {
       this.cfGetPayoutSettings = cf(FUNCTIONS.GET_PAYOUT_SETTINGS);
       this.cfCreatePayoutAccount = cf(FUNCTIONS.CREATE_PAYOUT_ACCOUNT);
 
-      // Initialize Stripe SDK asynchronously
+      // Initialize Stripe SDK asynchronously without blocking read-only wallet/profile paths
       const stripePublicKey = import.meta.env?.VITE_STRIPE_PUBLISHABLE_KEY;
       if (stripePublicKey) {
-        try {
-          this.stripe = await loadStripe(stripePublicKey);
-          log.info('Stripe successfully loaded with public key');
-        } catch (err) {
-          log.error('Stripe load error', err);
-        }
+        this._stripePromise = loadStripe(stripePublicKey)
+          .then((stripe) => {
+            this.stripe = stripe;
+            log.info('Stripe successfully loaded with public key');
+            return stripe;
+          })
+          .catch((err) => {
+            log.error('Stripe load error', err);
+            return null;
+          });
       } else {
         // No publishable key configured: the SDK is not loaded and the card
         // flow reports "unavailable". Coin grants still go through the
@@ -371,8 +400,22 @@ class MonetizationService {
       this.initialized = true;
       this.cleanupInterval = setInterval(() => this._cleanupExpiredAds(), 5 * 60 * 1000);
       this.offlineQueue.sync();
+      return this.db;
+    })().finally(() => {
+      this._initPromise = null;
+    });
+
+    return this._initPromise;
+  }
+
+  invalidateBalanceCache(userId) {
+    if (!userId) {
+      this._balanceCache.clear();
+      this._levelCache.clear();
+      return;
     }
-    return this.db;
+    this._balanceCache.delete(userId);
+    this._levelCache.delete(userId);
   }
 
   async ensureInitialized() {
@@ -417,19 +460,35 @@ class MonetizationService {
   // readable) — NOT the world-signed-in `users/{uid}` doc, which would leak any
   // balance to every signed-in user regardless of the owner's `economicStatus`
   // scope (N324). A cross-viewer read is denied by the rules and returns null.
-  async getBalance(userId) {
+  async getBalance(userId, { forceRefresh = false } = {}) {
     if (!userId) return null;
-    await this._ensureInitialized();
-    try {
-      const privateRef = doc(this.db, PRIVATE_PROFILE_COLLECTION, userId);
-      const privateSnap = await getDoc(privateRef);
-      if (!privateSnap.exists()) return null;
-      const coins = privateSnap.data().coins;
-      return coins == null ? null : Number(coins);
-    } catch (e) {
-      log.error('Failed to get balance:', e);
-      return null;
+    if (!forceRefresh) {
+      const cached = this._balanceCache.get(userId);
+      if (cached && Date.now() - cached.at < 15_000) return cached.value;
+      const inflight = this._balanceInflight.get(userId);
+      if (inflight) return inflight;
     }
+
+    const req = (async () => {
+      await this._ensureInitialized();
+      try {
+        const privateRef = doc(this.db, PRIVATE_PROFILE_COLLECTION, userId);
+        const privateSnap = await withBoundedTimeout(getDoc(privateRef), 3500, 'balance read');
+        if (!privateSnap.exists()) return null;
+        const coins = privateSnap.data().coins;
+        const value = coins == null ? null : Number(coins);
+        this._balanceCache.set(userId, { value, at: Date.now() });
+        return value;
+      } catch (e) {
+        log.error('Failed to get balance:', e);
+        return null;
+      } finally {
+        this._balanceInflight.delete(userId);
+      }
+    })();
+
+    this._balanceInflight.set(userId, req);
+    return req;
   }
 
   // Cursor-paginated: `cursor` is the ISO `createdAt` of the last row the
@@ -458,34 +517,51 @@ class MonetizationService {
     }
   }
 
-  async getUserLevel(userId) {
-    await this._ensureInitialized();
-    let experience = 0;
-    let hasStanding = false;
-    if (userId) {
-      try {
-        const userRef = doc(this.db, 'users', userId);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          experience = Number(data.experience) || 0;
-          hasStanding = data.level !== undefined || data.experience !== undefined;
-        }
-      } catch (e) {
-        log.error('Failed to fetch user level info:', e);
-      }
+  async getUserLevel(userId, { forceRefresh = false } = {}) {
+    if (userId && !forceRefresh) {
+      const cached = this._levelCache.get(userId);
+      if (cached && Date.now() - cached.at < 15_000) return cached.value;
+      const inflight = this._levelInflight.get(userId);
+      if (inflight) return inflight;
     }
-    // Delegate to the canonical curve (src/shared/levelConfig.cjs) rather than
-    // re-deriving level/progress from a locally-held copy of the level table,
-    // which is the drift AGENTS.md forbids. Absent standing stays unknown.
-    const info = getLevelInfo(experience);
-    return {
-      level: hasStanding ? info.level : null,
-      experience,
-      nextLevelXP: info.nextLevelXp,
-      xpToNextLevel: info.xpToNext,
-      progress: info.progress,
-    };
+
+    const run = (async () => {
+      await this._ensureInitialized();
+      let experience = 0;
+      let hasStanding = false;
+      if (userId) {
+        try {
+          const userRef = doc(this.db, 'users', userId);
+          const userSnap = await withBoundedTimeout(getDoc(userRef), 3500, 'user level read');
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            experience = Number(data.experience) || 0;
+            hasStanding = data.level !== undefined || data.experience !== undefined;
+          }
+        } catch (e) {
+          log.error('Failed to fetch user level info:', e);
+        }
+      }
+      // Delegate to the canonical curve (src/shared/levelConfig.cjs) rather than
+      // re-deriving level/progress from a locally-held copy of the level table,
+      // which is the drift AGENTS.md forbids. Absent standing stays unknown.
+      const info = getLevelInfo(experience);
+      const value = {
+        level: hasStanding ? info.level : null,
+        experience,
+        nextLevelXP: info.nextLevelXp,
+        xpToNextLevel: info.xpToNext,
+        progress: info.progress,
+      };
+      if (userId) {
+        this._levelCache.set(userId, { value, at: Date.now() });
+        this._levelInflight.delete(userId);
+      }
+      return value;
+    })();
+
+    if (userId) this._levelInflight.set(userId, run);
+    return run;
   }
 
   async getMonetizationStats(userId) {
@@ -730,6 +806,7 @@ class MonetizationService {
     try {
       const result = await retryOperation(() => this.cfPurchaseCoins({ packageId, paymentMethodId, deviceMetadata, idempotencyKey: key }));
       if (result.data?.success) {
+        this.invalidateBalanceCache(auth?.currentUser?.uid || null);
         return {
           success: true,
           receipt: {
@@ -843,6 +920,7 @@ class MonetizationService {
       const result = await retryOperation(() =>
         this.cfAddCoins({ userId, amount, reason, metadata, idempotencyKey: key })
       );
+      this.invalidateBalanceCache(userId);
       return result.data;
     } catch (err) {
       // Server-authoritative money path: there is deliberately NO
@@ -861,6 +939,7 @@ class MonetizationService {
       const result = await retryOperation(() =>
         this.cfSpendCoins({ userId, amount, reason, metadata, idempotencyKey: key })
       );
+      this.invalidateBalanceCache(userId);
       return result.data;
     } catch (err) {
       // Server-authoritative money path: there is deliberately NO
@@ -879,6 +958,8 @@ class MonetizationService {
       const result = await retryOperation(() =>
         this.cfTransferCoins({ fromUserId, toUserId, amount, reason, metadata, idempotencyKey: key })
       );
+      this.invalidateBalanceCache(fromUserId);
+      this.invalidateBalanceCache(toUserId);
       return result.data;
     } catch (err) {
       // Server-authoritative money path: there is deliberately NO
@@ -905,6 +986,7 @@ class MonetizationService {
       const result = await retryOperation(() =>
         this.cfSendGift({ senderId, postId, giftType, idempotencyKey: key })
       );
+      this.invalidateBalanceCache(senderId);
       // The receiver's in-app `gift_received` notification is written server-side
       // in `sendGift` (the only place that can prove the gift); a client cannot
       // mint that trusted type. Nothing further to do here.
@@ -932,6 +1014,7 @@ class MonetizationService {
       const result = await retryOperation(() =>
         this.cfSendVibeGift({ vibeId, giftType, idempotencyKey: key })
       );
+      this.invalidateBalanceCache(auth?.currentUser?.uid || null);
       return result.data;
     } catch (err) {
       log.error('sendVibeGift callable failed (no client fallback):', err);
@@ -946,6 +1029,7 @@ class MonetizationService {
       const result = await retryOperation(() =>
         this.cfBoostPost({ userId, postId, days, idempotencyKey: key })
       );
+      this.invalidateBalanceCache(userId);
       return result.data;
     } catch (err) {
       // Server-authoritative money path: there is deliberately NO

@@ -516,16 +516,19 @@ const ProfileFeedGrid = memo(({
             ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
             : activeTab === 'audio'
             ? "grid-cols-1 md:grid-cols-2"
-            : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4"
+            : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4",
+          "animate-pulse"
         )}
       >
         {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
           <div
             key={n}
             className={cn(
-              "rounded-2xl border",
+              "rounded-[20px] sm:rounded-[24px] border backdrop-blur-xl",
               activeTab === 'reels' ? "aspect-[9/16]" : activeTab === 'audio' ? "h-36" : "aspect-square",
-              isDark ? "bg-white/[0.05] border-white/[0.08]" : "bg-slate-200/70 border-slate-200"
+              isDark
+                ? "bg-white/[0.025] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                : "bg-white/75 border-white/90 shadow-xs"
             )}
           />
         ))}

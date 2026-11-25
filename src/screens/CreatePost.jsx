@@ -10,7 +10,7 @@ import React, {
   lazy,
   Suspense,
 } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { toast } from 'sonner';
 import * as Icons from 'lucide-react';
@@ -19,15 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import LoadingSpinner from '../components/Shared/LoadingSpinner.jsx';
 import { ErrorBoundary } from '../components/ErrorBoundary.jsx';
-import { CreatePostSkeleton } from '../components/UI/SkeletonLoaders.jsx';
-import { callFunction, FUNCTIONS } from '../services/callableService.js';
 import { usePrompt } from '../components/Shared/ConfirmProvider.jsx';
-import { Virtuoso } from 'react-virtuoso';
-import { getFirestoreService } from '../services/firestoreService';
-import { getStorageService } from '../services/storageService';
-import { getSearchService } from '../services/searchService';
-import { getFeedService } from '../services/feedService';
-import { getUserService } from '../services/userService';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import {
   ServicesContext,
@@ -64,8 +56,6 @@ import {
   deleteOfflineQueueItem,
   stripEphemeralUrlsFromMediaItems,
 } from './CreatePost/createPostStorage.js';
-import { uploadComposerMedia } from './CreatePost/postMediaPipeline.js';
-import { executePostPublish } from './CreatePost/postPublishPipeline.js';
 import {
   Modal,
   VisibilityPanel,
@@ -75,7 +65,6 @@ import {
   ModerationStatus,
   ReviewSummary,
 } from './CreatePost/ComposerPanels.jsx';
-import CreatorInsightsDrawer from './CreatePost/CreatorInsightsDrawer.jsx';
 import EditPostLoader from './CreatePost/EditPostLoader.jsx';
 
 export {
@@ -92,18 +81,44 @@ export {
   ReviewSummary,
 };
 
-// Lazy-loaded editors
-const CreateText = lazy(() => import('./CreatePost/CreateText'));
-const CreateImage = lazy(() => import('./CreatePost/CreateImage'));
-const CreateVideo = lazy(() => import('./CreatePost/CreateVideo'));
-const CreatePoll = lazy(() => import('./CreatePost/CreatePoll'));
-const CreateQuestion = lazy(() => import('./CreatePost/CreateQuestion'));
-const CreateLink = lazy(() => import('./CreatePost/CreateLink'));
-const CreateAudio = lazy(() => import('./CreatePost/CreateAudio'));
-const CreateEvent = lazy(() => import('./CreatePost/CreateEvent'));
+const EDITOR_LOADERS = {
+  text: () => import('./CreatePost/CreateText'),
+  image: () => import('./CreatePost/CreateImage'),
+  video: () => import('./CreatePost/CreateVideo'),
+  poll: () => import('./CreatePost/CreatePoll'),
+  question: () => import('./CreatePost/CreateQuestion'),
+  link: () => import('./CreatePost/CreateLink'),
+  audio: () => import('./CreatePost/CreateAudio'),
+  event: () => import('./CreatePost/CreateEvent'),
+};
+
+const preloadEditor = (typeId) => {
+  const loader = EDITOR_LOADERS[typeId];
+  if (loader) {
+    loader().catch((err) => {
+      console.warn(`[CreatePost] Editor preload note (${typeId}):`, err?.message);
+    });
+  }
+};
+
+// Lazy-loaded editors & secondary panels
+const CreateText = lazy(EDITOR_LOADERS.text);
+const CreateImage = lazy(EDITOR_LOADERS.image);
+const CreateVideo = lazy(EDITOR_LOADERS.video);
+const CreatePoll = lazy(EDITOR_LOADERS.poll);
+const CreateQuestion = lazy(EDITOR_LOADERS.question);
+const CreateLink = lazy(EDITOR_LOADERS.link);
+const CreateAudio = lazy(EDITOR_LOADERS.audio);
+const CreateEvent = lazy(EDITOR_LOADERS.event);
+const LazyVirtuoso = lazy(() =>
+  import('react-virtuoso').then((m) => ({ default: m.Virtuoso }))
+);
+const CreatorInsightsDrawer = lazy(() => import('./CreatePost/CreatorInsightsDrawer.jsx'));
+const ComposerControlCenter = lazy(() => import('./CreatePost/sections/ComposerControlCenter.jsx'));
 
 function CreatePostProvider({ children }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const communityIdParam = searchParams.get('community') || null;
   const { theme } = useTheme();
@@ -112,21 +127,44 @@ function CreatePostProvider({ children }) {
   const isDark = theme === 'dark';
   const prefersReducedMotion = useReducedMotion();
 
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(reducer, null, () => {
+    const requestedType = searchParams.get('type');
+    const isEdit = Boolean(searchParams.get('edit'));
+    if (
+      !isEdit &&
+      requestedType &&
+      requestedType !== 'vibe' &&
+      POST_TYPES.some((t) => t.id === requestedType)
+    ) {
+      preloadEditor(requestedType);
+      return { ...initialState, postType: requestedType, step: 2 };
+    }
+    if (typeof location.state?.prefillContent === 'string' && location.state.prefillContent.trim()) {
+      const preType = location.state?.prefillType || 'text';
+      preloadEditor(preType);
+      return {
+        ...initialState,
+        postType: preType,
+        content: location.state.prefillContent,
+        step: 2,
+      };
+    }
+    return initialState;
+  });
+
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [draftsList, setDraftsList] = useState([]);
   const [offlineQueueItems, setOfflineQueueItems] = useState([]);
-  const [servicesReady, setServicesReady] = useState(false);
-  const [serviceError, setServiceError] = useState(null);
+  const [dbReady, setDbReady] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('idle');
   const [lastSavedAt, setLastSavedAt] = useState(null);
 
   const mountedRef = useRef(true);
   const dbRef = useRef(null);
+  const dbInitDoneRef = useRef(false);
   const processingOfflineRef = useRef(false);
   const publishLockRef = useRef(false);
   const mediaPreviewUrlsRef = useRef([]);
-  const initLockRef = useRef(false);
   const initPromiseRef = useRef(null);
   const autoSaveTimerRef = useRef(null);
 
@@ -153,8 +191,46 @@ function CreatePostProvider({ children }) {
     storage: null,
     search: null,
     feed: null,
-    user: null,
   });
+
+  const ensureFirestoreService = useCallback(async () => {
+    if (services.current.firestore) return services.current.firestore;
+    try {
+      const { getFirestoreService } = await import('../services/firestoreService');
+      const svc = getFirestoreService();
+      services.current.firestore = svc;
+      return svc;
+    } catch (e) {
+      console.warn('[CreatePost] Firestore init note:', e?.message);
+      return null;
+    }
+  }, []);
+
+  const ensureStorageService = useCallback(async () => {
+    if (services.current.storage) return services.current.storage;
+    try {
+      const { getStorageService } = await import('../services/storageService');
+      const svc = getStorageService();
+      services.current.storage = svc;
+      return svc;
+    } catch (e) {
+      console.warn('[CreatePost] Storage init note:', e?.message);
+      return null;
+    }
+  }, []);
+
+  const ensureSearchService = useCallback(async () => {
+    if (services.current.search) return services.current.search;
+    try {
+      const { getSearchService } = await import('../services/searchService');
+      const svc = getSearchService();
+      services.current.search = svc;
+      return svc;
+    } catch (e) {
+      console.warn('[CreatePost] Search init note:', e?.message);
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -171,7 +247,7 @@ function CreatePostProvider({ children }) {
       return;
     }
     const owned = await listDraftsForOwner(dbRef.current, uid);
-    setDraftsList(owned);
+    if (mountedRef.current) setDraftsList(owned);
   }, []);
 
   const refreshOfflineQueue = useCallback(async (uidOverride) => {
@@ -181,59 +257,28 @@ function CreatePostProvider({ children }) {
       return;
     }
     const owned = await listOfflineQueueForOwner(dbRef.current, uid);
-    setOfflineQueueItems(owned);
+    if (mountedRef.current) setOfflineQueueItems(owned);
   }, []);
 
-  const initServices = useCallback(async () => {
-    if (initLockRef.current) return initPromiseRef.current;
-    initLockRef.current = true;
+  // Non-blocking background initialization: UI paints immediately on frame 1 while
+  // IndexedDB drafts/queue and service instances hydrate asynchronously.
+  const initBackgroundResources = useCallback(async () => {
+    if (initPromiseRef.current) return initPromiseRef.current;
 
     const initTask = (async () => {
       try {
-        // Initialize IndexedDB first and resolve core services resiliently so a
-        // secondary service failure never locks the entire creator studio.
-        const [db, fsSettled, stSettled, seSettled, fdSettled, usSettled] = await Promise.all([
-          openCreatePostDB(),
-          Promise.resolve().then(() => getFirestoreService()).catch((e) => {
-            console.warn('[CreatePost] Firestore init note:', e?.message);
-            return null;
-          }),
-          Promise.resolve().then(() => getStorageService()).catch((e) => {
-            console.warn('[CreatePost] Storage init note:', e?.message);
-            return null;
-          }),
-          Promise.resolve().then(() => getSearchService()).catch((e) => {
-            console.warn('[CreatePost] Search init note:', e?.message);
-            return null;
-          }),
-          Promise.resolve().then(() => getFeedService()).catch((e) => {
-            console.warn('[CreatePost] Feed init note:', e?.message);
-            return null;
-          }),
-          Promise.resolve().then(() => getUserService()).catch((e) => {
-            console.warn('[CreatePost] User service init note:', e?.message);
-            return null;
-          }),
-        ]);
-
+        const db = await openCreatePostDB();
         if (!mountedRef.current) return;
         dbRef.current = db;
-        services.current = {
-          firestore: fsSettled,
-          storage: stSettled,
-          search: seSettled,
-          feed: fdSettled,
-          user: usSettled,
-        };
-
-        await Promise.all([refreshDraftsList(), refreshOfflineQueue()]);
-        setServicesReady(true);
-        setServiceError(null);
+        if (db) {
+          await Promise.all([refreshDraftsList(), refreshOfflineQueue()]);
+        }
+        if (mountedRef.current) setDbReady(true);
       } catch (err) {
-        console.error('[CreatePost] Studio initialization error:', err);
-        setServiceError(err?.message || 'Initialization failed');
+        console.warn('[CreatePost] Local storage init note:', err?.message);
+        if (mountedRef.current) setDbReady(true);
       } finally {
-        initLockRef.current = false;
+        dbInitDoneRef.current = true;
         initPromiseRef.current = null;
       }
     })();
@@ -242,16 +287,36 @@ function CreatePostProvider({ children }) {
     return initTask;
   }, [refreshDraftsList, refreshOfflineQueue]);
 
+  const ensureDB = useCallback(async () => {
+    if (dbRef.current) return dbRef.current;
+    if (dbInitDoneRef.current) return null;
+    await initBackgroundResources();
+    return dbRef.current;
+  }, [initBackgroundResources]);
+
   useEffect(() => {
-    initServices();
-  }, [initServices]);
+    initBackgroundResources();
+    // Warm core publishing services & common editors after first paint
+    const warm = () => {
+      ensureFirestoreService();
+      ensureStorageService();
+      preloadEditor('text');
+      preloadEditor('image');
+    };
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(warm, { timeout: 1000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const timer = setTimeout(warm, 120);
+    return () => clearTimeout(timer);
+  }, [initBackgroundResources, ensureFirestoreService, ensureStorageService]);
 
   // Re-scope local drafts & queue immediately on account switch or sign-out
   useEffect(() => {
-    if (!servicesReady || !dbRef.current) return;
+    if (!dbReady || !dbRef.current) return;
     refreshDraftsList(user?.uid);
     refreshOfflineQueue(user?.uid);
-  }, [user?.uid, servicesReady, refreshDraftsList, refreshOfflineQueue]);
+  }, [user?.uid, dbReady, refreshDraftsList, refreshOfflineQueue]);
 
   const hydrateDraftMedia = useCallback(async (mediaItems, uid) => {
     const restored = [];
@@ -278,16 +343,18 @@ function CreatePostProvider({ children }) {
   const persistDraft = useCallback(
     async ({ silent = false } = {}) => {
       const uid = userRef.current?.uid;
-      if (!dbRef.current || !uid || !stateRef.current.postType || stateRef.current.editPostId) {
+      if (!uid || !stateRef.current.postType || stateRef.current.editPostId) {
         return false;
       }
+      const db = dbRef.current || (await ensureDB());
+      if (!db) return false;
       const data = stateRef.current;
       setAutoSaveStatus('saving');
       try {
         const mediaToStore = [];
         for (const m of data.mediaItems || []) {
           if (m.file) {
-            const blobId = await storeBlobWithDedup(dbRef.current, m.file, m.type, uid);
+            const blobId = await storeBlobWithDedup(db, m.file, m.type, uid);
             mediaToStore.push({
               ...m,
               file: null,
@@ -329,7 +396,7 @@ function CreatePostProvider({ children }) {
           updatedAt: Date.now(),
         };
 
-        await saveDraftRecord(dbRef.current, draftPayload, uid);
+        await saveDraftRecord(db, draftPayload, uid);
         if (!data.draftId) dispatch({ type: 'SET_DRAFT_ID', payload: draftPayload.id });
         dispatch({ type: 'SET_IS_DIRTY', payload: false });
         await refreshDraftsList(uid);
@@ -337,9 +404,10 @@ function CreatePostProvider({ children }) {
         setAutoSaveStatus('saved');
         setLastSavedAt(Date.now());
 
-        if (!isOfflineRef.current && services.current.firestore?.saveDraft) {
+        const fsService = await ensureFirestoreService();
+        if (!isOfflineRef.current && fsService?.saveDraft) {
           try {
-            await services.current.firestore.saveDraft(draftPayload.id, uid, draftPayload);
+            await fsService.saveDraft(draftPayload.id, uid, draftPayload);
             if (!silent) toast.success('Draft saved and synced');
           } catch (cloudErr) {
             console.warn('[CreatePost] Cloud draft sync note:', cloudErr?.message);
@@ -356,14 +424,14 @@ function CreatePostProvider({ children }) {
         return false;
       }
     },
-    [refreshDraftsList]
+    [ensureDB, refreshDraftsList, ensureFirestoreService]
   );
 
   const saveDraft = useCallback(() => persistDraft({ silent: false }), [persistDraft]);
 
   // Unified parent debounced autosave (replaces duplicate child autosave loops)
   useEffect(() => {
-    if (!servicesReady || !state.postType || !state.isDirty || state.editPostId || state.loading) {
+    if (!dbReady || !state.postType || !state.isDirty || state.editPostId || state.loading) {
       return;
     }
     clearTimeout(autoSaveTimerRef.current);
@@ -372,7 +440,7 @@ function CreatePostProvider({ children }) {
     }, 2200);
     return () => clearTimeout(autoSaveTimerRef.current);
   }, [
-    servicesReady,
+    dbReady,
     state.postType,
     state.isDirty,
     state.editPostId,
@@ -391,11 +459,13 @@ function CreatePostProvider({ children }) {
   const loadDraft = useCallback(
     async (draftId) => {
       const uid = userRef.current?.uid;
-      if (!dbRef.current || !uid) return;
-      let draft = await getDraftForOwner(dbRef.current, draftId, uid);
-      if (!draft && !isOfflineRef.current && services.current.firestore?.getDraft) {
+      if (!uid) return;
+      const db = await ensureDB();
+      let draft = db ? await getDraftForOwner(db, draftId, uid) : null;
+      const fsService = !draft && !isOfflineRef.current ? await ensureFirestoreService() : null;
+      if (!draft && fsService?.getDraft) {
         try {
-          const cloudDraft = await services.current.firestore.getDraft(draftId);
+          const cloudDraft = await fsService.getDraft(draftId);
           if (cloudDraft && (!cloudDraft.ownerUid || cloudDraft.ownerUid === uid)) {
             draft = cloudDraft;
           }
@@ -421,25 +491,29 @@ function CreatePostProvider({ children }) {
       dispatch({ type: 'SET_STEP', payload: 2 });
       toast.success('Draft loaded');
     },
-    [hydrateDraftMedia]
+    [ensureDB, hydrateDraftMedia, ensureFirestoreService]
   );
 
   const deleteDraft = useCallback(
     async (draftId, { silent = false } = {}) => {
       const uid = userRef.current?.uid;
-      if (!dbRef.current || !uid || !draftId) return;
-      await deleteDraftRecord(dbRef.current, draftId, uid);
-      await refreshDraftsList(uid);
-      if (!isOfflineRef.current && services.current.firestore?.deleteDraft) {
+      if (!uid || !draftId) return;
+      const db = await ensureDB();
+      if (db) {
+        await deleteDraftRecord(db, draftId, uid);
+        await refreshDraftsList(uid);
+      }
+      const fsService = !isOfflineRef.current ? await ensureFirestoreService() : null;
+      if (fsService?.deleteDraft) {
         try {
-          await services.current.firestore.deleteDraft(draftId);
+          await fsService.deleteDraft(draftId);
         } catch (e) {
           console.warn('[CreatePost] Cloud draft delete failed:', e?.message);
         }
       }
       if (!silent) toast.success('Draft deleted');
     },
-    [refreshDraftsList]
+    [ensureDB, refreshDraftsList, ensureFirestoreService]
   );
 
   const resumeLatestDraft = useCallback(async () => {
@@ -449,7 +523,12 @@ function CreatePostProvider({ children }) {
 
   const saveAsTemplate = useCallback(async () => {
     const uid = userRef.current?.uid;
-    if (!dbRef.current || !uid || !stateRef.current.postType) return;
+    if (!uid || !stateRef.current.postType) return;
+    const db = await ensureDB();
+    if (!db) {
+      toast.error('Local template storage unavailable');
+      return;
+    }
     const name = await promptDialog({
       title: 'Save as Template',
       message: 'Enter a name for this reusable post template:',
@@ -457,19 +536,21 @@ function CreatePostProvider({ children }) {
       confirmText: 'Save Template',
     });
     if (!name || !name.trim()) return;
-    await saveTemplateRecord(dbRef.current, {
+    await saveTemplateRecord(db, {
       name,
       postType: stateRef.current.postType,
       state: stateRef.current,
       ownerUid: uid,
     });
     toast.success('Template saved');
-  }, [promptDialog]);
+  }, [ensureDB, promptDialog]);
 
   const loadTemplate = useCallback(async (templateId) => {
     const uid = userRef.current?.uid;
-    if (!dbRef.current || !uid) return;
-    const tpl = await getTemplateForOwner(dbRef.current, templateId, uid);
+    if (!uid) return;
+    const db = await ensureDB();
+    if (!db) return;
+    const tpl = await getTemplateForOwner(db, templateId, uid);
     if (!tpl) {
       toast.error('Template not found');
       return;
@@ -481,32 +562,38 @@ function CreatePostProvider({ children }) {
     dispatch({ type: 'SET_POST_TYPE', payload: tpl.postType });
     dispatch({ type: 'SET_STEP', payload: 2 });
     toast.success('Template loaded');
-  }, []);
+  }, [ensureDB]);
 
   const getDraftVersions = useCallback(async (draftId) => {
     const uid = userRef.current?.uid;
-    if (!dbRef.current || !uid) return [];
-    return listDraftVersionsForOwner(dbRef.current, draftId, uid);
-  }, []);
+    if (!uid) return [];
+    const db = await ensureDB();
+    if (!db) return [];
+    return listDraftVersionsForOwner(db, draftId, uid);
+  }, [ensureDB]);
 
   const addToOfflineQueue = useCallback(
     async (postData) => {
       const uid = userRef.current?.uid;
-      if (!dbRef.current || !uid) {
+      if (!uid) {
         throw new Error('Sign in required to queue offline posts');
+      }
+      const db = await ensureDB();
+      if (!db) {
+        throw new Error('Offline storage unavailable');
       }
       const id = postData.clientPostId || `queue_${uid}_${Date.now()}`;
       const mediaToStore = [];
       for (const m of postData.mediaItems || []) {
         if (m.file) {
-          const blobId = await storeBlobWithDedup(dbRef.current, m.file, m.type, uid);
+          const blobId = await storeBlobWithDedup(db, m.file, m.type, uid);
           mediaToStore.push({ ...m, file: null, preview: null, blobId });
         } else {
           mediaToStore.push(...stripEphemeralUrlsFromMediaItems([m]));
         }
       }
       await putOfflineQueueItem(
-        dbRef.current,
+        db,
         {
           id,
           ownerUid: uid,
@@ -519,7 +606,7 @@ function CreatePostProvider({ children }) {
       );
       await refreshOfflineQueue(uid);
     },
-    [refreshOfflineQueue, communityIdParam]
+    [ensureDB, refreshOfflineQueue, communityIdParam]
   );
 
   const uploadMedia = useCallback(
@@ -529,16 +616,20 @@ function CreatePostProvider({ children }) {
       }
       const uid = userRef.current?.uid;
       if (!uid) throw new Error('You must be signed in to upload media');
+      const [{ uploadComposerMedia }, storageService] = await Promise.all([
+        import('./CreatePost/postMediaPipeline.js'),
+        ensureStorageService(),
+      ]);
       return uploadComposerMedia(mediaItems, {
         uid,
-        storageService: services.current.storage,
+        storageService,
         signal,
         onItemProgress: (id, percent) =>
           dispatch({ type: 'UPDATE_MEDIA_PROGRESS', payload: { id, updates: { progress: percent } } }),
         onBatchProgress: (pct) => dispatch({ type: 'SET_PROGRESS', payload: pct }),
       });
     },
-    []
+    [ensureStorageService]
   );
 
   const publishPost = useCallback(
@@ -552,6 +643,11 @@ function CreatePostProvider({ children }) {
       const communityId = current.communityId || communityIdParam;
 
       try {
+        const [{ executePostPublish }] = await Promise.all([
+          import('./CreatePost/postPublishPipeline.js'),
+          ensureFirestoreService(),
+          ensureStorageService(),
+        ]);
         const result = await executePostPublish({
           current,
           communityId,
@@ -577,7 +673,13 @@ function CreatePostProvider({ children }) {
             toast.success('Post scheduled');
             navigate('/profile');
           } else {
-            toast.success('Post published');
+            if (result.linkedCampaignId) {
+              toast.success('Post published and linked Ad Campaign drafted in Advertising Center.');
+            } else if (result.promotionError) {
+              toast.warning(`Post published, but ad campaign setup failed: ${result.promotionError}`);
+            } else {
+              toast.success('Post published');
+            }
             navigate(communityId ? `/community/${communityId}` : '/home');
           }
         }
@@ -595,7 +697,7 @@ function CreatePostProvider({ children }) {
         publishLockRef.current = false;
       }
     },
-    [communityIdParam, deleteDraft, addToOfflineQueue, navigate]
+    [communityIdParam, deleteDraft, addToOfflineQueue, navigate, ensureFirestoreService, ensureStorageService]
   );
 
   const processOfflineQueue = useCallback(async () => {
@@ -680,6 +782,7 @@ function CreatePostProvider({ children }) {
 
   const moderateContent = useCallback(async (content, mediaUrls) => {
     try {
+      const { callFunction, FUNCTIONS } = await import('../services/callableService.js');
       const result = await callFunction(FUNCTIONS.MODERATE_POST, { content, mediaUrls });
       dispatch({ type: 'SET_MODERATION_STATUS', payload: result });
       return result;
@@ -698,6 +801,7 @@ function CreatePostProvider({ children }) {
 
   const getPredictions = useCallback(async () => {
     try {
+      const { callFunction, FUNCTIONS } = await import('../services/callableService.js');
       const result = await callFunction(FUNCTIONS.PREDICT_POST_PERFORMANCE, {
         postType: stateRef.current.postType,
         content: stateRef.current.content,
@@ -712,13 +816,13 @@ function CreatePostProvider({ children }) {
   }, []);
 
   const searchUsers = useCallback(async (query) => {
-    const svc = services.current.search;
+    const svc = await ensureSearchService();
     if (svc && typeof svc.searchUsers === 'function') {
       const res = await svc.searchUsers(query, { limit: 7 });
       return Array.isArray(res) ? res : res?.users || [];
     }
     return [];
-  }, []);
+  }, [ensureSearchService]);
 
   const debounceTimerRef = useRef(null);
   const lastModInputRef = useRef('');
@@ -836,11 +940,12 @@ function CreatePostProvider({ children }) {
 
   const loadTemplates = useCallback(async () => {
     const uid = userRef.current?.uid;
-    if (!dbRef.current || !uid) return;
-    const all = await listTemplatesForOwner(dbRef.current, uid);
+    if (!uid) return;
+    const db = await ensureDB();
+    const all = db ? await listTemplatesForOwner(db, uid) : [];
     setTemplates(all);
     setShowTemplates(true);
-  }, []);
+  }, [ensureDB]);
 
   const loadVersions = useCallback(
     async (draftId) => {
@@ -1073,30 +1178,6 @@ function CreatePostProvider({ children }) {
   );
 
   const stateValue = useMemo(() => ({ state, dispatch, draftsList }), [state, draftsList]);
-
-  if (!servicesReady) {
-    if (serviceError) {
-      return (
-        <div className="min-h-[60vh] flex items-center justify-center p-4">
-          <div className={`${SURFACE_GLASS_CLASS} text-center p-6 max-w-sm w-full space-y-4`}>
-            <Icons.AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
-            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
-              Could not open Studio: {serviceError}
-            </p>
-            <button
-              type="button"
-              onClick={initServices}
-              className="min-h-[44px] px-5 py-2.5 rounded-xl text-white font-semibold text-sm transition-opacity hover:opacity-95"
-              style={{ background: BRAND_GRADIENT }}
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return <CreatePostSkeleton />;
-  }
 
   return (
     <ServicesContext.Provider value={servicesValue}>
@@ -1443,6 +1524,8 @@ const LauncherGrid = React.memo(() => {
                   key={type.id}
                   type="button"
                   onClick={() => selectPostType(type.id)}
+                  onPointerEnter={() => preloadEditor(type.id)}
+                  onFocus={() => preloadEditor(type.id)}
                   className={`${SURFACE_GLASS_CLASS} group relative flex flex-col items-start justify-between p-4 sm:p-5 min-h-[132px] text-left hover:border-arvdoul-purple/50 active:scale-[0.98] transition-all focus-visible:ring-2 focus-visible:ring-arvdoul-purple`}
                   aria-label={`Create ${type.label}`}
                 >
@@ -1524,42 +1607,50 @@ const LauncherGrid = React.memo(() => {
                     className="overflow-hidden"
                   >
                     <div className="mt-3 h-60 w-full">
-                      <Virtuoso
-                        data={draftsList}
-                        itemContent={(_index, draft) => (
-                          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-100/80 dark:bg-white/[0.04] mb-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                                <span className="font-semibold capitalize text-arvdoul-purple">
-                                  {draft.postType}
-                                </span>
-                                <span aria-hidden="true">·</span>
-                                <span>{new Date(draft.updatedAt).toLocaleDateString()}</span>
-                              </div>
-                              <p className="text-sm text-slate-900 dark:text-white truncate mt-0.5">
-                                {draft.data?.content?.slice(0, 60) || 'Untitled draft'}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => loadVersions(draft.id)}
-                                className="min-h-[36px] px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-white/12 text-slate-700 dark:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-white/10"
-                              >
-                                History
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => loadDraft(draft.id)}
-                                className="min-h-[36px] px-3 py-1 text-xs font-semibold rounded-lg text-white"
-                                style={{ background: BRAND_GRADIENT }}
-                              >
-                                Open
-                              </button>
-                            </div>
+                      <Suspense
+                        fallback={
+                          <div className="h-full flex items-center justify-center">
+                            <LoadingSpinner size="sm" />
                           </div>
-                        )}
-                      />
+                        }
+                      >
+                        <LazyVirtuoso
+                          data={draftsList}
+                          itemContent={(_index, draft) => (
+                            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-100/80 dark:bg-white/[0.04] mb-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                  <span className="font-semibold capitalize text-arvdoul-purple">
+                                    {draft.postType}
+                                  </span>
+                                  <span aria-hidden="true">·</span>
+                                  <span>{new Date(draft.updatedAt).toLocaleDateString()}</span>
+                                </div>
+                                <p className="text-sm text-slate-900 dark:text-white truncate mt-0.5">
+                                  {draft.data?.content?.slice(0, 60) || 'Untitled draft'}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => loadVersions(draft.id)}
+                                  className="min-h-[36px] px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-white/12 text-slate-700 dark:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-white/10"
+                                >
+                                  History
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => loadDraft(draft.id)}
+                                  className="min-h-[36px] px-3 py-1 text-xs font-semibold rounded-lg text-white"
+                                  style={{ background: BRAND_GRADIENT }}
+                                >
+                                  Open
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        />
+                      </Suspense>
                     </div>
                   </motion.div>
                 )}
@@ -1637,12 +1728,20 @@ const LauncherGrid = React.memo(() => {
         {/* Side Drawer / Column for Schedule or Insights */}
         {activeSidePanel && (
           <div className="lg:col-span-5">
-            <CreatorInsightsDrawer
-              activeTab={activeSidePanel}
-              scheduledDrafts={scheduledDrafts}
-              onEditScheduledDraft={(draft) => loadDraft(draft.id)}
-              onClose={() => setActiveSidePanel(null)}
-            />
+            <Suspense
+              fallback={
+                <div className={`${SURFACE_GLASS_CLASS} p-8 flex items-center justify-center`}>
+                  <LoadingSpinner size="sm" />
+                </div>
+              }
+            >
+              <CreatorInsightsDrawer
+                activeTab={activeSidePanel}
+                scheduledDrafts={scheduledDrafts}
+                onEditScheduledDraft={(draft) => loadDraft(draft.id)}
+                onClose={() => setActiveSidePanel(null)}
+              />
+            </Suspense>
           </div>
         )}
       </div>
@@ -1682,99 +1781,7 @@ function CreatorShell({ children }) {
 }
 
 function EnhancedStep3View() {
-  const { state, dispatch } = useCreatePostState();
-  const { publishPost, saveDraft } = useCreatePostServices();
-
-  return (
-    <div className="max-w-5xl mx-auto py-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      <div className="lg:col-span-7 space-y-5">
-        <ReviewSummary />
-      </div>
-
-      <div className="lg:col-span-5 space-y-4">
-        {/* Quick Audience Selector */}
-        <div className={`${SURFACE_GLASS_CLASS} p-4 space-y-3`}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-              Audience
-            </span>
-            <span className="text-xs font-semibold text-arvdoul-purple capitalize">
-              {VISIBILITY_OPTIONS.find((o) => o.value === state.visibility)?.label || state.visibility}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {VISIBILITY_OPTIONS.map((opt) => {
-              const isSelected = state.visibility === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => dispatch({ type: 'SET_VISIBILITY', payload: opt.value })}
-                  className={`min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${
-                    isSelected
-                      ? 'bg-arvdoul-purple text-white border-arvdoul-purple shadow-sm'
-                      : 'bg-slate-50 dark:bg-white/[0.04] text-slate-700 dark:text-slate-200 border-slate-200 dark:border-white/10 hover:border-arvdoul-purple/50'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <VisibilityPanel defaultOpen={false} />
-        <LocationPanel defaultOpen={false} />
-        <SchedulingPanel defaultOpen={false} />
-        <ModerationStatus defaultOpen={false} />
-        <InsightsPanel defaultOpen={false} />
-
-        <div className={`${SURFACE_GLASS_CLASS} p-4 space-y-3`}>
-          <div>
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
-              {state.scheduledTime ? 'Ready to schedule' : 'Ready to publish'}
-            </h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {state.scheduledTime
-                ? `Scheduled for ${new Date(state.scheduledTime).toLocaleString()}`
-                : 'Published posts appear immediately for your selected audience.'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={saveDraft}
-              className="min-h-[44px] px-4 py-2 rounded-xl border border-slate-200 dark:border-white/15 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-            >
-              Save Draft
-            </button>
-            <button
-              type="button"
-              onClick={() => publishPost()}
-              disabled={state.loading}
-              className="min-h-[44px] flex-1 px-5 py-2 rounded-xl font-semibold text-white text-sm shadow-lg hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-              style={{ background: BRAND_GRADIENT }}
-            >
-              {state.loading ? (
-                <>
-                  <LoadingSpinner size="xs" color="white" />
-                  <span>Publishing...</span>
-                </>
-              ) : (
-                <span>
-                  {state.editPostId
-                    ? 'Save Changes'
-                    : state.scheduledTime
-                    ? 'Schedule Post'
-                    : 'Publish Now'}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <ComposerControlCenter />;
 }
 
 function CreatePostShell({ children }) {
@@ -1865,6 +1872,18 @@ function CreatePostShell({ children }) {
 
 function CreatePostContent() {
   const { state } = useCreatePostState();
+
+  useEffect(() => {
+    if (state.step === 2) {
+      import('./CreatePost/sections/ComposerControlCenter.jsx').catch((err) => {
+        console.warn('[CreatePost] Control center preload note:', err?.message);
+      });
+      import('./CreatePost/postPublishPipeline.js').catch((err) => {
+        console.warn('[CreatePost] Publish pipeline preload note:', err?.message);
+      });
+    }
+  }, [state.step]);
+
   const step2Content = useMemo(() => {
     if (!state.postType) return null;
     switch (state.postType) {
@@ -1908,7 +1927,28 @@ function CreatePostContent() {
       <ErrorBoundary fallback={<div className="p-4 text-rose-500">Failed to load editor.</div>}>
         <CreatorShell>
           <CreatePostShell>
-            {state.step === 2 ? step2Content : <EnhancedStep3View />}
+            {state.step === 2 ? (
+              <div className="max-w-5xl mx-auto pt-4 space-y-4">
+                <div className="flex items-center justify-between gap-3 px-1">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-7 rounded-lg bg-arvdoul-purple/12 text-arvdoul-purple flex items-center justify-center font-bold text-xs tabular-nums">
+                      01
+                    </span>
+                    <div>
+                      <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+                        Content Studio
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Compose media and copy, then continue to Control Center (Sections 02–10)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {step2Content}
+              </div>
+            ) : (
+              <EnhancedStep3View />
+            )}
           </CreatePostShell>
         </CreatorShell>
       </ErrorBoundary>

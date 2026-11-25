@@ -395,6 +395,49 @@ class CollaborationService {
     return { initialized: this.initialized, projects };
   }
 
+  // ==================== BRAND PARTNERSHIPS & AD AUTHORIZATIONS ====================
+  async createBrandPartnership(payload) {
+    return callFunction(FUNCTIONS.CREATE_BRAND_PARTNERSHIP, payload);
+  }
+
+  async respondBrandPartnership(partnershipId, decision) {
+    return callFunction(FUNCTIONS.RESPOND_BRAND_PARTNERSHIP, { partnershipId, decision });
+  }
+
+  async updatePartnershipDeliverable(partnershipId, deliverableId, completed, postId = null) {
+    return callFunction(FUNCTIONS.UPDATE_PARTNERSHIP_DELIVERABLE, {
+      partnershipId,
+      deliverableId,
+      completed,
+      postId,
+    });
+  }
+
+  async listBrandPartnerships() {
+    return callFunction(FUNCTIONS.LIST_BRAND_PARTNERSHIPS, {});
+  }
+
+  async grantAdAuthorization({ postId, partnerId = null, partnerName = '', expiresInDays = 30 }) {
+    return callFunction(FUNCTIONS.GRANT_AD_AUTHORIZATION, {
+      postId,
+      partnerId,
+      partnerName,
+      expiresInDays,
+    });
+  }
+
+  async revokeAdAuthorization(authorizationId) {
+    return callFunction(FUNCTIONS.REVOKE_AD_AUTHORIZATION, { authorizationId });
+  }
+
+  async listAdAuthorizations() {
+    return callFunction(FUNCTIONS.LIST_AD_AUTHORIZATIONS, {});
+  }
+
+  async getPartnershipAnalytics(partnershipId) {
+    return callFunction(FUNCTIONS.GET_PARTNERSHIP_ANALYTICS, { partnershipId });
+  }
+
   destroy() {
     this.initialized = false;
     this.initPromise = null;
@@ -439,6 +482,14 @@ const collaborationService = {
   acquireLock: (cid, uid, ttl) => getCollaborationService().acquireLock(cid, uid, ttl),
   releaseLock: (cid, uid) => getCollaborationService().releaseLock(cid, uid),
   getStats: (uid) => getCollaborationService().getStats(uid),
+  createBrandPartnership: (p) => getCollaborationService().createBrandPartnership(p),
+  respondBrandPartnership: (id, d) => getCollaborationService().respondBrandPartnership(id, d),
+  updatePartnershipDeliverable: (pid, did, c, postId) => getCollaborationService().updatePartnershipDeliverable(pid, did, c, postId),
+  listBrandPartnerships: () => getCollaborationService().listBrandPartnerships(),
+  grantAdAuthorization: (p) => getCollaborationService().grantAdAuthorization(p),
+  revokeAdAuthorization: (id) => getCollaborationService().revokeAdAuthorization(id),
+  listAdAuthorizations: () => getCollaborationService().listAdAuthorizations(),
+  getPartnershipAnalytics: (id) => getCollaborationService().getPartnershipAnalytics(id),
   destroy: () => getCollaborationService().destroy(),
   getService: getCollaborationService,
 };

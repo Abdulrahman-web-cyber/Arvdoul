@@ -43,6 +43,20 @@
         "likesCount": { "type": "number" },
         "commentsCount": { "type": "number" },
         "sharesCount": { "type": "number" },
+        "identityMeta": { "type": "object" },
+        "distributionSettings": { "type": "object" },
+        "engagementControls": { "type": "object" },
+        "commercialDisclosure": { "type": "object" },
+        "partnership": { "type": "object" },
+        "creatorPrograms": { "type": "object" },
+        "safetyAccessibility": { "type": "object" },
+        "lifecycleSettings": { "type": "object" },
+        "adCampaignId": { "type": "string", "maxLength": 128 },
+        "adReviewStatus": { "type": "string", "enum": ["none", "pending_review", "approved", "rejected"] },
+        "paidStats": { "type": "object" },
+        "sponsoredMetrics": { "type": "object" },
+        "adAttribution": { "type": "object" },
+        "monetizationLedgerRef": { "type": "string", "maxLength": 128 },
         "createdAt": { "type": "string" }
       },
       "required": ["id", "authorId", "type"]
@@ -253,6 +267,226 @@
         "shardIndex": { "type": "number" }
       },
       "required": ["count", "docPath", "field", "shardIndex"]
+    },
+    "AdAccount": {
+      "title": "AdAccount",
+      "description": "Dedicated advertiser billing account strictly separated from Virtual Coins Wallet and Creator Earnings.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "currency": { "type": "string", "maxLength": 8 },
+        "balanceCents": { "type": "number" },
+        "reservedCents": { "type": "number" },
+        "lifetimeSpendCents": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "suspended", "pending_verification"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "currency", "balanceCents"]
+    },
+    "AdCampaign": {
+      "title": "AdCampaign",
+      "description": "Advertising campaign linking a preserved organic post (Spark) or standalone ad creative with targeting, placements, budget, and delivery status.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "advertiserId": { "type": "string", "maxLength": 128 },
+        "partnerCreatorId": { "type": "string", "maxLength": 128 },
+        "sourcePostId": { "type": "string", "maxLength": 128 },
+        "adAuthorizationId": { "type": "string", "maxLength": 128 },
+        "promotionKind": { "type": "string", "enum": ["post", "profile", "website", "product", "event", "spark_video"] },
+        "objective": { "type": "string", "enum": ["reach", "impressions", "engagement", "profile_visits", "clicks", "conversions"] },
+        "status": { "type": "string", "enum": ["draft", "pending_review", "active", "paused", "rejected", "completed", "ended"] },
+        "reviewStatus": { "type": "string", "enum": ["not_submitted", "pending_review", "approved", "rejected"] },
+        "budgetType": { "type": "string", "enum": ["daily", "lifetime"] },
+        "budgetCents": { "type": "number" },
+        "spentCents": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 8 },
+        "placements": { "type": "array" },
+        "targeting": { "type": "object" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "advertiserId", "promotionKind", "objective", "status"]
+    },
+    "AdCreative": {
+      "title": "AdCreative",
+      "description": "Ad creative payload linked to an advertising campaign and optional preserved organic post.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "advertiserId": { "type": "string", "maxLength": 128 },
+        "sourcePostId": { "type": "string", "maxLength": 128 },
+        "headline": { "type": "string", "maxLength": 160 },
+        "body": { "type": "string", "maxLength": 1000 },
+        "ctaLabel": { "type": "string", "maxLength": 64 },
+        "destinationUrl": { "type": "string", "maxLength": 1000 },
+        "mediaUrl": { "type": "string", "maxLength": 1000 },
+        "disclosureType": { "type": "string", "enum": ["sponsored_ad", "paid_partnership", "own_promotion"] },
+        "status": { "type": "string", "enum": ["draft", "active", "archived"] }
+      },
+      "required": ["id", "campaignId", "advertiserId"]
+    },
+    "AdConversion": {
+      "title": "AdConversion",
+      "description": "Server-validated conversion attribution record for paid ad delivery.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "advertiserId": { "type": "string", "maxLength": 128 },
+        "sourcePostId": { "type": "string", "maxLength": 128 },
+        "eventType": { "type": "string", "enum": ["click", "profile_visit", "follow", "rsvp", "purchase", "lead"] },
+        "valueCents": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "campaignId", "advertiserId", "eventType"]
+    },
+    "AdBillingEntry": {
+      "title": "AdBillingEntry",
+      "description": "Immutable advertiser billing ledger entry (fundings, campaign charges, refunds).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "advertiserId": { "type": "string", "maxLength": 128 },
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["deposit", "spend", "refund", "adjustment"] },
+        "amountCents": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 8 },
+        "balanceAfterCents": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "advertiserId", "type", "amountCents"]
+    },
+    "AdDispute": {
+      "title": "AdDispute",
+      "description": "Advertiser billing refund or delivery dispute record resolved by admin moderation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "advertiserId": { "type": "string", "maxLength": 128 },
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "reason": { "type": "string", "maxLength": 500 },
+        "requestedAmountCents": { "type": "number" },
+        "status": { "type": "string", "enum": ["open", "approved", "rejected"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "advertiserId", "status"]
+    },
+    "AdReview": {
+      "title": "AdReview",
+      "description": "Policy compliance and moderation review ticket for an ad campaign.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "advertiserId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending_review", "approved", "rejected"] },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "reviewedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "campaignId", "advertiserId", "status"]
+    },
+    "AdDailyMetric": {
+      "title": "AdDailyMetric",
+      "description": "Per-day separated paid delivery metrics for an ad campaign and preserved source post.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "advertiserId": { "type": "string", "maxLength": 128 },
+        "partnerCreatorId": { "type": "string", "maxLength": 128 },
+        "sourcePostId": { "type": "string", "maxLength": 128 },
+        "dateKey": { "type": "string", "maxLength": 10 },
+        "impressions": { "type": "number" },
+        "reach": { "type": "number" },
+        "clicks": { "type": "number" },
+        "conversions": { "type": "number" },
+        "spendCents": { "type": "number" }
+      },
+      "required": ["id", "campaignId", "advertiserId", "dateKey"]
+    },
+    "CreatorEarningsEntry": {
+      "title": "CreatorEarningsEntry",
+      "description": "Creator monetization ledger entry (gifts, ad revenue share, affiliate commissions, sponsorship settlements) separated from Virtual Coins and Ad Spend.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "creatorId": { "type": "string", "maxLength": 128 },
+        "sourceType": { "type": "string", "enum": ["gift", "ad_rev_share", "affiliate", "sponsorship", "payout"] },
+        "postId": { "type": "string", "maxLength": 128 },
+        "amountCents": { "type": "number" },
+        "coinsEquivalent": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 8 },
+        "status": { "type": "string", "enum": ["pending", "available", "settled"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "creatorId", "sourceType", "status"]
+    },
+    "AdAuthorization": {
+      "title": "AdAuthorization",
+      "description": "Revocable, expiring creator authorization allowing a verified brand partner to promote an existing organic post without duplicating it.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "creatorId": { "type": "string", "maxLength": 128 },
+        "partnerId": { "type": "string", "maxLength": 128 },
+        "postId": { "type": "string", "maxLength": 128 },
+        "authCode": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["active", "revoked", "expired"] },
+        "expiresAt": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "creatorId", "postId", "authCode", "status"]
+    },
+    "BrandPartnership": {
+      "title": "BrandPartnership",
+      "description": "Structured creator-brand sponsorship partnership agreement with deliverables, compensation terms, and disclosure metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "creatorId": { "type": "string", "maxLength": 128 },
+        "brandId": { "type": "string", "maxLength": 128 },
+        "brandName": { "type": "string", "maxLength": 160 },
+        "title": { "type": "string", "maxLength": 200 },
+        "compensationCents": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 8 },
+        "status": { "type": "string", "enum": ["proposed", "active", "completed", "declined", "cancelled"] },
+        "deliverables": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "creatorId", "brandId", "title", "status"]
+    },
+    "AffiliateLink": {
+      "title": "AffiliateLink",
+      "description": "Tracked creator affiliate product/service attribution link.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "creatorId": { "type": "string", "maxLength": 128 },
+        "postId": { "type": "string", "maxLength": 128 },
+        "label": { "type": "string", "maxLength": 160 },
+        "destinationUrl": { "type": "string", "maxLength": 1000 },
+        "commissionRatePct": { "type": "number" },
+        "clicks": { "type": "number" },
+        "conversions": { "type": "number" }
+      },
+      "required": ["id", "creatorId", "destinationUrl"]
+    },
+    "PromoCode": {
+      "title": "PromoCode",
+      "description": "Creator promotional discount code tied to brand partnerships or storefront offers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "creatorId": { "type": "string", "maxLength": 128 },
+        "code": { "type": "string", "maxLength": 48 },
+        "discountText": { "type": "string", "maxLength": 120 },
+        "expiresAt": { "type": "string" },
+        "redemptions": { "type": "number" }
+      },
+      "required": ["id", "creatorId", "code"]
     },
     "Story": {
       "title": "Story",
@@ -634,6 +868,58 @@
     "/migration_checkpoints/{jobId}": {
       "schema": "MigrationCheckpoint",
       "description": "Server-only cursor checkpoints for resumable migrations"
+    },
+    "/ad_accounts/{accountId}": {
+      "schema": "AdAccount",
+      "description": "Advertiser billing account balance and spend summary"
+    },
+    "/ad_campaigns/{campaignId}": {
+      "schema": "AdCampaign",
+      "description": "Paid promotion and Spark advertising campaigns"
+    },
+    "/ad_creatives/{creativeId}": {
+      "schema": "AdCreative",
+      "description": "Ad creative variations tied to campaigns"
+    },
+    "/ad_conversions/{conversionId}": {
+      "schema": "AdConversion",
+      "description": "Attributed campaign conversions"
+    },
+    "/ad_billing_ledger/{entryId}": {
+      "schema": "AdBillingEntry",
+      "description": "Immutable advertiser spend and funding ledger"
+    },
+    "/ad_disputes/{disputeId}": {
+      "schema": "AdDispute",
+      "description": "Advertiser billing refund and delivery disputes"
+    },
+    "/ad_reviews/{reviewId}": {
+      "schema": "AdReview",
+      "description": "Ad campaign compliance and policy moderation reviews"
+    },
+    "/ad_daily_metrics/{metricId}": {
+      "schema": "AdDailyMetric",
+      "description": "Daily paid campaign delivery metrics separated from organic post stats"
+    },
+    "/creator_earnings_ledger/{entryId}": {
+      "schema": "CreatorEarningsEntry",
+      "description": "Creator monetization earnings ledger separated from virtual coins and ad billing"
+    },
+    "/ad_authorizations/{authId}": {
+      "schema": "AdAuthorization",
+      "description": "Revocable expiring post ad authorizations for brand partners"
+    },
+    "/brand_partnerships/{partnershipId}": {
+      "schema": "BrandPartnership",
+      "description": "Creator-brand sponsorship partnerships and deliverables"
+    },
+    "/affiliate_links/{linkId}": {
+      "schema": "AffiliateLink",
+      "description": "Tracked creator affiliate links"
+    },
+    "/promo_codes/{codeId}": {
+      "schema": "PromoCode",
+      "description": "Creator promotional discount codes"
     }
   }
 }

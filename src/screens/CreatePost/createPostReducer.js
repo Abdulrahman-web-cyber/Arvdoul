@@ -51,6 +51,83 @@ export const initialState = {
   insights: null,
   moderationStatus: null,
   isContentReady: false,
+  identityMeta: {
+    publishAs: 'personal',
+    collaborators: [],
+    communityDestinationId: null,
+  },
+  distributionSettings: {
+    allowDiscovery: true,
+    allowReposts: true,
+    allowRemixes: true,
+    allowDownloads: true,
+    category: 'general',
+    mentions: [],
+  },
+  engagementControls: {
+    enableComments: true,
+    commentMode: 'everyone',
+    enableReactions: true,
+    enableGifts: true,
+    enableSaves: true,
+    enableShares: true,
+  },
+  commercialSettings: {
+    disclosureType: 'none',
+    brandPartnerId: '',
+    brandPartnerName: '',
+    brandPartnerHandle: '',
+    partnershipId: null,
+    adAuthorizationId: null,
+    adAuthorizationCode: '',
+    allowPartnerPromotion: false,
+    affiliateLinkId: null,
+    affiliateUrl: '',
+    affiliateLabel: '',
+    promoCode: '',
+    productTag: '',
+    ctaLabel: 'Learn More',
+    ctaUrl: '',
+  },
+  creatorPrograms: {
+    eligible: false,
+    enableGiftsForPost: true,
+    enableAdRevenueShare: false,
+    enableAffiliateTracking: false,
+    enableSponsorshipAttribution: false,
+  },
+  promotionIntent: {
+    enabled: false,
+    promotionKind: 'post',
+    preservesOriginalPost: true,
+    objective: 'reach',
+    placements: ['home'],
+    targetLocations: [],
+    targetInterests: [],
+    targetAgeMin: 18,
+    dailyBudgetCents: 1000,
+    currency: 'USD',
+    durationDays: 7,
+    complianceNotes: '',
+    submitForReview: false,
+  },
+  safetyAccessibility: {
+    contentWarning: '',
+    isSensitiveMedia: false,
+    ageRating: 'all',
+    regionalStandard: 'global',
+    copyrightConfirmed: true,
+    captionsText: '',
+    transcriptText: '',
+    language: 'en',
+    allowAutoTranslation: true,
+  },
+  lifecycleSettings: {
+    timezone: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC',
+    expiresAt: null,
+    notifyFollowers: true,
+    priorityAlert: false,
+  },
   _past: [],
   _future: [],
 };
@@ -329,6 +406,46 @@ export function reducer(state, action) {
       case 'SET_CONTENT_READY':
         draft.isContentReady = !!action.payload;
         break;
+      case 'SET_IDENTITY_META':
+        draft.identityMeta = { ...draft.identityMeta, ...(action.payload || {}) };
+        draft.isDirty = true;
+        pushHistory = true;
+        break;
+      case 'SET_DISTRIBUTION_SETTINGS':
+        draft.distributionSettings = { ...draft.distributionSettings, ...(action.payload || {}) };
+        draft.isDirty = true;
+        pushHistory = true;
+        break;
+      case 'SET_ENGAGEMENT_CONTROLS':
+        draft.engagementControls = { ...draft.engagementControls, ...(action.payload || {}) };
+        draft.isDirty = true;
+        pushHistory = true;
+        break;
+      case 'SET_COMMERCIAL_SETTINGS':
+        draft.commercialSettings = { ...draft.commercialSettings, ...(action.payload || {}) };
+        draft.isDirty = true;
+        pushHistory = true;
+        break;
+      case 'SET_CREATOR_PROGRAMS':
+        draft.creatorPrograms = { ...draft.creatorPrograms, ...(action.payload || {}) };
+        draft.isDirty = true;
+        pushHistory = true;
+        break;
+      case 'SET_PROMOTION_INTENT':
+        draft.promotionIntent = { ...draft.promotionIntent, ...(action.payload || {}) };
+        draft.isDirty = true;
+        pushHistory = true;
+        break;
+      case 'SET_SAFETY_ACCESSIBILITY':
+        draft.safetyAccessibility = { ...draft.safetyAccessibility, ...(action.payload || {}) };
+        draft.isDirty = true;
+        pushHistory = true;
+        break;
+      case 'SET_LIFECYCLE_SETTINGS':
+        draft.lifecycleSettings = { ...draft.lifecycleSettings, ...(action.payload || {}) };
+        draft.isDirty = true;
+        pushHistory = true;
+        break;
       case 'LOAD_DRAFT': {
         const cleanPrev = cloneSnapshotForHistory(state);
         const incoming = action.payload || {};
@@ -340,6 +457,35 @@ export function reducer(state, action) {
           link: { ...initialState.typeData.link, ...(incoming.typeData?.link || {}) },
           audio: { ...initialState.typeData.audio, ...(incoming.typeData?.audio || {}) },
           video: { ...initialState.typeData.video, ...(incoming.typeData?.video || {}) },
+        };
+        draft.identityMeta = { ...initialState.identityMeta, ...(incoming.identityMeta || {}) };
+        draft.distributionSettings = {
+          ...initialState.distributionSettings,
+          ...(incoming.distributionSettings || {}),
+        };
+        draft.engagementControls = {
+          ...initialState.engagementControls,
+          ...(incoming.engagementControls || {}),
+        };
+        draft.commercialSettings = {
+          ...initialState.commercialSettings,
+          ...(incoming.commercialSettings || {}),
+        };
+        draft.creatorPrograms = {
+          ...initialState.creatorPrograms,
+          ...(incoming.creatorPrograms || {}),
+        };
+        draft.promotionIntent = {
+          ...initialState.promotionIntent,
+          ...(incoming.promotionIntent || {}),
+        };
+        draft.safetyAccessibility = {
+          ...initialState.safetyAccessibility,
+          ...(incoming.safetyAccessibility || {}),
+        };
+        draft.lifecycleSettings = {
+          ...initialState.lifecycleSettings,
+          ...(incoming.lifecycleSettings || {}),
         };
         draft.isDraftLoaded = true;
         draft.draftId = incoming.draftId ?? null;

@@ -2800,6 +2800,100 @@ exports.sendVibeGift = functions.https.onCall(async (data, context) => {
   } catch (err) { throw handleError(err); }
 });
 
+// ----------------------------------------------------------------------
+// 17. Affiliate Links & Promo Codes — tracked creator commercial attribution
+// ----------------------------------------------------------------------
+exports.createAffiliateLink = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    await checkRateLimit(uid, 'createAffiliateLink', 20, 60000);
+
+    const { postId = null, label = '', destinationUrl, commissionRatePct = 10 } = data || {};
+    if (typeof destinationUrl !== 'string' || !/^https?:\/\//i.test(destinationUrl.trim())) {
+      throw new functions.https.HttpsError('invalid-argument', 'Valid http(s) destinationUrl is required.');
+    }
+
+    const ref = admin.firestore().collection('affiliate_links').doc();
+    await ref.set({
+      creatorId: uid,
+      postId: postId ? String(postId).slice(0, 128) : null,
+      label: String(label || 'Featured product').trim().slice(0, 160),
+      destinationUrl: destinationUrl.trim().slice(0, 1000),
+      commissionRatePct: Math.max(0, Math.min(Number(commissionRatePct) || 10, 80)),
+      clicks: 0,
+      conversions: 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, linkId: ref.id };
+  } catch (err) { throw handleError(err); }
+});
+
+exports.createPromoCode = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    await checkRateLimit(uid, 'createPromoCode', 20, 60000);
+
+    const { code, discountText = '', expiresAt = null } = data || {};
+    const cleanCode = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 48);
+    if (!cleanCode) {
+      throw new functions.https.HttpsError('invalid-argument', 'Valid promo code is required.');
+    }
+
+    const ref = admin.firestore().collection('promo_codes').doc();
+    await ref.set({
+      creatorId: uid,
+      code: cleanCode,
+      discountText: String(discountText || '').trim().slice(0, 120),
+      expiresAt: expiresAt ? String(expiresAt).slice(0, 40) : null,
+      redemptions: 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, promoId: ref.id, code: cleanCode };
+  } catch (err) { throw handleError(err); }
+});
+
+exports.listCreatorAffiliateAssets = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    await checkRateLimit(uid, 'listCreatorAffiliateAssets', 60, 60000);
+
+    const [linksSnap, codesSnap] = await Promise.all([
+      admin.firestore().collection('affiliate_links').where('creatorId', '==', uid).orderBy('createdAt', 'desc').limit(30).get(),
+      admin.firestore().collection('promo_codes').where('creatorId', '==', uid).orderBy('createdAt', 'desc').limit(30).get(),
+    ]);
+
+    return {
+      success: true,
+      affiliateLinks: linksSnap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate ? d.data().createdAt.toDate().toISOString() : null })),
+      promoCodes: codesSnap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate ? d.data().createdAt.toDate().toISOString() : null })),
+    };
+  } catch (err) { throw handleError(err); }
+});
+
+exports.trackAffiliateConversion = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    await checkRateLimit(uid, 'trackAffiliateConversion', 60, 60000);
+
+    const { linkId, eventType = 'click' } = data || {};
+    if (!linkId || !['click', 'conversion'].includes(eventType)) {
+      throw new functions.https.HttpsError('invalid-argument', 'Valid linkId and eventType required.');
+    }
+
+    const linkRef = admin.firestore().collection('affiliate_links').doc(linkId);
+    const snap = await linkRef.get();
+    if (!snap.exists) throw new functions.https.HttpsError('not-found', 'Affiliate link not found.');
+
+    await linkRef.update({
+      [eventType === 'conversion' ? 'conversions' : 'clicks']: admin.firestore.FieldValue.increment(1),
+    });
+
+    return { success: true, linkId, eventType };
+  } catch (err) { throw handleError(err); }
+});
+
 // Shared internals exposed to sibling modules (admin.js) so the money-path
 // helpers exist exactly once: the single configured Stripe client and the
 // double-entry ledger writer. Not deployed as callables.

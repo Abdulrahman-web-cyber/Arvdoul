@@ -115,9 +115,15 @@ describe('composer has no dead scheduling/collaboration controls', () => {
     const files = fs.readdirSync(dir).filter((f) => f.startsWith('CreatePost') && /\.(jsx|js)$/.test(f));
     const subDir = path.join(dir, 'CreatePost');
     const all = [...files.map((f) => path.join(dir, f))];
-    if (fs.existsSync(subDir)) {
-      all.push(...fs.readdirSync(subDir).filter((f) => /\.(jsx|js)$/.test(f)).map((f) => path.join(subDir, f)));
-    }
+    const collectRecursive = (folder) => {
+      if (!fs.existsSync(folder)) return;
+      for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
+        const full = path.join(folder, entry.name);
+        if (entry.isDirectory()) collectRecursive(full);
+        else if (/\.(jsx|js)$/.test(entry.name)) all.push(full);
+      }
+    };
+    collectRecursive(subDir);
     const source = all.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
     const cases = new Set([...source.matchAll(/case\s+['"]([A-Z0-9_]+)['"]/g)].map((m) => m[1]));
     const dispatched = new Set([

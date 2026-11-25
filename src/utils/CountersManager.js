@@ -94,6 +94,20 @@ class CountersManager {
     cacheManager.delete('counters', `${docPath}:${field}`);
   }
 
+  async _withTimeout(promise, ms, onTimeout) {
+    let timerId;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((resolve) => {
+          timerId = setTimeout(() => resolve(onTimeout()), ms);
+        }),
+      ]);
+    } finally {
+      if (timerId) clearTimeout(timerId);
+    }
+  }
+
   /**
    * Read the current counter value.
    * @param {Object} opts
@@ -106,21 +120,42 @@ class CountersManager {
     const cached = cacheManager.get('counters', `${docPath}:${field}`);
     if (cached !== null && cached !== undefined) return cached;
 
-    const { firestore, m } = await this._ensure();
-    const refs = [];
-    for (let i = 0; i < this.shards; i++) refs.push(this._shardRef(firestore, docPath, field, i));
+    try {
+      const { firestore, m } = await this._withTimeout(
+        this._ensure(),
+        3000,
+        () => ({ timedOut: true })
+      );
+      if (!firestore || !m) return fallback;
 
-    // Read all shards in parallel (10 reads, cached for SUM_CACHE_TTL_MS).
-    let total = 0;
-    let found = 0;
-    const reads = await Promise.all(refs.map((r) => m.getDoc(r)));
-    reads.forEach((d) => {
-      if (d.exists()) { total += (d.data().value || 0); found++; }
-    });
+      const refs = [];
+      for (let i = 0; i < this.shards; i++) refs.push(this._shardRef(firestore, docPath, field, i));
 
-    if (found === 0 && fallback) total = fallback;
-    cacheManager.set('counters', `${docPath}:${field}`, total, SUM_CACHE_TTL_MS);
-    return total;
+      let timedOut = false;
+      // Read all shards in parallel (10 reads, cached for SUM_CACHE_TTL_MS).
+      const reads = await this._withTimeout(
+        Promise.all(refs.map((r) => m.getDoc(r))),
+        3000,
+        () => {
+          timedOut = true;
+          return null;
+        }
+      );
+      if (timedOut || !Array.isArray(reads)) return fallback;
+
+      let total = 0;
+      let found = 0;
+      reads.forEach((d) => {
+        if (d.exists()) { total += (d.data().value || 0); found++; }
+      });
+
+      if (found === 0 && fallback) total = fallback;
+      cacheManager.set('counters', `${docPath}:${field}`, total, SUM_CACHE_TTL_MS);
+      return total;
+    } catch (e) {
+      this.logger.warn('Counter shard read failed; falling back to legacy count', { docPath, field, error: e?.message });
+      return fallback;
+    }
   }
 
   /**
@@ -176,57 +211,72 @@ class CountersManager {
     if (!Array.isArray(items) || items.length === 0 || !Array.isArray(fields) || fields.length === 0) {
       return items;
     }
-    const { firestore, m } = await this._ensure();
+    try {
+      const { firestore, m } = await this._withTimeout(
+        this._ensure(),
+        3000,
+        () => ({ timedOut: true })
+      );
+      if (!firestore || !m) return items;
 
-    // Keep each batched read to ~400 refs (Firestore getAll is happiest well
-    // under 500) regardless of how many fields/shards are in play.
-    const refsPerItem = fields.length * this.shards;
-    const effectiveChunk = chunkSize || Math.max(1, Math.floor(400 / refsPerItem));
+      // Keep each batched read to ~400 refs (Firestore getAll is happiest well
+      // under 500) regardless of how many fields/shards are in play.
+      const refsPerItem = fields.length * this.shards;
+      const effectiveChunk = chunkSize || Math.max(1, Math.floor(400 / refsPerItem));
 
-    for (let start = 0; start < items.length; start += effectiveChunk) {
-      const chunk = items.slice(start, start + effectiveChunk);
-      const refs = [];
-      const meta = [];
-      chunk.forEach((item, localIdx) => {
-        const id = item && item[idField];
-        if (!id) return;
-        fields.forEach((field) => {
-          for (let s = 0; s < this.shards; s++) {
-            refs.push(this._shardRef(firestore, `${collection}/${id}`, field, s));
-            meta.push({ localIdx, field });
-          }
+      for (let start = 0; start < items.length; start += effectiveChunk) {
+        const chunk = items.slice(start, start + effectiveChunk);
+        const refs = [];
+        const meta = [];
+        chunk.forEach((item, localIdx) => {
+          const id = item && item[idField];
+          if (!id) return;
+          fields.forEach((field) => {
+            for (let s = 0; s < this.shards; s++) {
+              refs.push(this._shardRef(firestore, `${collection}/${id}`, field, s));
+              meta.push({ localIdx, field });
+            }
+          });
         });
-      });
-      if (refs.length === 0) continue;
+        if (refs.length === 0) continue;
 
-      // Web SDK v12 has no getAll(); read bounded chunk refs concurrently via getDoc.
-      const snaps = await Promise.all(refs.map((r) => m.getDoc(r)));
-      const sums = new Map();
-      snaps.forEach((snap, k) => {
-        if (!snap.exists()) return;
-        const { localIdx, field } = meta[k];
-        const key = `${localIdx}\u0000${field}`;
-        sums.set(key, (sums.get(key) || 0) + (snap.data().value || 0));
-      });
+        // Web SDK v12 has no getAll(); read bounded chunk refs concurrently via getDoc.
+        const snaps = await this._withTimeout(
+          Promise.all(refs.map((r) => m.getDoc(r))),
+          3500,
+          () => null
+        );
+        const sums = new Map();
+        if (Array.isArray(snaps)) {
+          snaps.forEach((snap, k) => {
+            if (!snap.exists()) return;
+            const { localIdx, field } = meta[k];
+            const key = `${localIdx}\u0000${field}`;
+            sums.set(key, (sums.get(key) || 0) + (snap.data().value || 0));
+          });
+        }
 
-      chunk.forEach((item, localIdx) => {
-        fields.forEach((field) => {
-          const key = `${localIdx}\u0000${field}`;
-          const rawLegacy = scope === 'stats'
-            ? (item.stats && item.stats[field])
-            : (item[field] ?? (item.stats && item.stats[field]));
-          // Coerce: a non-numeric legacy (e.g. `replies` after a nested build
-          // turned it into an array) is not a count and falls back to 0.
-          const legacy = Number.isFinite(Number(rawLegacy)) ? Number(rawLegacy) : 0;
-          const value = sums.has(key) ? sums.get(key) : legacy;
-          if (scope === 'stats') {
-            item.stats = item.stats || {};
-            item.stats[field] = value;
-          } else {
-            item[fieldAliases[field] || field] = value;
-          }
+        chunk.forEach((item, localIdx) => {
+          fields.forEach((field) => {
+            const key = `${localIdx}\u0000${field}`;
+            const rawLegacy = scope === 'stats'
+              ? (item.stats && item.stats[field])
+              : (item[field] ?? (item.stats && item.stats[field]));
+            // Coerce: a non-numeric legacy (e.g. `replies` after a nested build
+            // turned it into an array) is not a count and falls back to 0.
+            const legacy = Number.isFinite(Number(rawLegacy)) ? Number(rawLegacy) : 0;
+            const value = sums.has(key) ? sums.get(key) : legacy;
+            if (scope === 'stats') {
+              item.stats = item.stats || {};
+              item.stats[field] = value;
+            } else {
+              item[fieldAliases[field] || field] = value;
+            }
+          });
         });
-      });
+      }
+    } catch (e) {
+      this.logger.warn('applyAll shard read skipped; keeping legacy counts', { collection, error: e?.message });
     }
     return items;
   }

@@ -12,6 +12,7 @@ import QuickAccessPanel from "./QuickAccessPanel";
 import { BRAND_GRADIENT, brandRgba, tokens } from "../../design-system/tokens.js";
 import { LazyImage } from '../../components/Shared/LazyImage';
 import GoldCoinsIcon from '../UI/GoldCoinsIcon.jsx';
+import { prefetchCreatePost } from "../../utils/routePrefetcher.js";
 
 /* ==========================================================================
    ARVDOUL BOTTOM NAVIGATION
@@ -618,6 +619,9 @@ const CreateControl = memo(function CreateControl({ dark, reducedMotion, onCreat
         type="button"
         aria-label="Create post"
         onClick={onCreate}
+        onPointerEnter={() => prefetchCreatePost()}
+        onTouchStart={() => prefetchCreatePost()}
+        onFocus={() => prefetchCreatePost()}
         className="absolute left-1/2 z-30 flex -translate-x-1/2 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/90 origin-center"
         style={{
           width: `${buttonSize}px`,

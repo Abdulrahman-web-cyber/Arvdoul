@@ -74,3 +74,88 @@ export const MEDIA_LIMITS = {
   maxImageSizeMB: 10,
   maxTotalMediaCount: 10,
 };
+
+export const COMPOSER_SECTIONS = [
+  { id: '01', key: 'content', label: '01 Content' },
+  { id: '02', key: 'identity', label: '02 Identity' },
+  { id: '03', key: 'audience', label: '03 Audience' },
+  { id: '04', key: 'engagement', label: '04 Engagement' },
+  { id: '05', key: 'commercial', label: '05 Commercial' },
+  { id: '06', key: 'programs', label: '06 Creator' },
+  { id: '07', key: 'promotion', label: '07 Promotion' },
+  { id: '08', key: 'analytics', label: '08 Analytics' },
+  { id: '09', key: 'safety', label: '09 Safety' },
+  { id: '10', key: 'schedule', label: '10 Schedule' },
+];
+
+export const COMMERCIAL_TYPES = [
+  {
+    id: 'none',
+    label: 'Organic Post',
+    badge: null,
+    description: 'Standard organic post with no brand, commercial, or paid sponsorship.',
+  },
+  {
+    id: 'own_promotion',
+    label: 'Promotional Content',
+    badge: 'Promotional content',
+    description: 'Promoting your own business, store, event, digital product, or service.',
+  },
+  {
+    id: 'paid_partnership',
+    label: 'Paid Partnership',
+    badge: 'Paid partnership',
+    description: 'Creator collaboration compensated by a brand or partner with disclosure.',
+  },
+  {
+    id: 'sponsored_ad',
+    label: 'Sponsored Ad Creative',
+    badge: 'Sponsored',
+    description: 'Formal paid advertising creative managed via the Advertising Center.',
+  },
+];
+
+export const REGIONAL_DISCLOSURE_STANDARDS = [
+  { id: 'global', label: 'Global Transparency Standard' },
+  { id: 'us_ftc', label: 'United States (FTC Endorsement Guides)' },
+  { id: 'ng_arcon', label: 'Nigeria (ARCON Advertising Code)' },
+  { id: 'eu_dsa', label: 'European Union (DSA Commercial Disclosure)' },
+];
+
+export const AD_OBJECTIVES = [
+  { id: 'reach', label: 'Reach', desc: 'Maximize unique viewers' },
+  { id: 'impressions', label: 'Impressions', desc: 'Maximize total views' },
+  { id: 'engagement', label: 'Engagement', desc: 'Likes, comments, shares, saves' },
+  { id: 'profile_visits', label: 'Profile Visits', desc: 'Grow profile visits and followers' },
+  { id: 'clicks', label: 'Website Clicks', desc: 'Drive external destination visits' },
+  { id: 'conversions', label: 'Conversions', desc: 'Track signups, sales, or RSVPs' },
+];
+
+export const PROMOTION_KINDS = [
+  { id: 'post', label: 'Boost this post', desc: 'Preserve original post & organic engagement' },
+  { id: 'spark_video', label: 'Promote video / Spark', desc: 'Use existing organic video as paid Spark ad' },
+  { id: 'profile', label: 'Promote profile', desc: 'Drive profile visits and new followers' },
+  { id: 'website', label: 'Promote website', desc: 'Send visitors to an external URL' },
+  { id: 'product', label: 'Promote product / service', desc: 'Drive product discovery, leads, or sales' },
+  { id: 'event', label: 'Promote event', desc: 'Increase event registrations and RSVPs' },
+];
+
+export const AD_PLACEMENTS = [
+  { id: 'home', label: 'Home Feed' },
+  { id: 'sparks', label: 'Sparks / Short Video' },
+  { id: 'explore', label: 'Explore & Communities' },
+  { id: 'search', label: 'Search & Discovery' },
+];
+
+export const AGE_RATINGS = [
+  { id: 'all', label: 'All Ages' },
+  { id: '13+', label: '13+ Teen & Adult' },
+  { id: '18+', label: '18+ Mature Only' },
+];
+
+export const COMMENT_MODES = [
+  { id: 'everyone', label: 'Everyone' },
+  { id: 'followers', label: 'Followers & Friends' },
+  { id: 'off', label: 'Comments Off' },
+];
+

@@ -1508,7 +1508,22 @@ export default function ProfileMyScreen() {
                       onAction={handleRetryLoad}
                     />
                   ) : (
-                    <div className="pms-glass pms-skel pms-pulse" data-tier="subtle" style={{ height: 128 }} aria-busy="true" />
+                    <div
+                      className="pms-glass px-3.5 py-2.5 space-y-2 pms-pulse"
+                      data-tier="subtle"
+                      aria-busy="true"
+                      aria-label="Loading highlights"
+                    >
+                      <div className="h-4 w-24 rounded-md bg-[var(--sk)]" />
+                      <div className="flex gap-3 overflow-hidden">
+                        {[1, 2, 3, 4].map((n) => (
+                          <div key={n} className="flex flex-col items-center gap-1.5 shrink-0">
+                            <div className="w-14 h-14 rounded-full bg-[var(--sk)]" />
+                            <div className="h-2.5 w-11 rounded bg-[var(--sk)]" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </section>
               )}
@@ -1518,7 +1533,24 @@ export default function ProfileMyScreen() {
             {isOwnerView && (
               <section aria-label="Creator dashboard" className="pms-rise min-w-0" style={{ '--i': 3 }}>
                 <SectionGuard label="Creator dashboard" resetKey={ctxKey}>
-                  <Suspense fallback={<div className="pms-glass pms-skel pms-pulse" style={{ height: 144 }} aria-busy="true" />}>
+                  <Suspense fallback={(
+                    <div
+                      className="pms-glass p-4 space-y-3 pms-pulse"
+                      data-tier="subtle"
+                      aria-busy="true"
+                      aria-label="Loading creator dashboard"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="h-5 w-36 rounded-lg bg-[var(--sk)]" />
+                        <div className="h-8 w-24 rounded-xl bg-[var(--sk)]" />
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        {[1, 2, 3, 4].map((n) => (
+                          <div key={n} className="h-14 rounded-xl bg-[var(--sk)]" />
+                        ))}
+                      </div>
+                    </div>
+                  )}>
                     <ProfileCreatorDashboard
                       analytics={analytics}
                       ranking={ranking}

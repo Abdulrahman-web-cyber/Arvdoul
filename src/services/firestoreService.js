@@ -397,10 +397,16 @@ class EnterpriseFirestoreService {
         hashtags: mergedHashtags,
         status,
         isDeleted: false,
-        monetization: postData.monetization || null,
-        // boostData is server-owned (set only by the `boostPost` callable after
-        // it debits coins); a create must never seed it (firestore.rules pins
-        // `boostData == null` on create).
+        identityMeta: postData.identityMeta || null,
+        distributionSettings: postData.distributionSettings || null,
+        engagementControls: postData.engagementControls || null,
+        commercialDisclosure: postData.commercialDisclosure || null,
+        partnership: postData.partnership || null,
+        creatorPrograms: postData.creatorPrograms || null,
+        safetyAccessibility: postData.safetyAccessibility || null,
+        lifecycleSettings: postData.lifecycleSettings || null,
+        // boostData and paid ad delivery fields are strictly server-owned
+        // (firestore.rules pins them to null on create).
         scheduledTime: scheduledTime || null,
         publishedAt: (!isScheduled && status === 'published') ? serverTimestamp() : null,
         expiresAt: expiresAt || null,
@@ -734,6 +740,7 @@ class EnterpriseFirestoreService {
       const IMMUTABLE_FIELDS = new Set([
         'id', 'authorId', 'createdAt', 'stats', 'gifts', 'boostData', 'poll',
         'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore', 'reportCount',
+        'adReviewStatus', 'paidStats', 'sponsoredMetrics', 'adAttribution', 'monetizationLedgerRef',
       ]);
       const sanitizeUndefined = (obj) => {
         if (obj === null || typeof obj !== 'object') return obj;

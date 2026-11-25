@@ -1517,6 +1517,38 @@ class UltimateFeedService {
 
   async _getAdOptimized(userId, adIndex) {
     try {
+      const { default: advertisingService } = await import('./advertisingService.js');
+      const res = await advertisingService.getEligibleFeedAds('home', 5).catch(() => null);
+      const campaigns = Array.isArray(res?.ads) ? res.ads : [];
+      if (campaigns.length > 0) {
+        const picked = campaigns[adIndex % campaigns.length];
+        if (picked) {
+          const snapshot = picked.sourcePostSnapshot || {};
+          return {
+            id: picked.sourcePostId || picked.id || `ad_${userId}_${adIndex}`,
+            campaignId: picked.campaignId || picked.id,
+            adCampaignId: picked.campaignId || picked.id,
+            type: 'ad',
+            adType: picked.promotionKind || 'post',
+            title: picked.title || 'Sponsored',
+            content: snapshot.content || picked.title || '',
+            imageUrl: snapshot.mediaUrl || null,
+            link: picked.destinationUrl || (picked.sourcePostId ? `/post/${picked.sourcePostId}` : null),
+            advertiser: picked.advertiserId || null,
+            authorId: picked.partnerCreatorId || picked.advertiserId || null,
+            sourcePostId: picked.sourcePostId || null,
+            cta: picked.ctaLabel || 'Learn More',
+            isAd: true,
+            isSponsored: true,
+            _source: 'advertising_center',
+          };
+        }
+      }
+    } catch (advErr) {
+      logger.warn('Advertising Center feed ad lookup failed', { userId, error: advErr?.message });
+    }
+
+    try {
       const mon = await _getMonetization();
       const ad = await mon.getAd(FEED_CONFIG.MONETISATION.AD_PLACEMENT, userId, { feedPosition: adIndex });
       if (!ad) return null;

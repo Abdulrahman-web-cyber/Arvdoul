@@ -210,3 +210,148 @@ exports.trackProfileView = functions.https.onCall(async (data, context) => {
     return { success: true, counted };
   });
 
+  exports.getPostSeparatedAnalytics = functions.https.onCall(async (data, context) => {
+    const uid = getUserIdFromContext(context);
+    const { postId } = data || {};
+    if (!postId || typeof postId !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'postId is required.');
+    }
+
+    await checkRateLimit(uid, 'getPostSeparatedAnalytics', 60, 60000);
+
+    const postSnap = await db.collection('posts').doc(postId).get();
+    if (!postSnap.exists) {
+      throw new functions.https.HttpsError('not-found', 'Post not found.');
+    }
+    const post = postSnap.data();
+
+    const [campaignsSnap, earningsSnap] = await Promise.all([
+      db.collection('ad_campaigns').where('sourcePostId', '==', postId).limit(20).get(),
+      db.collection('creator_earnings_ledger').where('creatorId', '==', post.authorId || uid).limit(50).get(),
+    ]);
+
+    const linkedCampaigns = campaignsSnap.docs
+      .filter((d) => {
+        const c = d.data();
+        return c.advertiserId === uid || c.partnerCreatorId === uid || post.authorId === uid;
+      })
+      .map((d) => {
+        const c = d.data();
+        return {
+          id: d.id,
+          title: c.title,
+          status: c.status,
+          objective: c.objective,
+          budgetCents: c.budgetCents || 0,
+          spentCents: c.spentCents || 0,
+          currency: c.currency || 'USD',
+          metrics: c.metrics || { impressions: 0, reach: 0, clicks: 0, conversions: 0, spendCents: 0 },
+        };
+      });
+
+    if (post.authorId !== uid && linkedCampaigns.length === 0) {
+      throw new functions.https.HttpsError('permission-denied', 'Separated post analytics are restricted to the author or authorized campaign partner.');
+    }
+
+    const paidAggregate = linkedCampaigns.reduce(
+      (acc, c) => {
+        acc.impressions += Number(c.metrics?.impressions || 0);
+        acc.reach += Number(c.metrics?.reach || 0);
+        acc.clicks += Number(c.metrics?.clicks || 0);
+        acc.conversions += Number(c.metrics?.conversions || 0);
+        acc.spendCents += Number(c.spentCents || c.metrics?.spendCents || 0);
+        return acc;
+      },
+      { impressions: 0, reach: 0, clicks: 0, conversions: 0, spendCents: 0 }
+    );
+
+    const postEarnings = earningsSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((e) => e.postId === postId);
+
+    const giftCoins = Number(post.stats?.giftValue || 0);
+    const organicStats = {
+      views: typeof post.stats?.views === 'number' ? post.stats.views : 0,
+      likes: typeof post.stats?.likes === 'number' ? post.stats.likes : 0,
+      comments: typeof post.stats?.comments === 'number' ? post.stats.comments : 0,
+      shares: typeof post.stats?.shares === 'number' ? post.stats.shares : 0,
+      saves: typeof post.stats?.saves === 'number' ? post.stats.saves : 0,
+      gifts: typeof post.stats?.gifts === 'number' ? post.stats.gifts : 0,
+      giftValueCoins: giftCoins,
+    };
+
+    return {
+      success: true,
+      postId,
+      organic: organicStats,
+      paid: {
+        ...paidAggregate,
+        ctr: paidAggregate.impressions > 0 ? Number(((paidAggregate.clicks / paidAggregate.impressions) * 100).toFixed(2)) : 0,
+        cpcCents: paidAggregate.clicks > 0 ? Math.round(paidAggregate.spendCents / paidAggregate.clicks) : 0,
+        cpmCents: paidAggregate.impressions > 0 ? Math.round((paidAggregate.spendCents / paidAggregate.impressions) * 1000) : 0,
+        campaigns: linkedCampaigns,
+        hasActiveBoost: Boolean(post.boostData?.isBoosted && (!post.boostData.boostExpiresAt || post.boostData.boostExpiresAt > Date.now())),
+      },
+      creatorAttribution: {
+        giftValueCoins: giftCoins,
+        ledgerEntries: postEarnings,
+      },
+    };
+  });
+
+  exports.getCreatorEarningsLedger = functions.https.onCall(async (data, context) => {
+    const uid = getUserIdFromContext(context);
+    await checkRateLimit(uid, 'getCreatorEarningsLedger', 60, 60000);
+
+    const limitCount = Math.min(Math.max(Number(data?.limit) || 50, 1), 100);
+    const [ledgerSnap, giftsSnap] = await Promise.all([
+      db.collection('creator_earnings_ledger')
+        .where('creatorId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(limitCount)
+        .get(),
+      db.collection('gift_transactions')
+        .where('receiverId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(limitCount)
+        .get(),
+    ]);
+
+    const entries = ledgerSnap.docs.map((d) => {
+      const row = d.data();
+      return {
+        id: d.id,
+        ...row,
+        createdAt: row.createdAt?.toDate ? row.createdAt.toDate().toISOString() : null,
+      };
+    });
+
+    const giftEntries = giftsSnap.docs.map((d) => {
+      const g = d.data();
+      return {
+        id: `gift_${d.id}`,
+        sourceType: 'gift',
+        postId: g.postId || null,
+        coinsEquivalent: Number(g.value || 0),
+        amountCents: 0,
+        currency: 'USD',
+        status: 'available',
+        createdAt: g.createdAt?.toDate ? g.createdAt.toDate().toISOString() : null,
+      };
+    });
+
+    const totalGiftCoins = giftEntries.reduce((sum, g) => sum + g.coinsEquivalent, 0);
+    const totalCashCents = entries
+      .filter((e) => e.sourceType !== 'payout')
+      .reduce((sum, e) => sum + Number(e.amountCents || 0), 0);
+
+    return {
+      success: true,
+      summary: {
+        totalGiftCoins,
+        totalCashCents,
+        currency: 'USD',
+      },
+      entries: [...entries, ...giftEntries].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).slice(0, limitCount),
+    };
+  });

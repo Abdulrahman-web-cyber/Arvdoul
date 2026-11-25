@@ -23,6 +23,7 @@ import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '@context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
+import { prefetchCreatePost } from '../../utils/routePrefetcher.js';
 import { useNavBadges } from '../../hooks/useNavBadges';
 import { fetchAdminStatus } from '../../services/callableService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
@@ -192,6 +193,9 @@ export default function DesktopNavRail() {
         <button
           type="button"
           onClick={() => navigate('/create-post')}
+          onPointerEnter={() => prefetchCreatePost()}
+          onTouchStart={() => prefetchCreatePost()}
+          onFocus={() => prefetchCreatePost()}
           className="w-full py-2.5 px-4 rounded-xl bg-arvdoul-gradient text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-sm hover:opacity-95 transition-opacity focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
         >
           <Plus className="w-4 h-4" aria-hidden="true" />

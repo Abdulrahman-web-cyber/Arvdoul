@@ -102,8 +102,15 @@ export function sanitizeStateForTemplate(state) {
   };
 }
 
+let cachedDb = null;
+let cachedDbPromise = null;
+
 export async function openCreatePostDB() {
-  return openDB(DRAFT_DB_NAME, DRAFT_DB_VERSION, {
+  if (cachedDb) return cachedDb;
+  if (typeof indexedDB === 'undefined') return null;
+  if (cachedDbPromise) return cachedDbPromise;
+
+  const openPromise = openDB(DRAFT_DB_NAME, DRAFT_DB_VERSION, {
     allowDowngrade: true,
     upgrade(db, _oldVersion, _newVersion, tx) {
       const ensureStore = (name, options, indexes = []) => {
@@ -143,7 +150,50 @@ export async function openCreatePostDB() {
         ['createdAt', 'createdAt'],
       ]);
     },
+    blocking() {
+      if (cachedDb) {
+        try {
+          cachedDb.close();
+        } catch (err) {
+          console.warn('[createPostStorage] IDB close on versionchange note:', err?.message);
+        }
+        cachedDb = null;
+        cachedDbPromise = null;
+      }
+    },
+    terminated() {
+      cachedDb = null;
+      cachedDbPromise = null;
+    },
   });
+
+  let timeoutId;
+  const timeoutPromise = new Promise((resolve) => {
+    timeoutId = setTimeout(() => {
+      console.warn('[createPostStorage] openCreatePostDB timed out; continuing without local IDB');
+      resolve(null);
+    }, 2000);
+    if (typeof timeoutId?.unref === 'function') timeoutId.unref();
+  });
+
+  cachedDbPromise = Promise.race([openPromise, timeoutPromise])
+    .then((db) => {
+      clearTimeout(timeoutId);
+      if (db) {
+        cachedDb = db;
+        return db;
+      }
+      cachedDbPromise = null;
+      return null;
+    })
+    .catch((err) => {
+      clearTimeout(timeoutId);
+      console.warn('[createPostStorage] openCreatePostDB unavailable:', err?.message);
+      cachedDbPromise = null;
+      return null;
+    });
+
+  return cachedDbPromise;
 }
 
 function assertUid(uid) {
