@@ -233,6 +233,18 @@ export async function executePostPublish({
     throw new Error('Please enter a valid URL (e.g. https://example.com).');
   }
 
+  // Enforce Step 3 compliance & partnership settings before any publish
+  if (current.safetyAccessibility?.copyrightConfirmed === false) {
+    throw new Error('Please confirm copyright and usage rights in Post Settings before publishing.');
+  }
+  if (
+    current.commercialSettings?.disclosureType === 'paid_partnership' &&
+    !String(current.commercialSettings?.brandPartnerName || '').trim() &&
+    !current.commercialSettings?.brandPartnerId
+  ) {
+    throw new Error('Please tag a brand partner for your paid partnership post.');
+  }
+
   // Offline handling before attempting network writes
   if (isOffline) {
     if (isOfflineReplay || editPostId) {
@@ -289,24 +301,56 @@ export async function executePostPublish({
         allowMultiple: !!current.typeData?.poll?.allowMultiple,
         closesAt: current.pollClosesAt || null,
       };
+    } else if (effectiveType === 'question') {
+      updatePayload['question.text'] = effectiveText;
     } else if (effectiveType === 'event') {
+      const existingEventId = current.typeData?.event?.id || null;
+      if (existingEventId) {
+        try {
+          const { getEventService } = await import('../../services/eventService.js');
+          const eventService = services?.event || getEventService();
+          await eventService.updateEvent(
+            existingEventId,
+            {
+              title: effectiveText,
+              description: current.typeData?.event?.description || '',
+              coverImage: current.typeData?.event?.coverImage || '',
+              startDate: current.typeData?.event?.date ? new Date(current.typeData.event.date) : null,
+              location: current.typeData?.event?.location || '',
+              locationLat: current.typeData?.event?.locationData?.lat ?? null,
+              locationLng: current.typeData?.event?.locationData?.lng ?? null,
+              timezone: current.typeData?.event?.timezone || 'UTC',
+              capacity: current.typeData?.event?.capacity ?? 0,
+            },
+            userNow.uid
+          );
+        } catch (eventSyncErr) {
+          console.warn('[postPublishPipeline] Linked event sync skipped:', eventSyncErr?.message);
+        }
+      }
       updatePayload.event = {
+        id: existingEventId,
         title: effectiveText,
         date: current.typeData?.event?.date,
         location: current.typeData?.event?.location || '',
         locationData: current.typeData?.event?.locationData || null,
         description: current.typeData?.event?.description || '',
         coverImage: current.typeData?.event?.coverImage || '',
-        rsvpEnabled: !!current.typeData?.event?.rsvpEnabled,
+        rsvpEnabled: current.typeData?.event?.rsvpEnabled !== false,
         capacity: current.typeData?.event?.capacity ?? null,
         timezone: current.typeData?.event?.timezone || null,
       };
     } else if (effectiveType === 'link') {
+      const rawLink = current.typeData?.link || {};
+      const linkMeta = rawLink.metadata || null;
       updatePayload.link = {
-        url: current.typeData?.link?.url || '',
-        title: current.typeData?.link?.title || effectiveText,
-        thumbnail: current.typeData?.link?.thumbnail || '',
-        metadata: current.typeData?.link?.metadata || null,
+        url: rawLink.url || '',
+        title: rawLink.title || linkMeta?.title || effectiveText,
+        description: rawLink.description || linkMeta?.description || '',
+        image: rawLink.image || rawLink.thumbnail || linkMeta?.image || '',
+        thumbnail: rawLink.thumbnail || rawLink.image || linkMeta?.image || '',
+        domain: rawLink.domain || linkMeta?.domain || '',
+        metadata: linkMeta,
       };
     } else if (effectiveType === 'audio') {
       updatePayload.audio = {
@@ -393,6 +437,7 @@ export async function executePostPublish({
       const sparkSubType = current.typeData?.video?.subType || 'spark';
       const sparkDuration =
         Number(firstVideoItem?.duration || current.typeData?.video?.duration || 0) || null;
+      const controlMeta = buildControlMetadata(current);
 
       const uploadRes = await videoService.uploadVideo(
         videoFile,
@@ -406,14 +451,21 @@ export async function executePostPublish({
           subType: sparkSubType,
           type: sparkSubType === 'reel' ? 'reel' : 'video',
           duration: sparkDuration,
-          allowDownload: current.typeData?.video?.allowDownload ?? true,
-          duetEnabled: current.typeData?.video?.duetEnabled ?? true,
-          stitchEnabled: current.typeData?.video?.stitchEnabled ?? true,
+          allowDownload:
+            controlMeta.distributionSettings?.allowDownloads !== false &&
+            (current.typeData?.video?.allowDownload ?? true),
+          duetEnabled:
+            controlMeta.distributionSettings?.allowRemixes !== false &&
+            (current.typeData?.video?.duetEnabled ?? true),
+          stitchEnabled:
+            controlMeta.distributionSettings?.allowRemixes !== false &&
+            (current.typeData?.video?.stitchEnabled ?? true),
           chapters: Array.isArray(current.typeData?.video?.chapters)
             ? current.typeData.video.chapters
             : [],
           thumbnailFile,
           location: current.location || null,
+          ...controlMeta,
         },
         {
           onProgress: (fraction) => {
@@ -426,7 +478,6 @@ export async function executePostPublish({
 
       if (uploadRes?.postId || uploadRes?.videoId) {
         const canonicalId = uploadRes.postId || uploadRes.videoId;
-        const controlMeta = buildControlMetadata(current);
         result = { postId: canonicalId };
         finalPostData = {
           id: canonicalId,
@@ -503,6 +554,35 @@ export async function executePostPublish({
           ? current.typeData.video.url
           : '');
 
+      let linkedEventId = current.typeData?.event?.id || null;
+      if (effectiveType === 'event' && !isScheduled && !linkedEventId) {
+        try {
+          const { getEventService } = await import('../../services/eventService.js');
+          const eventService = services?.event || getEventService();
+          const createdEvent = await eventService.createEvent(userNow.uid, {
+            title: effectiveText || 'Untitled Event',
+            description: current.typeData?.event?.description || '',
+            coverImage: current.typeData?.event?.coverImage || uploadedMedia[0]?.url || '',
+            startDate: current.typeData?.event?.date ? new Date(current.typeData.event.date) : null,
+            timezone: current.typeData?.event?.timezone || 'UTC',
+            location: current.typeData?.event?.location || '',
+            locationLat: current.typeData?.event?.locationData?.lat ?? null,
+            locationLng: current.typeData?.event?.locationData?.lng ?? null,
+            type: current.typeData?.event?.location ? 'physical' : 'digital',
+            capacity: current.typeData?.event?.capacity ?? 0,
+            communityId: communityId || null,
+          });
+          if (createdEvent?.id) {
+            linkedEventId = createdEvent.id;
+            await eventService.publishEvent(createdEvent.id, userNow.uid).catch(() => {});
+          }
+        } catch (eventCreateErr) {
+          console.warn('[postPublishPipeline] Linked event creation skipped:', eventCreateErr?.message);
+        }
+      }
+
+      const rawLink = current.typeData?.link || {};
+      const linkMeta = rawLink.metadata || null;
       const controlMeta = buildControlMetadata(current);
       finalPostData = {
         id: clientPostId,
@@ -539,13 +619,14 @@ export async function executePostPublish({
         event:
           effectiveType === 'event'
             ? {
+                id: linkedEventId,
                 title: effectiveText,
                 date: current.typeData?.event?.date,
                 location: current.typeData?.event?.location || '',
                 locationData: current.typeData?.event?.locationData || null,
                 description: current.typeData?.event?.description || '',
-                coverImage: current.typeData?.event?.coverImage || '',
-                rsvpEnabled: !!current.typeData?.event?.rsvpEnabled,
+                coverImage: current.typeData?.event?.coverImage || uploadedMedia[0]?.url || '',
+                rsvpEnabled: current.typeData?.event?.rsvpEnabled !== false,
                 capacity: current.typeData?.event?.capacity ?? null,
                 timezone: current.typeData?.event?.timezone || null,
               }
@@ -553,10 +634,13 @@ export async function executePostPublish({
         link:
           effectiveType === 'link'
             ? {
-                url: current.typeData?.link?.url || '',
-                title: current.typeData?.link?.title || effectiveText,
-                thumbnail: current.typeData?.link?.thumbnail || '',
-                metadata: current.typeData?.link?.metadata || null,
+                url: rawLink.url || '',
+                title: rawLink.title || linkMeta?.title || effectiveText,
+                description: rawLink.description || linkMeta?.description || '',
+                image: rawLink.image || rawLink.thumbnail || linkMeta?.image || '',
+                thumbnail: rawLink.thumbnail || rawLink.image || linkMeta?.image || '',
+                domain: rawLink.domain || linkMeta?.domain || '',
+                metadata: linkMeta,
               }
             : null,
         question:

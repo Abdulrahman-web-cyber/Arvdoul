@@ -73,7 +73,7 @@ function enhanceError(error, defaultMessage) {
     'cancelled': 'Operation cancelled.'
   };
   const code = error?.code || 'unknown';
-  let message = errorMap[code] || defaultMessage || 'Database operation failed';
+  let message = errorMap[code] || (!error?.code && error?.message ? error.message : null) || defaultMessage || 'Database operation failed';
   if (code === 'failed-precondition' && error.message?.includes('index')) {
     const match = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
     const url = match ? match[0] : 'Check Firebase console';
@@ -312,12 +312,14 @@ class EnterpriseFirestoreService {
         if (!isSafeRemoteUrl(rawUrl)) return null;
         let hostname = '';
         try { hostname = new URL(rawUrl).hostname; } catch { hostname = ''; }
+        const meta = rawLink.metadata && typeof rawLink.metadata === 'object' ? rawLink.metadata : null;
+        const candidateImage = rawLink.image || rawLink.thumbnail || meta?.image || '';
         return {
           url: rawUrl,
-          title: String(rawLink.title || hostname || rawUrl).slice(0, 200),
-          description: String(rawLink.description || '').slice(0, 500),
-          image: isSafeRemoteUrl(rawLink.image) ? rawLink.image : '',
-          domain: String(rawLink.domain || hostname || '').slice(0, 120),
+          title: String(rawLink.title || meta?.title || hostname || rawUrl).slice(0, 200),
+          description: String(rawLink.description || meta?.description || '').slice(0, 500),
+          image: isSafeRemoteUrl(candidateImage) ? candidateImage : '',
+          domain: String(rawLink.domain || meta?.domain || hostname || '').slice(0, 120),
           author: rawLink.author ? String(rawLink.author).slice(0, 120) : '',
         };
       };
@@ -765,6 +767,25 @@ class EnterpriseFirestoreService {
             .filter(Boolean)
         )].slice(0, 30);
       }
+      if ('scheduledTime' in cleanUpdates) {
+        const parsedScheduled =
+          cleanUpdates.scheduledTime && !isNaN(new Date(cleanUpdates.scheduledTime).getTime())
+            ? new Date(cleanUpdates.scheduledTime)
+            : null;
+        cleanUpdates.scheduledTime = parsedScheduled;
+        if (parsedScheduled && parsedScheduled > new Date()) {
+          cleanUpdates.status = 'scheduled';
+        } else if (!('status' in cleanUpdates)) {
+          cleanUpdates.status = 'published';
+          cleanUpdates.publishedAt = serverTimestamp();
+        }
+      }
+      if ('expiresAt' in cleanUpdates) {
+        cleanUpdates.expiresAt =
+          cleanUpdates.expiresAt && !isNaN(new Date(cleanUpdates.expiresAt).getTime())
+            ? new Date(cleanUpdates.expiresAt)
+            : null;
+      }
       const postRef = doc(this.firestore, 'posts', postId);
       await updateDoc(postRef, { ...cleanUpdates, updatedAt: serverTimestamp(), _clientUpdatedAt: new Date().toISOString() });
       this.cache.delete(postId);
@@ -1134,6 +1155,13 @@ class EnterpriseFirestoreService {
       if (original.authorIsPrivate === true && original.authorId !== uid) {
         throw new Error('You cannot repost content from a private account.');
       }
+      if (
+        original.distributionSettings?.allowReposts === false ||
+        original.engagementControls?.enableShares === false ||
+        original.allowSharing === false
+      ) {
+        throw new Error('Reposting is disabled by the post author.');
+      }
 
       const repostDoc = {
         type: 'repost',
@@ -1356,14 +1384,45 @@ class EnterpriseFirestoreService {
     } catch (error) { throw enhanceError(error, 'Failed to increment comment count'); }
   }
 
-  async getUserPollVote(postId, userId) {
+  async getUserPollVote(postId, userId, options = {}) {
     await this.ensureInitialized();
     const { doc, getDoc } = this.firestoreMethods;
+    const allowMultiple = options?.allowMultiple === true;
+    const optionCount = Math.max(0, Math.min(10, Number(options?.optionCount) || 10));
+
+    if (allowMultiple) {
+      const indices = Array.from({ length: optionCount }, (_, idx) => idx);
+      const snaps = await Promise.all(
+        indices.map((idx) =>
+          getDoc(doc(this.firestore, 'posts', postId, 'poll_votes', `${userId}_opt_${idx}`)).catch(() => null)
+        )
+      );
+      const optionIds = [];
+      let firstIndex = null;
+      snaps.forEach((snap, idx) => {
+        if (snap && snap.exists()) {
+          const data = snap.data() || {};
+          const optId = data.optionId || `opt_${idx}`;
+          optionIds.push(optId);
+          if (firstIndex === null) firstIndex = data.optionIndex ?? idx;
+        }
+      });
+      if (optionIds.length > 0) {
+        return { success: true, optionIndex: firstIndex, optionId: optionIds[0], optionIds };
+      }
+    }
+
     const voteRef = doc(this.firestore, 'posts', postId, 'poll_votes', userId);
     const snap = await getDoc(voteRef);
-    if (!snap.exists()) return { success: true, optionIndex: null, optionId: null };
-    const data = snap.data();
-    return { success: true, optionIndex: data.optionIndex ?? null, optionId: data.optionId ?? null };
+    if (!snap.exists()) return { success: true, optionIndex: null, optionId: null, optionIds: [] };
+    const data = snap.data() || {};
+    const optId = data.optionId ?? (data.optionIndex != null ? `opt_${data.optionIndex}` : null);
+    return {
+      success: true,
+      optionIndex: data.optionIndex ?? null,
+      optionId: optId,
+      optionIds: optId ? [optId] : [],
+    };
   }
 
   // ── Q&A (post-embedded questions) ───────────────────────────────────

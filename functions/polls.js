@@ -140,7 +140,11 @@ exports.votePostPoll = functions.https.onCall(async (data, context) => {
           ? { id: `opt_${idx}`, text: o, votes: 0 }
           : { id: o.id ?? `opt_${idx}`, text: o.text ?? '', votes: o.votes || 0 }
       ));
-      const target = options.find((o) => o.id === optionId);
+      const target = options.find(
+        (o) =>
+          o.id === optionId ||
+          (typeof optionId === 'string' && optionId.startsWith('opt_') && o.id === optionId.slice(4))
+      );
       if (!target) throw new functions.https.HttpsError('invalid-argument', 'Option not found');
 
       // One vote per (viewer, option). A single-choice poll keys on the viewer

@@ -39,8 +39,8 @@ const FETCHERS = {
 export default function BlockedAccountsScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const { theme, isDark: resolvedIsDark } = useTheme();
+  const isDark = typeof resolvedIsDark === 'boolean' ? resolvedIsDark : theme !== 'light';
   const uid = user?.uid;
 
   const [activeTab, setActiveTab] = useState('blocked');

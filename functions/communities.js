@@ -523,11 +523,15 @@ exports.createCommunityPost = functions.https.onCall(async (data, context) => {
       poll: {
         question: cleanText(post.poll.question || content, 500),
         options: Array.isArray(post.poll.options)
-          ? post.poll.options.slice(0, 10).map((opt, idx) => ({
-              id: cleanText(opt?.id || String(idx), 40),
-              text: cleanText(opt?.text, 120),
-              votes: 0,
-            })).filter((o) => o.text)
+          ? post.poll.options.slice(0, 10).map((opt, idx) => {
+              const rawText = typeof opt === 'string' ? opt : opt?.text;
+              const rawId = typeof opt === 'object' && opt?.id ? opt.id : `opt_${idx}`;
+              return {
+                id: cleanText(rawId, 40),
+                text: cleanText(rawText, 120),
+                votes: 0,
+              };
+            }).filter((o) => o.text)
           : [],
         totalVotes: 0,
         allowMultiple: Boolean(post.poll.allowMultiple),
@@ -536,8 +540,12 @@ exports.createCommunityPost = functions.https.onCall(async (data, context) => {
     }),
     ...(postType === 'question' && {
       question: {
-        title: cleanText(post?.question?.title || content, 300),
+        text: cleanText(post?.question?.text || post?.question?.title || content, 500),
+        title: cleanText(post?.question?.title || post?.question?.text || content, 300),
         details: cleanText(post?.question?.details || '', 2000),
+        bounty: Number(post?.question?.bounty) || 0,
+        closed: Boolean(post?.question?.closed),
+        acceptedAnswerId: post?.question?.acceptedAnswerId || null,
         answers: [],
         totalAnswers: 0,
         bestAnswerId: null,
@@ -546,10 +554,10 @@ exports.createCommunityPost = functions.https.onCall(async (data, context) => {
     ...(postType === 'link' && post?.link && safeHttpUrl(post.link.url) && {
       link: {
         url: safeHttpUrl(post.link.url),
-        title: cleanText(post.link.title, 200) || '',
-        description: cleanText(post.link.description, 500) || '',
-        image: safeHttpUrl(post.link.image) || '',
-        domain: cleanText(post.link.domain, 120) || '',
+        title: cleanText(post.link.title || post.link.metadata?.title, 200) || '',
+        description: cleanText(post.link.description || post.link.metadata?.description, 500) || '',
+        image: safeHttpUrl(post.link.image || post.link.thumbnail || post.link.metadata?.image) || '',
+        domain: cleanText(post.link.domain || post.link.metadata?.domain, 120) || '',
       },
     }),
     ...(postType === 'event' && post?.event && {
@@ -560,6 +568,8 @@ exports.createCommunityPost = functions.https.onCall(async (data, context) => {
         date: post.event.date || null,
         endDate: post.event.endDate || null,
         location: cleanText(post.event.location, 240),
+        locationData: post.event.locationData || null,
+        timezone: cleanText(post.event.timezone, 80) || null,
         coverImage: safeHttpUrl(post.event.coverImage) || '',
         rsvpEnabled: post.event.rsvpEnabled !== false,
         capacity: typeof post.event.capacity === 'number' && post.event.capacity > 0 ? post.event.capacity : null,
@@ -583,10 +593,45 @@ exports.createCommunityPost = functions.https.onCall(async (data, context) => {
       },
     }),
     visibility: 'community',
-    enableComments: post?.enableComments !== false && post?.allowComments !== false,
-    allowComments: post?.allowComments !== false && post?.enableComments !== false,
-    enableGifts: post?.enableGifts !== false,
-    allowSharing: post?.allowSharing !== false,
+    ...(post?.identityMeta && typeof post.identityMeta === 'object' ? { identityMeta: post.identityMeta } : {}),
+    ...(post?.distributionSettings && typeof post.distributionSettings === 'object'
+      ? { distributionSettings: post.distributionSettings }
+      : {}),
+    ...(post?.engagementControls && typeof post.engagementControls === 'object'
+      ? { engagementControls: post.engagementControls }
+      : {}),
+    ...(post?.commercialDisclosure && typeof post.commercialDisclosure === 'object'
+      ? { commercialDisclosure: post.commercialDisclosure }
+      : {}),
+    ...(post?.partnership && typeof post.partnership === 'object'
+      ? { partnership: post.partnership }
+      : {}),
+    ...(post?.creatorPrograms && typeof post.creatorPrograms === 'object'
+      ? { creatorPrograms: post.creatorPrograms }
+      : {}),
+    ...(post?.safetyAccessibility && typeof post.safetyAccessibility === 'object'
+      ? { safetyAccessibility: post.safetyAccessibility }
+      : {}),
+    ...(post?.lifecycleSettings && typeof post.lifecycleSettings === 'object'
+      ? { lifecycleSettings: post.lifecycleSettings }
+      : {}),
+    enableComments:
+      post?.engagementControls?.commentMode === 'off'
+        ? false
+        : (post?.enableComments !== false && post?.allowComments !== false && post?.engagementControls?.enableComments !== false),
+    commentsEnabled:
+      post?.engagementControls?.commentMode === 'off'
+        ? false
+        : (post?.enableComments !== false && post?.allowComments !== false && post?.engagementControls?.enableComments !== false),
+    allowComments:
+      post?.engagementControls?.commentMode === 'off'
+        ? false
+        : (post?.allowComments !== false && post?.enableComments !== false && post?.engagementControls?.enableComments !== false),
+    enableGifts:
+      post?.enableGifts !== false &&
+      post?.engagementControls?.enableGifts !== false &&
+      post?.creatorPrograms?.enableGiftsForPost !== false,
+    allowSharing: post?.allowSharing !== false && post?.engagementControls?.enableShares !== false,
     stats: { likes: 0, comments: 0, shares: 0, saves: 0, views: 0 },
     reactions: { like: 0, love: 0, laugh: 0, celebrate: 0, support: 0, insightful: 0 },
     hashtags: normalizedHashtags,
@@ -594,10 +639,17 @@ exports.createCommunityPost = functions.https.onCall(async (data, context) => {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     publishedAt: FieldValue.serverTimestamp(),
+    scheduledTime: post?.scheduledTime && !Number.isNaN(new Date(post.scheduledTime).getTime())
+      ? new Date(post.scheduledTime)
+      : null,
     // Canonical post shape: `expiresAt` is present (null = never expires) so the
     // client's `postReadableByViewer` get-rule never hits an absent field.
-    expiresAt: null,
-    status: community.moderation?.contentApproval ? 'pending' : 'published',
+    expiresAt: post?.expiresAt && !Number.isNaN(new Date(post.expiresAt).getTime())
+      ? new Date(post.expiresAt)
+      : null,
+    status: community.moderation?.contentApproval
+      ? 'pending'
+      : (post?.scheduledTime && new Date(post.scheduledTime).getTime() > Date.now() ? 'scheduled' : 'published'),
     isDeleted: false,
   };
   await postRef.set(newPost);

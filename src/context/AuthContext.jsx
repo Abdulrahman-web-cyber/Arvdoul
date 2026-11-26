@@ -1438,7 +1438,7 @@ export function AuthProvider({ children }) {
     }
   }, [authService]);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async ({ redirectTo = '/' } = {}) => {
     if (!authService) throw new Error('Auth service not ready');
     navigationLock.current = true;
     isLoggingOutRef.current = true;
@@ -1477,7 +1477,9 @@ export function AuthProvider({ children }) {
       clearOnboardingRequired();
       broadcastRef.current?.postMessage({ type: 'signOut' });
       toast.success('Signed out successfully');
-      setTimeout(() => navigate('/', { replace: true }), 300);
+      if (redirectTo) {
+        setTimeout(() => navigate(redirectTo, { replace: true }), 300);
+      }
     } catch (error) {
       console.error('❌ Sign out failed:', error);
       debouncedToast('Failed to sign out', 'error');

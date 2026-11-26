@@ -98,6 +98,18 @@ const AnswerItem = React.memo(({
   const canMarkBest = isAuthor && !isBest && !answer.isBest;
   const voteLock = useRef(false);
 
+  useEffect(() => {
+    setUserVote(answer.userVote || null);
+  }, [answer.userVote]);
+
+  useEffect(() => {
+    setOptimisticUpvotes(unknownNumber(answer.upvotes));
+  }, [answer.upvotes]);
+
+  useEffect(() => {
+    if (!isEditing) setEditContent(answer.answer || '');
+  }, [answer.answer, isEditing]);
+
   const handleVote = async (direction) => {
     if (voteLock.current) return;
     voteLock.current = true;

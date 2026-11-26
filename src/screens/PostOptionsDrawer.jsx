@@ -146,7 +146,12 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     saved: false,
     pinned: !!safePost.pinned,
     archived: safePost.archived === true,
-    commentsEnabled: safePost.commentsEnabled !== false,
+    commentsEnabled:
+      safePost.enableComments !== false &&
+      safePost.commentsEnabled !== false &&
+      safePost.allowComments !== false &&
+      safePost.engagementControls?.enableComments !== false &&
+      safePost.engagementControls?.commentMode !== 'off',
     followState: null,
     followRequested: false,
   });
@@ -605,7 +610,15 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     const newState = !uiState.commentsEnabled;
     dispatchUI({ type: 'SET_COMMENTS_ENABLED', payload: newState });
     try {
-      await callWithRetry(() => firestoreService.updatePost(post.id, { commentsEnabled: newState }));
+      await callWithRetry(() =>
+        firestoreService.updatePost(post.id, {
+          commentsEnabled: newState,
+          enableComments: newState,
+          allowComments: newState,
+          'engagementControls.enableComments': newState,
+          'engagementControls.commentMode': newState ? 'everyone' : 'off',
+        })
+      );
       if (!isValidVersion('comments', version) || !mountedRef.current) return;
       toast.success(newState ? 'Comments on' : 'Comments off');
       debouncedAnalytics('post_option_click', { action: newState ? 'enable_comments' : 'disable_comments', postId: post.id });
@@ -769,13 +782,21 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     }
   });
 
+  const allowShare = safePost.engagementControls?.enableShares !== false && safePost.allowSharing !== false;
+  const allowSave = safePost.engagementControls?.enableSaves !== false;
+  const allowDownload = isAuthor || (safePost.distributionSettings?.allowDownloads !== false && safePost.allowDownload !== false);
+  const allowGifts =
+    safePost.enableGifts !== false &&
+    safePost.engagementControls?.enableGifts !== false &&
+    safePost.creatorPrograms?.enableGiftsForPost !== false;
+
   const primaryRow = useMemo(() => [
-    { id: 'share', icon: Share2, label: 'Share', onClick: handleShare, primary: true, wide: true },
-    { id: 'save', icon: uiState.saved ? BookmarkCheck : Bookmark, label: uiState.saved ? 'Saved' : 'Save', onClick: handleSaveToggle, disabled: uiState.saving, primary: true, wide: true },
-  ], [uiState.saved, uiState.saving, handleShare, handleSaveToggle]);
+    ...(allowShare ? [{ id: 'share', icon: Share2, label: 'Share', onClick: handleShare, primary: true, wide: true }] : []),
+    ...(allowSave ? [{ id: 'save', icon: uiState.saved ? BookmarkCheck : Bookmark, label: uiState.saved ? 'Saved' : 'Save', onClick: handleSaveToggle, disabled: uiState.saving, primary: true, wide: true }] : []),
+  ], [allowShare, allowSave, uiState.saved, uiState.saving, handleShare, handleSaveToggle]);
 
   const secondaryRow = useMemo(() => [
-    { id: 'copy', icon: Copy, label: 'Copy link', onClick: handleCopyLink, secondary: true },
+    ...(allowShare ? [{ id: 'copy', icon: Copy, label: 'Copy link', onClick: handleCopyLink, secondary: true }] : []),
     ...(!isAuthor ? [{
       id: 'follow',
       icon: uiState.followState ? UserMinus : UserPlus,
@@ -784,14 +805,14 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
       disabled: uiState.followLoading,
       primary: true,
     }] : []),
-  ], [isAuthor, uiState.followState, uiState.followRequested, uiState.followLoading, handleCopyLink, handleFollowToggle]);
+  ], [allowShare, isAuthor, uiState.followState, uiState.followRequested, uiState.followLoading, handleCopyLink, handleFollowToggle]);
 
   const tertiaryRow = useMemo(() => [
     ...(!isAuthor ? [{ id: 'tip', icon: Coins, label: 'Tip', onClick: () => openModal('tip'), primary: true }] : []),
-    ...(!isAuthor ? [{ id: 'gift', icon: Gift, label: 'Gift', onClick: () => openModal('gift'), primary: true }] : []),
+    ...(!isAuthor && allowGifts ? [{ id: 'gift', icon: Gift, label: 'Gift', onClick: () => openModal('gift'), primary: true }] : []),
     ...(isAuthor ? [{ id: 'boost', icon: Zap, label: 'Boost', onClick: () => openModal('boost'), primary: true }] : []), // FIXED: only for author
-    ...(hasMedia && currentUser ? [{ id: 'download', icon: Download, label: 'Download', onClick: handleDownload, secondary: true }] : []),
-  ], [isAuthor, hasMedia, currentUser, handleDownload, openModal]);
+    ...(hasMedia && currentUser && allowDownload ? [{ id: 'download', icon: Download, label: 'Download', onClick: handleDownload, secondary: true }] : []),
+  ], [isAuthor, allowGifts, allowDownload, hasMedia, currentUser, handleDownload, openModal]);
 
   const handleOpenAdsCenter = requireAuth(() => {
     if (!isAuthor) { toast.error('Only author'); return; }

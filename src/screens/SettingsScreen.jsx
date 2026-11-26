@@ -118,10 +118,10 @@ function OptionPill({ label, active, onClick }) {
 /* ---------- Main screen ---------- */
 export default function SettingsScreen() {
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, isDark: resolvedIsDark, toggleTheme } = useTheme();
   const { user, signOut } = useAuth();
   const { t, i18n } = useTranslation();
-  const isDark = theme !== 'light';
+  const isDark = typeof resolvedIsDark === 'boolean' ? resolvedIsDark : theme !== 'light';
   const uid = user?.uid;
 
   const [settings, setSettings] = useState(null); // null = loading
@@ -175,40 +175,53 @@ export default function SettingsScreen() {
   const [profileIsPrivate, setProfileIsPrivate] = useState(false);
 
   useEffect(() => {
+    if (!storeProfile) return;
+    if (storeProfile.privacy) {
+      const merged = { ...DEFAULT_PROFILE_PRIVACY, ...storeProfile.privacy };
+      profilePrivacyRef.current = merged;
+      setProfilePrivacy(merged);
+    }
+    setProfileIsPrivate(Boolean(storeProfile.isPrivate));
+  }, [storeProfile]);
+
+  useEffect(() => {
     let mounted = true;
     setLoadError(null);
     (async () => {
       try {
-        const [loaded, level] = await Promise.all([
+        const [loaded, level, profileDoc] = await Promise.all([
           settingsService.getSettings(uid),
           levelSystemService.getLevelInfo(uid),
+          !storeProfile && uid && typeof userServiceDefault?.getUserProfile === 'function'
+            ? userServiceDefault.getUserProfile(uid).catch(() => null)
+            : Promise.resolve(null),
         ]);
         if (!mounted) return;
         setSettings(loaded);
         setLevelInfo(level);
-        // Initialize profile privacy from storeProfile or loaded doc
-        if (storeProfile?.privacy) {
-          const merged = { ...DEFAULT_PROFILE_PRIVACY, ...storeProfile.privacy };
+        const resolvedProfile = storeProfile || profileDoc;
+        if (resolvedProfile?.privacy) {
+          const merged = { ...DEFAULT_PROFILE_PRIVACY, ...resolvedProfile.privacy };
           profilePrivacyRef.current = merged;
           setProfilePrivacy(merged);
         }
         // Profile privacy is owned by the user profile (`users/{uid}.isPrivate`),
-        // never by the settings document - read it from the profile store only.
-        setProfileIsPrivate(Boolean(storeProfile?.isPrivate));
+        // never by the settings document.
+        setProfileIsPrivate(Boolean(resolvedProfile?.isPrivate));
         // Apply persisted reduce-motion override
         if (loaded?.appearance?.reduceMotion) {
           document.documentElement.classList.add('arvdoul-reduce-motion');
         }
       } catch (err) {
         if (!mounted) return;
-        setSettings({});
+        setSettings(null);
         setLoadError(err?.message || 'Could not load your settings.');
       }
     })();
     return () => {
       mounted = false;
     };
-  }, [uid, storeProfile, reloadKey]);
+  }, [uid, reloadKey]);
 
   // Read the real DND state once so the toggle reflects the server's view.
   useEffect(() => {
@@ -419,7 +432,7 @@ export default function SettingsScreen() {
   // — the document the server actually reads when dispatching a notification.
   // Without the mirror these switches were inert.
   const handleNotificationChannel = useCallback(async (path, value) => {
-    updateSetting(path, value);
+    await updateSetting(path, value);
     if (!uid) return;
     const channel = path === 'notifications.push' ? 'push'
       : path === 'notifications.email' ? 'email'
@@ -454,10 +467,10 @@ export default function SettingsScreen() {
 
   const handleLogout = async () => {
     try {
-      if (signOut) await signOut();
-      navigate('/login');
+      if (signOut) await signOut({ redirectTo: '/login' });
+      navigate('/login', { replace: true });
     } catch {
-      navigate('/login');
+      navigate('/login', { replace: true });
     }
   };
 

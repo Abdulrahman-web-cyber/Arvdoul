@@ -1094,7 +1094,60 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     }
   }, [isOpen]);
 
-  // ── Load blocked users ──────────────────────────────
+  // ── Load blocked users & comment eligibility ────────
+  const [commentAccessAllowed, setCommentAccessAllowed] = useState(true);
+  const [commentAccessNotice, setCommentAccessNotice] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    const commentMode = post?.engagementControls?.commentMode || 'everyone';
+    const commentsOff =
+      post?.enableComments === false ||
+      post?.commentsEnabled === false ||
+      post?.allowComments === false ||
+      post?.engagementControls?.enableComments === false ||
+      commentMode === 'off';
+
+    if (commentsOff) {
+      setCommentAccessAllowed(false);
+      setCommentAccessNotice('Comments are turned off for this post.');
+      return () => { cancelled = true; };
+    }
+    if (
+      !currentUser?.uid ||
+      currentUser.uid === post?.authorId ||
+      (commentMode !== 'followers' && commentMode !== 'friends')
+    ) {
+      setCommentAccessAllowed(true);
+      setCommentAccessNotice('');
+      return () => { cancelled = true; };
+    }
+
+    (async () => {
+      try {
+        const { getSocialGraphService } = await import('../services/socialGraphService.js');
+        const rel = await getSocialGraphService().getRelationship(currentUser.uid, post.authorId);
+        if (cancelled) return;
+        if (commentMode === 'followers' && !rel?.isFollowing) {
+          setCommentAccessAllowed(false);
+          setCommentAccessNotice('Only followers of the author can comment on this post.');
+        } else if (commentMode === 'friends' && (!rel?.isFollowing || !rel?.isFollower)) {
+          setCommentAccessAllowed(false);
+          setCommentAccessNotice('Only mutual friends of the author can comment on this post.');
+        } else {
+          setCommentAccessAllowed(true);
+          setCommentAccessNotice('');
+        }
+      } catch {
+        if (!cancelled) {
+          setCommentAccessAllowed(true);
+          setCommentAccessNotice('');
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser?.uid, post?.authorId, post?.enableComments, post?.commentsEnabled, post?.allowComments, post?.engagementControls]);
+
   useEffect(() => {
     if (!currentUser?.uid) { setBlockedLoading(false); return; }
     (async () => {
@@ -1254,8 +1307,18 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       toast.error('Please sign in to comment');
       return;
     }
-    if (post?.enableComments === false || post?.commentsEnabled === false || post?.allowComments === false) {
+    if (
+      post?.enableComments === false ||
+      post?.commentsEnabled === false ||
+      post?.allowComments === false ||
+      post?.engagementControls?.enableComments === false ||
+      post?.engagementControls?.commentMode === 'off'
+    ) {
       toast.error('Comments are turned off for this post');
+      return;
+    }
+    if (!commentAccessAllowed) {
+      toast.error(commentAccessNotice || 'You cannot comment on this post');
       return;
     }
     const activeUser = currentUser;
@@ -1806,9 +1869,9 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
             <TypingIndicator typingUsers={typingUsers} />
 
             {/* Reply / Main composer */}
-            {post?.enableComments === false || post?.commentsEnabled === false || post?.allowComments === false ? (
+            {!commentAccessAllowed ? (
               <div className="px-4 py-3 border-t dark:border-gray-800 text-center text-xs text-gray-500 dark:text-gray-400">
-                Comments are turned off for this post.
+                {commentAccessNotice || 'Comments are turned off for this post.'}
               </div>
             ) : (
               <>

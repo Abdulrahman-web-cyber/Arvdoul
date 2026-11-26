@@ -263,6 +263,7 @@ export default function EditPostLoader() {
               allowMultiple: !!p.poll?.allowMultiple,
             },
             event: {
+              id: p.event?.id || null,
               date: p.event?.date?.toDate
                 ? p.event.date.toDate().toISOString()
                 : p.event?.date || null,
@@ -270,15 +271,18 @@ export default function EditPostLoader() {
               locationData: p.event?.locationData || null,
               description: p.event?.description || '',
               coverImage: p.event?.coverImage || '',
-              rsvpEnabled: !!p.event?.rsvpEnabled,
+              rsvpEnabled: p.event?.rsvpEnabled !== false,
               capacity: p.event?.capacity ?? null,
               timezone: p.event?.timezone || null,
             },
             link: {
               url: p.link?.url || '',
               title: p.link?.title || '',
+              description: p.link?.description || p.link?.metadata?.description || '',
+              image: p.link?.image || p.link?.thumbnail || p.link?.metadata?.image || '',
+              domain: p.link?.domain || p.link?.metadata?.domain || '',
               metadata: p.link?.metadata || null,
-              thumbnail: p.link?.thumbnail || '',
+              thumbnail: p.link?.thumbnail || p.link?.image || '',
             },
             audio: {
               file: null,

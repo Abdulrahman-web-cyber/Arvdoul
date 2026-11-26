@@ -263,6 +263,10 @@ class SettingsService {
         'auth_token',
         'user_session',
         'arvdoul_locale',
+        'arvdoul_has_session',
+        'arvdoul_uid',
+        'uid',
+        'arvdoul_device_id',
         ...preserveKeys,
       ]);
       Object.keys(localStorage).forEach((key) => {
@@ -275,23 +279,25 @@ class SettingsService {
       logger.warn('[Settings] localStorage clear failed:', { error: err.message });
     }
 
-    // 2. IndexedDB (offline queue + L3 caches)
+    // 2. IndexedDB (offline queue + L3 app caches — never delete Firebase Auth or Firestore persistence DBs)
     try {
       if (typeof indexedDB !== 'undefined' && indexedDB.databases) {
         const dbs = await indexedDB.databases();
         await Promise.all(
-          dbs.map(
-            (db) =>
-              new Promise((resolve) => {
-                const req = indexedDB.deleteDatabase(db.name);
-                req.onsuccess = () => {
-                  cleared.push(`indexeddb:${db.name}`);
-                  resolve();
-                };
-                req.onerror = () => resolve();
-                req.onblocked = () => resolve();
-              })
-          )
+          dbs
+            .filter((db) => db?.name && !/^firebase|^firestore/i.test(db.name))
+            .map(
+              (db) =>
+                new Promise((resolve) => {
+                  const req = indexedDB.deleteDatabase(db.name);
+                  req.onsuccess = () => {
+                    cleared.push(`indexeddb:${db.name}`);
+                    resolve();
+                  };
+                  req.onerror = () => resolve();
+                  req.onblocked = () => resolve();
+                })
+            )
         );
       }
     } catch (err) {

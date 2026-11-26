@@ -286,6 +286,10 @@ const ImageCard = React.memo(({
   postId,
   srcSetGenerator,
   overlay,
+  disableReactions = false,
+  disableSave = false,
+  disableShare = false,
+  disableDownload = false,
 }) => {
   const safeImages = Array.isArray(images) ? images : [];
   const total = safeImages.length;
@@ -639,18 +643,20 @@ const ImageCard = React.memo(({
 
   // Engagement handlers
   const handleLike = useCallback((idx) => {
+    if (disableReactions) return;
     if (onLike) onLike(idx);
     else if (onDoubleTap) onDoubleTap();
     pushAnalytics('like', { postId, imageIndex: idx });
     haptic(10);
-  }, [onLike, onDoubleTap, pushAnalytics, postId]);
+  }, [disableReactions, onLike, onDoubleTap, pushAnalytics, postId]);
   const handleSave = useCallback((url) => {
+    if (disableSave) return;
     // No save backend is wired for a bare image; never claim the image was saved.
     if (onSave) onSave(url);
     else toast.error('Saving is unavailable here');
     pushAnalytics('save', { postId, imageUrl: url });
     haptic(5);
-  }, [onSave, pushAnalytics, postId]);
+  }, [disableSave, onSave, pushAnalytics, postId]);
   const handleReport = useCallback((url) => {
     if (onReport) onReport(url);
     else toast.error('Reporting is unavailable here');
@@ -658,15 +664,20 @@ const ImageCard = React.memo(({
     haptic(10);
   }, [onReport, pushAnalytics, postId]);
   const handleShare = useCallback((url) => {
+    if (disableShare) return;
     if (onShare) onShare(url);
     else if (navigator.share) navigator.share({ url }).catch(() => toast.info('Share cancelled'));
     else toast.info('Share not supported');
     pushAnalytics('share', { postId, imageUrl: url });
     haptic(5);
-  }, [onShare, pushAnalytics, postId]);
+  }, [disableShare, onShare, pushAnalytics, postId]);
 
   // Download with fetch + blob for cross-origin (reliable)
   const handleDownload = useCallback(async (url) => {
+    if (disableDownload) {
+      toast.info('Downloads are disabled for this post');
+      return;
+    }
     if (onDownload) {
       onDownload(url);
       pushAnalytics('download', { postId, imageUrl: url });
@@ -694,7 +705,7 @@ const ImageCard = React.memo(({
     }
     pushAnalytics('download', { postId, imageUrl: url });
     haptic(5);
-  }, [onDownload, pushAnalytics, postId]);
+  }, [disableDownload, onDownload, pushAnalytics, postId]);
 
   // Reduced motion support
   const prefersReducedMotion = hasWindow && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -929,11 +940,11 @@ const ImageCard = React.memo(({
                 </button>
               </div>
               <div className="absolute bottom-4 right-4 flex gap-2 z-20">
-                <button onClick={() => handleLike(currentIndex)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70" aria-label="Like"><Heart className="w-5 h-5" /></button>
-                <button onClick={() => handleSave(safeImages[currentIndex]?.url)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70" aria-label="Save"><Save className="w-5 h-5" /></button>
+                {!disableReactions && <button onClick={() => handleLike(currentIndex)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70" aria-label="Like"><Heart className="w-5 h-5" /></button>}
+                {!disableSave && <button onClick={() => handleSave(safeImages[currentIndex]?.url)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70" aria-label="Save"><Save className="w-5 h-5" /></button>}
                 <button onClick={() => handleReport(safeImages[currentIndex]?.url)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70" aria-label="Report"><Flag className="w-5 h-5" /></button>
-                <button onClick={() => handleShare(safeImages[currentIndex]?.url)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70" aria-label="Share"><Share2 className="w-5 h-5" /></button>
-                <button onClick={() => handleDownload(safeImages[currentIndex]?.url)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70" aria-label="Download"><Download className="w-5 h-5" /></button>
+                {!disableShare && <button onClick={() => handleShare(safeImages[currentIndex]?.url)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70" aria-label="Share"><Share2 className="w-5 h-5" /></button>}
+                {!disableDownload && <button onClick={() => handleDownload(safeImages[currentIndex]?.url)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-black/70" aria-label="Download"><Download className="w-5 h-5" /></button>}
               </div>
               <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-md rounded-full px-3 py-1 text-white text-sm z-20">
                 {currentIndex + 1} / {total}

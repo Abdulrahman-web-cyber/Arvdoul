@@ -390,6 +390,17 @@ class UltimateVideoService {
       chapters: Array.isArray(metadata.chapters) ? metadata.chapters : [],
       music: metadata.music || null,
       effects: metadata.effects || null,
+      identityMeta: metadata.identityMeta || null,
+      distributionSettings: metadata.distributionSettings || null,
+      engagementControls: metadata.engagementControls || null,
+      commercialDisclosure: metadata.commercialDisclosure || null,
+      partnership: metadata.partnership || null,
+      creatorPrograms: metadata.creatorPrograms || null,
+      safetyAccessibility: metadata.safetyAccessibility || null,
+      lifecycleSettings: metadata.lifecycleSettings || null,
+      enableComments: metadata.enableComments ?? true,
+      enableGifts: metadata.enableGifts ?? true,
+      expiresAt: metadata.expiresAt || null,
     });
     const { uploadUrl, assetId, playbackId } = uploadData;
     const postId = uploadData.postId || assetId;

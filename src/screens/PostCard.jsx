@@ -19,7 +19,7 @@ import notificationService from '../services/notificationsService';
 import { triggerHaptic } from '../utils/haptics';
 import { formatDistanceToNow } from 'date-fns';
 import { resolveActorName } from '../services/profileReadModel.js';
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, BarChart3, Coins, Send, AlertTriangle, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink, Handshake, Tag } from "lucide-react";
+import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, BarChart3, Coins, Send, AlertTriangle, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink, Handshake, Tag, Eye, ShieldAlert, FileText } from "lucide-react";
 import { FaHeart, FaWhatsapp, FaTelegram, FaTwitter, FaFacebook, FaInstagram } from 'react-icons/fa6';
 
 // Sub‑cards
@@ -123,7 +123,7 @@ class PostErrorBoundary extends React.Component {
 }
 
 // 5. SHARE SHEET (tap outside / ESC, download only if hasMedia)
-const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, postData, isCreator, hasMedia, navigate, currentUser }) => {
+const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, postData, isCreator, hasMedia, navigate, currentUser, allowRepost = true, allowDownload = true }) => {
   const sheetRef = useRef(null);
   const overlayRef = useRef(null);
 
@@ -321,12 +321,16 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
           <button type="button" onClick={() => { window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(content)}&url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaTwitter className="w-6 h-6 text-sky-500" /><span className="text-xs">X</span></button>
           <button type="button" onClick={() => { window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaFacebook className="w-6 h-6 text-blue-600" /><span className="text-xs">FB</span></button>
           <button type="button" onClick={() => { navigator.clipboard.writeText(url); toast.success('Link copied – share in Instagram DM'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaInstagram className="w-6 h-6 text-pink-500" /><span className="text-xs">IG</span></button>
-          <button type="button" onClick={repost} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><RefreshCw className="w-6 h-6 text-green-500" /><span className="text-xs">Repost</span></button>
+          {allowRepost && (
+            <button type="button" onClick={repost} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><RefreshCw className="w-6 h-6 text-green-500" /><span className="text-xs">Repost</span></button>
+          )}
         </div>
         <div className="border-t pt-3 space-y-2" style={{ borderColor: tokens.overlayPanelBorder }}>
-          <button type="button" onClick={quotePost} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Quote className="w-5 h-5" /><span className="text-sm">Quote Post</span></button>
+          {allowRepost && (
+            <button type="button" onClick={quotePost} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Quote className="w-5 h-5" /><span className="text-sm">Quote Post</span></button>
+          )}
           <button type="button" onClick={sendToFriends} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Send className="w-5 h-5" /><span className="text-sm">Send to Friends</span></button>
-          {hasMedia && (
+          {hasMedia && allowDownload && (
             <button type="button" onClick={downloadMedia} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Download className="w-5 h-5" /><span className="text-sm">Download Media</span></button>
           )}
           <button type="button" onClick={addToStory} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><PlusCircle className="w-5 h-5" /><span className="text-sm">Add to Story</span></button>
@@ -530,9 +534,11 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const isAd = post.type === 'ad' || post.isAd === true;
   const activeCampaignId = post.campaignId || post.adCampaignId || null;
   const commercialDisclosure = post.commercialDisclosure || null;
-  const hasCommercialDisclosure = Boolean(
-    commercialDisclosure?.disclosureType && commercialDisclosure.disclosureType !== 'none'
-  );
+  const disclosureType = commercialDisclosure?.type || commercialDisclosure?.disclosureType || 'none';
+  const brandPartnerName = post.partnership?.brandPartnerName || commercialDisclosure?.brandPartnerName || '';
+  const hasCommercialDisclosure = Boolean(disclosureType && disclosureType !== 'none');
+  const commercialUrl = commercialDisclosure?.affiliateUrl || commercialDisclosure?.ctaUrl || '';
+  const commercialCtaLabel = commercialDisclosure?.ctaLabel || 'Learn More';
   const isSponsored = post.isSponsored === true || post.adCampaignId !== undefined || isAd || hasCommercialDisclosure;
   const [adDetails, setAdDetails] = useState(null);
   useEffect(() => {
@@ -663,6 +669,29 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const debounceReactionRef = useRef(null);
   const likeLockRef = useRef(false);
   const isAuthor = currentUser?.uid === post.authorId;
+  const canComment =
+    post.enableComments !== false &&
+    post.commentsEnabled !== false &&
+    post.allowComments !== false &&
+    post.engagementControls?.enableComments !== false &&
+    post.engagementControls?.commentMode !== 'off';
+  const canReact = post.engagementControls?.enableReactions !== false;
+  const canSave = post.engagementControls?.enableSaves !== false;
+  const canShare = post.engagementControls?.enableShares !== false && post.allowSharing !== false;
+  const canRepost = canShare && post.distributionSettings?.allowReposts !== false;
+  const canDownload =
+    isAuthor || (post.distributionSettings?.allowDownloads !== false && post.allowDownload !== false);
+  const canGift =
+    isCreator &&
+    !isAuthor &&
+    post.enableGifts !== false &&
+    post.engagementControls?.enableGifts !== false &&
+    post.creatorPrograms?.enableGiftsForPost !== false;
+
+  const safetyMeta = post.safetyAccessibility || null;
+  const isSensitivePost = Boolean(safetyMeta?.isSensitiveMedia);
+  const [sensitiveRevealed, setSensitiveRevealed] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
 
   // Real coin balance (ledger) whenever the gift picker opens.
   useEffect(() => {
@@ -728,32 +757,125 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     return () => { cancelled = true; };
   }, [ui.showAnalytics, isAuthor, post.id]);
 
-  // The viewer's own vote on a post-embedded poll. PollCard renders the
-  // selection from `userVote`, but nothing ever supplied it, so a returning
-  // voter always saw an unvoted poll (and could re-tap into a server
-  // "already-exists" error).
-  const [userPollVoteIndex, setUserPollVoteIndex] = useState(null);
+  // The viewer's own vote(s) on a post-embedded poll. Supports both single and
+  // multi-choice polls cleanly.
+  const [userPollVotes, setUserPollVotes] = useState([]);
   useEffect(() => {
     if (post.type !== 'poll' || !post.id || !currentUser?.uid) {
-      setUserPollVoteIndex(null);
+      setUserPollVotes([]);
       return undefined;
     }
     let cancelled = false;
-    firestoreService.getUserPollVote?.(post.id, currentUser.uid)
-      .then((res) => { if (!cancelled) setUserPollVoteIndex(res?.optionIndex ?? null); })
-      .catch(() => { if (!cancelled) setUserPollVoteIndex(null); });
-    return () => { cancelled = true; };
-  }, [post.type, post.id, currentUser?.uid]);
+    firestoreService
+      .getUserPollVote?.(post.id, currentUser.uid, {
+        allowMultiple: post.poll?.allowMultiple === true,
+        optionCount: Array.isArray(post.poll?.options) ? post.poll.options.length : 10,
+      })
+      .then((res) => {
+        if (cancelled) return;
+        if (Array.isArray(res?.optionIds) && res.optionIds.length > 0) {
+          setUserPollVotes(res.optionIds);
+        } else if (res?.optionId) {
+          setUserPollVotes([res.optionId]);
+        } else if (res?.optionIndex != null) {
+          setUserPollVotes([`opt_${res.optionIndex}`]);
+        } else {
+          setUserPollVotes([]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setUserPollVotes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [post.type, post.id, post.poll?.allowMultiple, post.poll?.options?.length, currentUser?.uid]);
 
   const pollWithVote = useMemo(
-    () => (post.poll ? { ...post.poll, userVote: userPollVoteIndex == null ? null : `opt_${userPollVoteIndex}` } : null),
-    [post.poll, userPollVoteIndex],
+    () =>
+      post.poll
+        ? {
+            ...post.poll,
+            userVote:
+              userPollVotes.length === 0
+                ? null
+                : post.poll?.allowMultiple
+                  ? userPollVotes
+                  : userPollVotes[0],
+          }
+        : null,
+    [post.poll, userPollVotes]
   );
 
-  // The viewer's own up/down votes on this question's answers. QuestionCard
-  // renders the per-answer selection from `answer.userVote`, which nothing
-  // supplied; without it a returning voter could re-vote (and the server would
-  // toggle it off).
+  // Event RSVP hydration & live registration toggle when post.event.id is linked
+  const [eventUserStatus, setEventUserStatus] = useState(null);
+  const [eventStatsOverride, setEventStatsOverride] = useState(null);
+  useEffect(() => {
+    const linkedId = post.event?.id;
+    const uid = currentUser?.uid;
+    if (post.type !== 'event' || !linkedId || !isActiveForSubs) return undefined;
+    let cancelled = false;
+    import('../services/eventService.js')
+      .then(({ getEventService }) => getEventService().getEvent(linkedId))
+      .then((ev) => {
+        if (cancelled || !ev) return;
+        const regStatus = uid ? ev.attendees?.[uid]?.status : null;
+        if (regStatus === 'registered' || regStatus === 'waitlist') setEventUserStatus('going');
+        else setEventUserStatus(null);
+        if (ev.stats) setEventStatsOverride(ev.stats);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [post.type, post.event?.id, currentUser?.uid, isActiveForSubs]);
+
+  const handleEventRSVP = useCallback(
+    async (newStatus) => {
+      const uid = currentUser?.uid;
+      const linkedId = post.event?.id;
+      if (!uid || !linkedId) {
+        if (navigate && linkedId) navigate(`/event/${linkedId}`);
+        return;
+      }
+      const { getEventService } = await import('../services/eventService.js');
+      const eventSvc = getEventService();
+      if (newStatus === null) {
+        await eventSvc.cancelRegistration(linkedId, uid);
+        setEventUserStatus(null);
+        setEventStatsOverride((prev) =>
+          prev
+            ? { ...prev, attendeeCount: Math.max(0, (prev.attendeeCount || 1) - 1) }
+            : prev
+        );
+      } else {
+        await eventSvc.registerForEvent(linkedId, uid, 'general');
+        setEventUserStatus(newStatus);
+        setEventStatsOverride((prev) =>
+          prev ? { ...prev, attendeeCount: (prev.attendeeCount || 0) + 1 } : prev
+        );
+      }
+    },
+    [currentUser?.uid, post.event?.id, navigate]
+  );
+
+  // Q&A state & live refresh after mutations
+  const [liveQuestion, setLiveQuestion] = useState(post.question || null);
+  useEffect(() => {
+    setLiveQuestion(post.question || null);
+  }, [post.question]);
+
+  const refreshQuestionFromServer = useCallback(async () => {
+    if (!post.id) return;
+    try {
+      const fresh = await firestoreService.getPost?.(post.id, { cacheFirst: false });
+      if (fresh?.question) setLiveQuestion(fresh.question);
+    } catch {
+      /* noop */
+    }
+  }, [post.id]);
+
+  // The viewer's own up/down votes on this question's answers.
   const [answerVotes, setAnswerVotes] = useState({});
   useEffect(() => {
     if (post.type !== 'question' || !post.id || !currentUser?.uid) {
@@ -768,18 +890,19 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   }, [post.type, post.id, currentUser?.uid]);
 
   const questionWithVotes = useMemo(() => {
-    const q = post.question;
+    const q = liveQuestion || post.question;
     if (!q || typeof q !== 'object') return q;
     const answers = Array.isArray(q.answers)
       ? q.answers.map((a) => ({ ...a, userVote: answerVotes[a.id] ?? null }))
       : q.answers;
     return { ...q, answers };
-  }, [post.question, answerVotes]);
+  }, [liveQuestion, post.question, answerVotes]);
 
   const handleAddAnswer = useCallback(async (answerText, idempotencyKey) => {
     if (!currentUser?.uid) throw new Error('Sign in to answer');
     await firestoreService.addAnswer?.(post.id, answerText, idempotencyKey);
-  }, [currentUser, post.id]);
+    await refreshQuestionFromServer();
+  }, [currentUser, post.id, refreshQuestionFromServer]);
 
   const handleAnswerVote = useCallback(async (answerId, direction) => {
     if (!currentUser?.uid) throw new Error('Sign in to vote');
@@ -794,15 +917,18 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
 
   const handleEditAnswer = useCallback(async (answerId, answerText) => {
     await firestoreService.editAnswer?.(post.id, answerId, answerText);
-  }, [post.id]);
+    await refreshQuestionFromServer();
+  }, [post.id, refreshQuestionFromServer]);
 
   const handleDeleteAnswer = useCallback(async (answerId) => {
     await firestoreService.deleteAnswer?.(post.id, answerId);
-  }, [post.id]);
+    await refreshQuestionFromServer();
+  }, [post.id, refreshQuestionFromServer]);
 
   const handleMarkBest = useCallback(async (answerId) => {
     await firestoreService.acceptAnswer?.(post.id, answerId);
-  }, [post.id]);
+    await refreshQuestionFromServer();
+  }, [post.id, refreshQuestionFromServer]);
 
   // Reporting a post (or one of its answers) goes through the canonical
   // reportContent path — rate-limited and de-duplicated server-side.
@@ -844,6 +970,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
 
   // HANDLERS with snapshot rollback, separate debounces, lock
   const handleLikeClick = useCallback(() => {
+    if (!canReact) return;
     // Identity comes from the live session only; a localStorage uid can belong
     // to a previous account on a shared device.
     const userId = currentUser?.uid || null;
@@ -896,9 +1023,10 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         toast.error('Could not update like');
       }
     }, 250);
-  }, [currentUser, post.id, post.authorId, takeSnapshot, rollbackTo]);
+  }, [canReact, currentUser, post.id, post.authorId, takeSnapshot, rollbackTo]);
 
   const handleReaction = useCallback((reaction) => {
+    if (!canReact) return;
     const effectiveUserId = currentUser?.uid || null;
     if (!effectiveUserId) {
       toast.error('Please sign in to react to posts');
@@ -962,19 +1090,25 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     if (index < 0) throw new Error('Option not found');
 
     const isMultiple = post.poll?.allowMultiple === true;
+    const votedOptionId = `opt_${index}`;
     const res = await firestoreService.voteOnPoll?.(postId, userId, index, isMultiple);
     if (res?.alreadyVoted) {
-      setUserPollVoteIndex(index);
+      setUserPollVotes((prev) =>
+        isMultiple ? Array.from(new Set([...prev, votedOptionId])) : [votedOptionId]
+      );
       toast.info('You already voted on this poll');
       return;
     }
-    setUserPollVoteIndex(index);
+    setUserPollVotes((prev) =>
+      isMultiple ? Array.from(new Set([...prev, votedOptionId])) : [votedOptionId]
+    );
     // Vote rewards are not credited: there is no escrow to fund them (see
     // functions/polls.js), so the card promises no coins.
     void idempotencyKey;
   }, [currentUser, post.poll]);
 
   const handleSave = useCallback(async () => {
+    if (!canSave) return;
     if (!currentUser) return toast.error('Sign in');
     const snapshot = takeSnapshot();
     const newSaved = !snapshot.saved;
@@ -996,7 +1130,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       toast.error('Failed');
       if (process.env.NODE_ENV === 'development') console.error(err);
     }
-  }, [currentUser, post.id, takeSnapshot, rollbackTo]);
+  }, [canSave, currentUser, post.id, takeSnapshot, rollbackTo]);
 
   const handleFollow = useCallback(async () => {
     if (!currentUser) return toast.error('Sign in');
@@ -1023,15 +1157,20 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   }, [currentUser, post.authorId, takeSnapshot, rollbackTo]);
 
   const handleShare = useCallback(() => {
+    if (!canShare) {
+      toast.info('Sharing is disabled for this post');
+      return;
+    }
     if (!currentUser) return toast.error('Sign in');
     setUi(prev => ({ ...prev, showShareSheet: true }));
-  }, [currentUser]);
+  }, [canShare, currentUser]);
 
   const handleOpenSparks = useCallback(() => {
     if (navigate) navigate(`/sparks/${post.canonicalPostId || post.id}`);
   }, [navigate, post.canonicalPostId, post.id]);
 
   const handleSendGift = useCallback(async (giftType = 'rose') => {
+    if (!canGift) return;
     if (!currentUser) return toast.error('Sign in');
     if (ui.giftLoading) return;
     setUi(prev => ({ ...prev, giftLoading: true }));
@@ -1055,10 +1194,11 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     } finally {
       setUi(prev => ({ ...prev, giftLoading: false }));
     }
-  }, [currentUser, post.id, ui.giftLoading]);
+  }, [canGift, currentUser, post.id, ui.giftLoading]);
 
   // Double‑tap detection (with lock)
   const handleContainerClick = useCallback((e) => {
+    if (!canReact) return;
     const now = Date.now();
     if (now - lastTapRef.current < 300) {
       e.preventDefault();
@@ -1069,7 +1209,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       handleLikeClick();
     }
     lastTapRef.current = now;
-  }, [handleLikeClick]);
+  }, [canReact, handleLikeClick]);
 
   const startLongPress = useCallback(() => {
     if (likeButtonRef.current) {
@@ -1155,7 +1295,19 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           {post.location && (
             <div className="flex items-center gap-1 text-xs mt-0.5" style={{ color: tokens.accent }}>
               <MapPin className="w-3 h-3" />
-              <span>{post.location}</span>
+              <span>{typeof post.location === 'string' ? post.location : (post.location.name || post.location.label || '')}</span>
+            </div>
+          )}
+          {Array.isArray(post.identityMeta?.collaborators) && post.identityMeta.collaborators.length > 0 && (
+            <div className="flex items-center gap-1 text-[11px] mt-0.5" style={{ color: tokens.textSecondary }}>
+              <Users className="w-3 h-3" />
+              <span>
+                with{' '}
+                {post.identityMeta.collaborators
+                  .slice(0, 3)
+                  .map((c) => (typeof c === 'string' ? c : c.displayName || c.username || 'Collaborator'))
+                  .join(', ')}
+              </span>
             </div>
           )}
         </div>
@@ -1182,24 +1334,43 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         </div>
       </div>
 
+      {/* SAFETY & CONTENT WARNING BANNER */}
+      {(safetyMeta?.contentWarning || (safetyMeta?.ageRating && safetyMeta.ageRating !== 'all')) && (
+        <div className="mx-3 mb-2 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/25 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-600 dark:text-rose-300">
+          <div className="flex items-center gap-1.5 font-medium">
+            <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+            <span>{safetyMeta.contentWarning || 'Sensitive / age-restricted content'}</span>
+          </div>
+          {safetyMeta?.ageRating && safetyMeta.ageRating !== 'all' && (
+            <span className="px-2 py-0.5 rounded-md bg-rose-500/15 font-bold uppercase text-[10px]">
+              {safetyMeta.ageRating}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* COMMERCIAL DISCLOSURE & PARTNER TAG */}
       {hasCommercialDisclosure && (
         <div className="mx-3 mb-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-300 font-semibold">
             <Handshake className="w-3.5 h-3.5 shrink-0" />
             <span>
-              {commercialDisclosure.disclosureType === 'paid_partnership' && commercialDisclosure.brandPartnerName
-                ? `Paid partnership with ${commercialDisclosure.brandPartnerName}`
-                : commercialDisclosure.disclosureType === 'sponsored'
-                  ? 'Sponsored content'
-                  : commercialDisclosure.disclosureType === 'gifted'
-                    ? 'Gifted product'
-                    : commercialDisclosure.disclosureType === 'affiliate'
-                      ? 'Affiliate disclosure'
-                      : 'Promotional content'}
+              {disclosureType === 'paid_partnership' && brandPartnerName
+                ? `Paid partnership with ${brandPartnerName}`
+                : disclosureType === 'paid_partnership'
+                  ? 'Paid partnership'
+                  : disclosureType === 'sponsored_ad' || disclosureType === 'sponsored'
+                    ? 'Sponsored content'
+                    : disclosureType === 'own_promotion'
+                      ? 'Own brand / self-promotion'
+                      : disclosureType === 'gifted'
+                        ? 'Gifted product'
+                        : disclosureType === 'affiliate'
+                          ? 'Affiliate disclosure'
+                          : 'Promotional content'}
             </span>
           </div>
-          {commercialDisclosure.promoCode && (
+          {commercialDisclosure?.promoCode && (
             <span className="px-2 py-0.5 rounded-md bg-amber-500/15 font-mono text-[11px] font-bold text-amber-600 dark:text-amber-300">
               Code: {commercialDisclosure.promoCode}
             </span>
@@ -1208,29 +1379,29 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       )}
 
       {/* FEATURED PRODUCT / AFFILIATE TAG */}
-      {(commercialDisclosure?.productTag || commercialDisclosure?.affiliateUrl) && (
+      {(commercialDisclosure?.productTag || commercialUrl) && (
         <div className="mx-3 mb-2 px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 flex items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2 min-w-0">
             <Tag className="w-3.5 h-3.5 text-purple-500 shrink-0" />
             <span className="font-medium truncate" style={{ color: tokens.text }}>
-              {commercialDisclosure.productTag || 'Featured partner link'}
+              {commercialDisclosure?.productTag || commercialDisclosure?.affiliateLabel || 'Featured partner link'}
             </span>
           </div>
-          {commercialDisclosure.affiliateUrl && (
+          {commercialUrl && (
             <a
-              href={commercialDisclosure.affiliateUrl}
+              href={commercialUrl}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => {
                 e.stopPropagation();
-                if (commercialDisclosure.affiliateLinkId && currentUser?.uid) {
+                if (commercialDisclosure?.affiliateLinkId && currentUser?.uid) {
                   creatorEarningsService.trackAffiliateConversion(commercialDisclosure.affiliateLinkId, 'click')
                     .catch((err) => console.warn('Affiliate click tracking failed', err?.message));
                 }
               }}
               className="text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 shrink-0"
             >
-              <span>Shop</span>
+              <span>{commercialCtaLabel}</span>
               <ExternalLink className="w-3 h-3" />
             </a>
           )}
@@ -1315,22 +1486,59 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           {post.hashtags.map(tag => <span key={tag} className="text-xs" style={{ color: tokens.primary }}>#{tag}</span>)}
         </div>
       )}
-      {isImage && <ImageCard images={post.media} onLike={handleLikeClick} onSave={handleSave} onReport={handleReportImage} postId={post.id} onAnalytics={handleAnalytics} />}
-      {isVideo && (
-        <VideoCard
-          src={post.media?.[0]?.url || post.videoUrl || post.video?.url}
-          poster={post.media?.[0]?.thumbnailUrl || post.media?.[0]?.thumbnail || post.thumbnailUrl || post.video?.thumbnail}
-          muxPlaybackId={post.muxPlaybackId || post.media?.[0]?.muxPlaybackId || null}
-          playbackPolicy={post.playbackPolicy || post.media?.[0]?.playbackPolicy || null}
-          canonicalPostId={post.canonicalPostId || post.id}
-          onOpenSparks={navigate ? handleOpenSparks : undefined}
-          isVisible={isVisible}
-          onDoubleTap={handleLikeClick}
-          postId={post.id}
-          currentUser={currentUser}
-          onAnalytics={handleAnalytics}
-        />
-      )}
+      <div className="relative">
+        <div className={cn(isSensitivePost && !sensitiveRevealed && (isImage || isVideo) && 'blur-xl pointer-events-none select-none')}>
+          {isImage && (
+            <ImageCard
+              images={post.media}
+              onLike={handleLikeClick}
+              onSave={handleSave}
+              onReport={handleReportImage}
+              onShare={handleShare}
+              postId={post.id}
+              onAnalytics={handleAnalytics}
+              disableReactions={!canReact}
+              disableSave={!canSave}
+              disableShare={!canShare}
+              disableDownload={!canDownload}
+            />
+          )}
+          {isVideo && (
+            <VideoCard
+              src={post.media?.[0]?.url || post.videoUrl || post.video?.url}
+              poster={post.media?.[0]?.thumbnailUrl || post.media?.[0]?.thumbnail || post.thumbnailUrl || post.video?.thumbnail}
+              muxPlaybackId={post.muxPlaybackId || post.media?.[0]?.muxPlaybackId || null}
+              playbackPolicy={post.playbackPolicy || post.media?.[0]?.playbackPolicy || null}
+              canonicalPostId={post.canonicalPostId || post.id}
+              onOpenSparks={navigate ? handleOpenSparks : undefined}
+              isVisible={isVisible}
+              onDoubleTap={canReact ? handleLikeClick : undefined}
+              postId={post.id}
+              currentUser={currentUser}
+              onAnalytics={handleAnalytics}
+            />
+          )}
+        </div>
+        {isSensitivePost && !sensitiveRevealed && (isImage || isVideo) && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/55 backdrop-blur-sm p-4 text-center rounded-2xl mx-3">
+            <ShieldAlert className="w-7 h-7 text-amber-300 mb-2" />
+            <p className="text-xs font-semibold text-white mb-2">
+              {safetyMeta?.contentWarning || 'Sensitive content'}
+            </p>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSensitiveRevealed(true);
+              }}
+              className="px-3.5 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-semibold flex items-center gap-1.5 transition"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Show content
+            </button>
+          </div>
+        )}
+      </div>
       {isAudio && (
         <AudioCard
           audio={{
@@ -1348,11 +1556,52 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       )}
       {isPoll && <PollCard poll={pollWithVote} postId={post.id} currentUser={currentUser} tokens={tokens} onVote={handlePollVote} onAnalytics={handleAnalytics} />}
       {isQuestion && <QuestionCard question={questionWithVotes} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} answers={questionWithVotes?.answers || []} userReputation={typeof currentUser?.reputation === 'number' ? currentUser.reputation : null} onSubmitAnswer={handleAddAnswer} onVote={handleAnswerVote} onMarkBest={handleMarkBest} onEditAnswer={handleEditAnswer} onDeleteAnswer={handleDeleteAnswer} onReport={handleReportAnswer} />}
-      {isEvent && <EventCard event={post.event} currentUser={currentUser} tokens={tokens} hostName={post.authorName} hostUsername={post.authorUsername} hostVerified={isVerified} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
+      {isEvent && (
+        <EventCard
+          event={eventStatsOverride ? { ...post.event, stats: eventStatsOverride } : post.event}
+          currentUser={currentUser}
+          tokens={tokens}
+          userStatus={eventUserStatus}
+          onRSVP={post.event?.id && post.event?.rsvpEnabled !== false ? handleEventRSVP : undefined}
+          hostName={post.authorName}
+          hostUsername={post.authorUsername}
+          hostVerified={isVerified}
+          onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)}
+        />
+      )}
       {isLink && <LinkCard link={post.link} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}
 
+      {/* ACCESSIBILITY CAPTIONS / TRANSCRIPT */}
+      {(safetyMeta?.captionsText || safetyMeta?.transcriptText) && (
+        <div className="mx-3 mt-1.5">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowTranscript((prev) => !prev);
+            }}
+            className="flex items-center gap-1.5 text-[11px] font-medium hover:underline"
+            style={{ color: tokens.textSecondary }}
+          >
+            <FileText className="w-3 h-3" />
+            <span>{showTranscript ? 'Hide captions & transcript' : 'Show captions & transcript'}</span>
+          </button>
+          {showTranscript && (
+            <div
+              className="mt-1 p-2.5 rounded-xl border text-xs space-y-1.5"
+              style={{ backgroundColor: tokens.cardBgAlt, borderColor: tokens.border, color: tokens.text }}
+            >
+              {safetyMeta.captionsText && <p>{safetyMeta.captionsText}</p>}
+              {safetyMeta.transcriptText && (
+                <p className="text-[11px]" style={{ color: tokens.textSecondary }}>{safetyMeta.transcriptText}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* INLINE COMMENT PREVIEW */}
-      {post.enableComments !== false && post.commentsEnabled !== false && post.allowComments !== false && (
+      {canComment && (
         <InlineComments postId={post.id} totalComments={engagement.commentCount} onViewAll={() => onOpenComments?.(post)} isVisible={isActiveForSubs} tokens={tokens} currentUser={currentUser} />
       )}
 
@@ -1400,48 +1649,50 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       >
         <div className="flex justify-between items-center px-4 py-1.5">
           {/* Like button with bubble */}
-          <div className="relative flex items-center">
-            <button
-              type="button"
-              ref={likeButtonRef}
-              onClick={handleLikeClick}
-              onMouseDown={startLongPress}
-              onMouseUp={cancelLongPress}
-              onMouseLeave={cancelLongPress}
-              onTouchStart={startLongPress}
-              onTouchEnd={cancelLongPress}
-              className="flex items-center gap-1.5 text-sm transition relative"
-              aria-label={engagement.liked ? 'Unlike' : 'Like'}
-              aria-pressed={engagement.liked}
-            >
-              {engagement.reaction ? <span className="text-base">{engagement.reaction}</span> : <Heart className="w-4 h-4" style={{ color: engagement.liked ? '#ef4444' : 'white' }} />}
-              <span className="text-xs text-white/90">Like</span>
-              {engagement.likeCount > 0 && (
-                <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-red-500 rounded-full flex items-center justify-center shadow-sm tabular-nums">
-                  {formatCount(engagement.likeCount)}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (likeButtonRef.current) {
-                  const rect = likeButtonRef.current.getBoundingClientRect();
-                  setReactionsTargetRect(rect);
-                }
-                setUi(prev => ({ ...prev, showReactionsPicker: !prev.showReactionsPicker }));
-              }}
-              className="ml-1 p-0.5 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition text-xs"
-              title="Reactions"
-              aria-label="Reactions"
-            >
-              ✨
-            </button>
-          </div>
+          {canReact && (
+            <div className="relative flex items-center">
+              <button
+                type="button"
+                ref={likeButtonRef}
+                onClick={handleLikeClick}
+                onMouseDown={startLongPress}
+                onMouseUp={cancelLongPress}
+                onMouseLeave={cancelLongPress}
+                onTouchStart={startLongPress}
+                onTouchEnd={cancelLongPress}
+                className="flex items-center gap-1.5 text-sm transition relative"
+                aria-label={engagement.liked ? 'Unlike' : 'Like'}
+                aria-pressed={engagement.liked}
+              >
+                {engagement.reaction ? <span className="text-base">{engagement.reaction}</span> : <Heart className="w-4 h-4" style={{ color: engagement.liked ? '#ef4444' : 'white' }} />}
+                <span className="text-xs text-white/90">Like</span>
+                {engagement.likeCount > 0 && (
+                  <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-red-500 rounded-full flex items-center justify-center shadow-sm tabular-nums">
+                    {formatCount(engagement.likeCount)}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (likeButtonRef.current) {
+                    const rect = likeButtonRef.current.getBoundingClientRect();
+                    setReactionsTargetRect(rect);
+                  }
+                  setUi(prev => ({ ...prev, showReactionsPicker: !prev.showReactionsPicker }));
+                }}
+                className="ml-1 p-0.5 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition text-xs"
+                title="Reactions"
+                aria-label="Reactions"
+              >
+                ✨
+              </button>
+            </div>
+          )}
 
           {/* Comment button with bubble */}
-          {post.enableComments !== false && post.commentsEnabled !== false && post.allowComments !== false && (
+          {canComment && (
             <button
               type="button"
               onClick={() => onOpenComments?.(post)}
@@ -1459,35 +1710,39 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           )}
 
           {/* Share button with bubble */}
-          <button
-            type="button"
-            onClick={handleShare}
-            className="flex items-center gap-1.5 text-sm text-white hover:text-white/80 transition relative"
-            aria-label="Share"
-          >
-            <Share2 className="w-4 h-4" />
-            <span className="text-xs text-white/90">Share</span>
-            {engagement.shareCount > 0 && (
-              <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-green-500 rounded-full flex items-center justify-center shadow-sm tabular-nums">
-                {formatCount(engagement.shareCount)}
-              </span>
-            )}
-          </button>
+          {canShare && (
+            <button
+              type="button"
+              onClick={handleShare}
+              className="flex items-center gap-1.5 text-sm text-white hover:text-white/80 transition relative"
+              aria-label="Share"
+            >
+              <Share2 className="w-4 h-4" />
+              <span className="text-xs text-white/90">Share</span>
+              {engagement.shareCount > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-green-500 rounded-full flex items-center justify-center shadow-sm tabular-nums">
+                  {formatCount(engagement.shareCount)}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Save button */}
-          <button
-            type="button"
-            onClick={handleSave}
-            className={cn("flex items-center gap-1.5 text-sm transition", engagement.saved ? 'text-yellow-400' : 'text-white hover:text-white/80')}
-            aria-label={engagement.saved ? 'Unsave' : 'Save'}
-            aria-pressed={engagement.saved}
-          >
-            <Bookmark className="w-4 h-4" />
-            <span className="text-xs">Save</span>
-          </button>
+          {canSave && (
+            <button
+              type="button"
+              onClick={handleSave}
+              className={cn("flex items-center gap-1.5 text-sm transition", engagement.saved ? 'text-yellow-400' : 'text-white hover:text-white/80')}
+              aria-label={engagement.saved ? 'Unsave' : 'Save'}
+              aria-pressed={engagement.saved}
+            >
+              <Bookmark className="w-4 h-4" />
+              <span className="text-xs">Save</span>
+            </button>
+          )}
 
           {/* Gift button (creator only, unless disabled on post) */}
-          {isCreator && !isAuthor && post.enableGifts !== false && (
+          {canGift && (
             <button
               type="button"
               onClick={() => setUi(prev => ({ ...prev, showGiftPicker: true }))}
@@ -1505,8 +1760,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {/* OVERLAYS */}
       <AnimatePresence>
         {ui.showHeartBurst && <DoubleTapHeart position={ui.tapPosition} onFinish={() => setUi(prev => ({ ...prev, showHeartBurst: false }))} prefersReducedMotion={prefersReducedMotion} />}
-        {ui.showReactionsPicker && <CardReactionsPicker onSelect={handleReactionSelect} onClose={closeReactionsPicker} tokens={tokens} targetRect={reactionsTargetRect} />}
-        {ui.showShareSheet && <CardShareSheet url={`${typeof window !== 'undefined' ? window.location.origin : ''}${isVideo ? `/sparks/${post.canonicalPostId || post.id}` : `/post/${post.id}`}`} content={post.content?.substring(0, 100) || 'Check out this post'} onClose={() => setUi(prev => ({ ...prev, showShareSheet: false }))} tokens={tokens} postId={post.id} postData={post} isCreator={isCreator} hasMedia={hasMedia} navigate={navigate} currentUser={currentUser} />}
+        {ui.showReactionsPicker && canReact && <CardReactionsPicker onSelect={handleReactionSelect} onClose={closeReactionsPicker} tokens={tokens} targetRect={reactionsTargetRect} />}
+        {ui.showShareSheet && canShare && <CardShareSheet url={`${typeof window !== 'undefined' ? window.location.origin : ''}${isVideo ? `/sparks/${post.canonicalPostId || post.id}` : `/post/${post.id}`}`} content={post.content?.substring(0, 100) || 'Check out this post'} onClose={() => setUi(prev => ({ ...prev, showShareSheet: false }))} tokens={tokens} postId={post.id} postData={post} isCreator={isCreator} hasMedia={hasMedia} navigate={navigate} currentUser={currentUser} allowRepost={canRepost} allowDownload={canDownload} />}
         {ui.showGiftPicker && (
           <CardGiftPicker
             tokens={tokens}

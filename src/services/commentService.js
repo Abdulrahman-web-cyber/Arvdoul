@@ -174,13 +174,52 @@ class UltimateCommentService {
         operationId,
         postId,
         userId,
-        contentLength: content.length,
+        contentLength: typeof content === 'string' ? content.length : 0,
         parentId: options.parentId || 'none'
       });
 
-      const validation = this._validateComment(content, userId);
+      const validation = this._validateComment(content, userId, options);
       if (!validation.valid) {
         throw new Error(`Comment validation failed: ${validation.errors.join(', ')}`);
+      }
+
+      // Enforce post-level comment permissions (enableComments / commentMode)
+      if (options.targetType !== 'legacy_video') {
+        try {
+          const postSnap = await this.firestoreMethods.getDoc(
+            this.firestoreMethods.doc(this.firestore, 'posts', postId)
+          );
+          if (postSnap.exists()) {
+            const p = postSnap.data() || {};
+            const commentMode = p.engagementControls?.commentMode || 'everyone';
+            const commentsOff =
+              p.enableComments === false ||
+              p.commentsEnabled === false ||
+              p.allowComments === false ||
+              p.engagementControls?.enableComments === false ||
+              commentMode === 'off';
+            if (commentsOff) {
+              throw new Error('Comments are turned off for this post.');
+            }
+            if (p.authorId && p.authorId !== userId && (commentMode === 'followers' || commentMode === 'friends')) {
+              const { getSocialGraphService } = await import('./socialGraphService.js');
+              const rel = await getSocialGraphService().getRelationship(userId, p.authorId);
+              if (commentMode === 'followers' && !rel?.isFollowing) {
+                throw new Error('Only followers of the author can comment on this post.');
+              }
+              if (commentMode === 'friends' && (!rel?.isFollowing || !rel?.isFollower)) {
+                throw new Error('Only friends (mutual followers) can comment on this post.');
+              }
+            }
+          }
+        } catch (permErr) {
+          if (
+            /turned off|Only followers|Only friends/i.test(permErr?.message || '')
+          ) {
+            throw permErr;
+          }
+          logger.warn('Comment permission lookup skipped', { postId, error: permErr?.message });
+        }
       }
 
       const spamCheck = await this._checkSpamRate(userId);
@@ -188,7 +227,8 @@ class UltimateCommentService {
         throw new Error(`Rate limit exceeded. Please wait ${spamCheck.waitTime} seconds`);
       }
 
-      const extracted = this._extractMetadata(content);
+      const safeText = typeof content === 'string' ? content : '';
+      const extracted = this._extractMetadata(safeText);
 
       // Identity honesty: a missing name resolves to the real uid prefix
       // (never a generic word like "Creator"/"Member", which reads as an
@@ -201,7 +241,9 @@ class UltimateCommentService {
         userAvatar: getSafeAvatarUrl(options.userAvatar, commentAuthorName, userId),
         userName: commentAuthorName,
         userUsername: deriveHandle(options.userUsername) || '',
-        content: content.trim(),
+        content: safeText.trim(),
+        type: options.type || 'text',
+        ...(options.mediaUrl ? { mediaUrl: options.mediaUrl } : {}),
         parentId: options.parentId || null,
         replyToId: options.replyToId || null,
         replyToUsername: options.replyToUsername || null,
@@ -1159,15 +1201,17 @@ class UltimateCommentService {
   }
 
 
-  _validateComment(content, userId) {
+  _validateComment(content, userId, options = {}) {
     const errors = [];
     const warnings = [];
+    const isVoiceWithMedia = options?.type === 'voice' && Boolean(options?.mediaUrl);
+    const text = typeof content === 'string' ? content : '';
 
-    if (!content || content.trim().length < COMMENTS_CONFIG.MIN_COMMENT_LENGTH) {
+    if (!isVoiceWithMedia && text.trim().length < COMMENTS_CONFIG.MIN_COMMENT_LENGTH) {
       errors.push('Comment cannot be empty');
     }
 
-    if (content.length > COMMENTS_CONFIG.MAX_COMMENT_LENGTH) {
+    if (text.length > COMMENTS_CONFIG.MAX_COMMENT_LENGTH) {
       errors.push(`Comment too long (max ${COMMENTS_CONFIG.MAX_COMMENT_LENGTH} characters)`);
     }
 
@@ -1181,7 +1225,7 @@ class UltimateCommentService {
 
     let spamScore = 0;
     spamPatterns.forEach(pattern => {
-      const matches = content.match(pattern);
+      const matches = text.match(pattern);
       if (matches) spamScore += matches.length;
     });
 
@@ -1189,7 +1233,7 @@ class UltimateCommentService {
       warnings.push('Comment contains spam-like patterns');
     }
 
-    const mentions = content.match(/@(\w+)/g) || [];
+    const mentions = text.match(/@(\w+)/g) || [];
     if (mentions.length > COMMENTS_CONFIG.MENTION_LIMIT) {
       errors.push(`Too many mentions (max ${COMMENTS_CONFIG.MENTION_LIMIT})`);
     }
@@ -1501,8 +1545,13 @@ class UltimateCommentService {
       'unknown': 'An unknown error occurred.'
     };
 
-    const enhanced = new Error(errorMap[error.code] || defaultMessage || 'Comment operation failed');
-    enhanced.code = error.code || 'unknown';
+    const enhanced = new Error(
+      errorMap[error?.code] ||
+      (!error?.code && error?.message ? error.message : null) ||
+      defaultMessage ||
+      'Comment operation failed'
+    );
+    enhanced.code = error?.code || 'unknown';
     enhanced.originalError = error;
     enhanced.timestamp = new Date().toISOString();
 

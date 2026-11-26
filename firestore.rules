@@ -734,7 +734,9 @@ service cloud.firestore {
         allow read: if subcollection != 'answer_votes' &&
           subcollection != 'daily_stats' &&
           subcollection != 'saved_by' &&
-          (subcollection != 'poll_votes' || docId == uid());
+          (subcollection != 'poll_votes' ||
+            docId == uid() ||
+            (isSignedIn() && docId.startsWith(uid() + '_opt_')));
         allow write: if isSignedIn() &&
           subcollection != 'answer_votes' &&
           subcollection != 'poll_votes' &&

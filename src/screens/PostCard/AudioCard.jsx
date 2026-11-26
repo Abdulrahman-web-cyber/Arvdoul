@@ -276,7 +276,7 @@ function useAudioState() {
 class AudioCache {
   constructor() { this.dbPromise = null; this.init(); }
   async init() {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || typeof indexedDB === 'undefined') return;
     this.dbPromise = openDB('ArvdoulAudioCache', 1, {
       upgrade(db) { if (!db.objectStoreNames.contains('audio')) db.createObjectStore('audio', { keyPath: 'url' }); },
     });

@@ -343,6 +343,17 @@ exports.createMuxUpload = onCall({
     chapters = [],
     music = null,
     effects = null,
+    identityMeta = null,
+    distributionSettings = null,
+    engagementControls = null,
+    commercialDisclosure = null,
+    partnership = null,
+    creatorPrograms = null,
+    safetyAccessibility = null,
+    lifecycleSettings = null,
+    enableComments = true,
+    enableGifts = true,
+    expiresAt = null,
   } = data || {};
 
   if (!fileName || !fileSize || !mimeType) {
@@ -428,6 +439,18 @@ exports.createMuxUpload = onCall({
       giftValue: 0,
     };
 
+    const parsedExpiresAt = expiresAt && !Number.isNaN(new Date(expiresAt).getTime())
+      ? new Date(expiresAt)
+      : null;
+    const resolvedEnableComments =
+      engagementControls?.commentMode === 'off'
+        ? false
+        : (enableComments !== false && engagementControls?.enableComments !== false);
+    const resolvedEnableGifts =
+      enableGifts !== false &&
+      engagementControls?.enableGifts !== false &&
+      creatorPrograms?.enableGiftsForPost !== false;
+
     const batch = db.batch();
     batch.set(postRef, {
       authorId: uid,
@@ -453,13 +476,28 @@ exports.createMuxUpload = onCall({
       muxPlaybackId: null,
       playbackPolicy: 'signed',
       duration: Number(duration) || 0,
-      allowDownload: allowDownload !== false,
-      duetEnabled: duetEnabled !== false,
-      stitchEnabled: stitchEnabled !== false,
+      allowDownload: allowDownload !== false && distributionSettings?.allowDownloads !== false,
+      duetEnabled: duetEnabled !== false && distributionSettings?.allowRemixes !== false,
+      stitchEnabled: stitchEnabled !== false && distributionSettings?.allowRemixes !== false,
+      chapters: Array.isArray(chapters) ? chapters : [],
       music: music || null,
       effects: effects || null,
-      chapters: Array.isArray(chapters) ? chapters : [],
       monetization: safeMonetization,
+      identityMeta: identityMeta && typeof identityMeta === 'object' ? identityMeta : null,
+      distributionSettings: distributionSettings && typeof distributionSettings === 'object' ? distributionSettings : null,
+      engagementControls: engagementControls && typeof engagementControls === 'object'
+        ? { ...engagementControls, enableComments: resolvedEnableComments, enableGifts: resolvedEnableGifts }
+        : { enableComments: resolvedEnableComments, commentMode: 'everyone', enableReactions: true, enableGifts: resolvedEnableGifts, enableSaves: true, enableShares: true },
+      commercialDisclosure: commercialDisclosure && typeof commercialDisclosure === 'object' ? commercialDisclosure : null,
+      partnership: partnership && typeof partnership === 'object' ? partnership : null,
+      creatorPrograms: creatorPrograms && typeof creatorPrograms === 'object' ? creatorPrograms : null,
+      safetyAccessibility: safetyAccessibility && typeof safetyAccessibility === 'object' ? safetyAccessibility : null,
+      lifecycleSettings: lifecycleSettings && typeof lifecycleSettings === 'object' ? lifecycleSettings : null,
+      enableComments: resolvedEnableComments,
+      commentsEnabled: resolvedEnableComments,
+      allowComments: resolvedEnableComments,
+      enableGifts: resolvedEnableGifts,
+      expiresAt: parsedExpiresAt,
       media: [],
       stats: baseStats,
       rankingScore: 0,
@@ -482,7 +520,8 @@ exports.createMuxUpload = onCall({
       description: safeDesc,
       tags: cleanTags,
       visibility: normalizedVis,
-      allowDownload: allowDownload !== false,
+      allowDownload: allowDownload !== false && distributionSettings?.allowDownloads !== false,
+      enableComments: resolvedEnableComments,
       status: 'uploading',
       processingState: SPARK_PROCESSING_STATES.UPLOAD_RESERVED,
       muxUploadId: upload.id || null,
@@ -496,8 +535,8 @@ exports.createMuxUpload = onCall({
       music: music || null,
       effects: effects || null,
       chapters: Array.isArray(chapters) ? chapters : [],
-      duetEnabled: duetEnabled !== false,
-      stitchEnabled: stitchEnabled !== false,
+      duetEnabled: duetEnabled !== false && distributionSettings?.allowRemixes !== false,
+      stitchEnabled: stitchEnabled !== false && distributionSettings?.allowRemixes !== false,
       rankingScore: 0,
       viralScore: 0,
       monetization: safeMonetization,

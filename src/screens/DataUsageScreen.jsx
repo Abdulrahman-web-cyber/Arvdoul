@@ -27,9 +27,9 @@ function formatBytes(bytes) {
 
 export default function DataUsageScreen() {
   const navigate = useNavigate();
-  const { theme } = useTheme();
+  const { theme, isDark: resolvedIsDark } = useTheme();
   const { user } = useAuth();
-  const isDark = theme === 'dark';
+  const isDark = typeof resolvedIsDark === 'boolean' ? resolvedIsDark : theme !== 'light';
 
   const [usage, setUsage] = useState({ used: null, quota: null, supported: true });
   const [cacheEntries, setCacheEntries] = useState(null); // null = unknown

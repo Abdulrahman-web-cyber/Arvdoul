@@ -124,14 +124,31 @@ describe('CreatePost modular reducer', () => {
     expect(s.typeData.link.url).toBe('');
   });
 
-  test('canProceedForState validates all 8 post types accurately', () => {
-    expect(canProceedForState({ ...initialState, step: 1, postType: null })).toBe(false);
+  test('canProceedForState validates all 8 post types accurately and ignores stale isContentReady flag', () => {
+    expect(canProceedForState({ ...initialState, step: 1, postType: null, isContentReady: true })).toBe(false);
     expect(canProceedForState({ ...initialState, step: 1, postType: 'text' })).toBe(true);
-    expect(canProceedForState({ ...initialState, step: 2, postType: 'text', content: '  ' })).toBe(false);
+    expect(canProceedForState({ ...initialState, step: 2, postType: 'text', content: '  ', isContentReady: true })).toBe(false);
     expect(canProceedForState({ ...initialState, step: 2, postType: 'text', content: 'Hello' })).toBe(true);
+    expect(canProceedForState({ ...initialState, step: 2, postType: 'question', content: '   ' })).toBe(false);
     expect(canProceedForState({ ...initialState, step: 2, postType: 'question', content: 'Why?' })).toBe(true);
     expect(canProceedForState({ ...initialState, step: 2, postType: 'image', mediaItems: [{ id: '1' }] })).toBe(true);
     expect(canProceedForState({ ...initialState, step: 2, postType: 'video', mediaItems: [] })).toBe(false);
+    expect(
+      canProceedForState({
+        ...initialState,
+        step: 2,
+        postType: 'video',
+        typeData: { ...initialState.typeData, video: { url: 'https://cdn.test/v.mp4' } },
+      })
+    ).toBe(true);
+    expect(
+      canProceedForState({
+        ...initialState,
+        step: 2,
+        postType: 'audio',
+        typeData: { ...initialState.typeData, audio: { url: '', previewUrl: '', file: null } },
+      })
+    ).toBe(false);
     expect(
       canProceedForState({
         ...initialState,
@@ -146,9 +163,37 @@ describe('CreatePost modular reducer', () => {
         step: 2,
         postType: 'poll',
         content: 'Pick one',
+        typeData: { ...initialState.typeData, poll: { options: ['Same', 'same'] } },
+      })
+    ).toBe(false);
+    expect(
+      canProceedForState({
+        ...initialState,
+        step: 2,
+        postType: 'poll',
+        content: 'Pick one',
+        pollClosesAt: '2020-01-01T00:00:00Z',
+        typeData: { ...initialState.typeData, poll: { options: ['A', 'B'] } },
+      })
+    ).toBe(false);
+    expect(
+      canProceedForState({
+        ...initialState,
+        step: 2,
+        postType: 'poll',
+        content: 'Pick one',
         typeData: { ...initialState.typeData, poll: { options: ['A', 'B'] } },
       })
     ).toBe(true);
+    expect(
+      canProceedForState({
+        ...initialState,
+        step: 2,
+        postType: 'event',
+        content: 'Meetup',
+        typeData: { ...initialState.typeData, event: { date: '2020-06-01T12:00:00Z' } },
+      })
+    ).toBe(false);
     expect(
       canProceedForState({
         ...initialState,
@@ -166,6 +211,14 @@ describe('CreatePost modular reducer', () => {
         typeData: { ...initialState.typeData, link: { url: 'https://arvdoul.com' } },
       })
     ).toBe(true);
+    expect(
+      canProceedForState({
+        ...initialState,
+        step: 2,
+        postType: 'link',
+        typeData: { ...initialState.typeData, link: { url: 'javascript:alert(1)' } },
+      })
+    ).toBe(false);
     expect(
       canProceedForState({
         ...initialState,
@@ -256,5 +309,108 @@ describe('CreatePost publish pipeline helpers', () => {
         isOffline: false,
       })
     ).rejects.toThrow(/signed in/i);
+  });
+
+  test('executePostPublish validates Step 3 compliance, edit question preservation, link metadata, and event creation', async () => {
+    jest.resetModules();
+    const updatePost = jest.fn(async () => ({ success: true }));
+    const createPost = jest.fn(async () => ({ postId: 'post_evt_1' }));
+    const createEvent = jest.fn(async () => ({ id: 'evt_1' }));
+    const publishEvent = jest.fn(async () => ({ success: true }));
+    const updateEvent = jest.fn(async () => ({ success: true }));
+    const clearUserCache = jest.fn();
+
+    jest.unstable_mockModule('../services/authService.js', () => ({
+      getAuthService: () => ({
+        getCurrentUser: () => ({ uid: 'u1', displayName: 'Ada', email: 'ada@arvdoul.test' }),
+      }),
+    }));
+
+    const { executePostPublish: runPublish } = await import('../screens/CreatePost/postPublishPipeline.js');
+    const services = {
+      firestore: { updatePost, createPost },
+      event: { createEvent, publishEvent, updateEvent },
+      feed: { clearUserCache },
+    };
+
+    // 1. Copyright confirmation missing -> rejects
+    await expect(
+      runPublish({
+        current: {
+          ...initialState,
+          postType: 'text',
+          content: 'Hello',
+          safetyAccessibility: { ...initialState.safetyAccessibility, copyrightConfirmed: false },
+        },
+        userSnapshot: { uid: 'u1' },
+        services,
+        isOffline: false,
+      })
+    ).rejects.toThrow(/copyright/i);
+
+    // 2. Paid partnership missing brand partner -> rejects
+    await expect(
+      runPublish({
+        current: {
+          ...initialState,
+          postType: 'text',
+          content: 'Sponsored post',
+          commercialSettings: { ...initialState.commercialSettings, disclosureType: 'paid_partnership', brandPartnerName: '' },
+        },
+        userSnapshot: { uid: 'u1' },
+        services,
+        isOffline: false,
+      })
+    ).rejects.toThrow(/brand partner/i);
+
+    // 3. Edit question post preserves answers by writing 'question.text' only
+    await runPublish({
+      current: {
+        ...initialState,
+        editPostId: 'q_edit_1',
+        postType: 'question',
+        content: 'Updated question?',
+      },
+      userSnapshot: { uid: 'u1' },
+      services,
+      isOffline: false,
+    });
+    expect(updatePost).toHaveBeenCalledWith(
+      'q_edit_1',
+      expect.objectContaining({
+        'question.text': 'Updated question?',
+      })
+    );
+    expect(updatePost.mock.calls[0][1].question).toBeUndefined();
+
+    // 4. Event post creates and publishes linked event and persists event.id on post
+    await runPublish({
+      current: {
+        ...initialState,
+        postType: 'event',
+        content: 'Arvdoul Summit',
+        typeData: {
+          ...initialState.typeData,
+          event: {
+            ...initialState.typeData.event,
+            date: '2035-09-01T10:00:00.000Z',
+            location: 'Lagos',
+            capacity: 250,
+            timezone: 'Africa/Lagos',
+          },
+        },
+      },
+      userSnapshot: { uid: 'u1' },
+      services,
+      isOffline: false,
+    });
+    expect(createEvent).toHaveBeenCalledTimes(1);
+    expect(publishEvent).toHaveBeenCalledWith('evt_1', 'u1');
+    expect(createPost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'event',
+        event: expect.objectContaining({ id: 'evt_1', location: 'Lagos', capacity: 250 }),
+      })
+    );
   });
 });

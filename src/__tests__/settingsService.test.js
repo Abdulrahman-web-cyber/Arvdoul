@@ -118,24 +118,54 @@ describe('updateSetting (mocked Firestore)', () => {
 });
 
 describe('clearApplicationCache', () => {
+  let originalIndexedDB;
+
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem('auth_token', 'tok');
     localStorage.setItem('user_session', 'sess');
     localStorage.setItem('arvdoul_locale', 'es');
+    localStorage.setItem('arvdoul_has_session', '1');
+    localStorage.setItem('arvdoul_uid', 'u9');
+    localStorage.setItem('arvdoul_device_id', 'dev-1');
     localStorage.setItem('arvdoul_flag_override_feed.ads', 'false');
     localStorage.setItem('random_key', '1');
     settingsService._cache.set('u9', { settings: DEFAULT_SETTINGS, at: Date.now() });
+
+    originalIndexedDB = globalThis.indexedDB;
+    const deletedDbs = [];
+    globalThis.indexedDB = {
+      _deletedDbs: deletedDbs,
+      databases: async () => [
+        { name: 'firebaseLocalStorageDb' },
+        { name: 'firestore/[DEFAULT]/arvdoul-prod/main' },
+        { name: 'arvdoul_offline_cache' },
+      ],
+      deleteDatabase: (name) => {
+        deletedDbs.push(name);
+        const req = {};
+        setTimeout(() => req.onsuccess?.(), 0);
+        return req;
+      },
+    };
   });
 
-  test('preserves auth/session/locale keys and clears everything else', async () => {
+  afterEach(() => {
+    globalThis.indexedDB = originalIndexedDB;
+  });
+
+  test('preserves auth/session/locale keys and Firebase IndexedDBs while clearing app caches', async () => {
     const res = await settingsService.clearApplicationCache();
     expect(res.success).toBe(true);
     expect(localStorage.getItem('auth_token')).toBe('tok');
     expect(localStorage.getItem('user_session')).toBe('sess');
     expect(localStorage.getItem('arvdoul_locale')).toBe('es');
+    expect(localStorage.getItem('arvdoul_has_session')).toBe('1');
+    expect(localStorage.getItem('arvdoul_uid')).toBe('u9');
+    expect(localStorage.getItem('arvdoul_device_id')).toBe('dev-1');
     expect(localStorage.getItem('random_key')).toBeNull();
     expect(localStorage.getItem('arvdoul_flag_override_feed.ads')).toBeNull();
+    expect(globalThis.indexedDB._deletedDbs).toEqual(['arvdoul_offline_cache']);
     expect(res.cleared.length).toBeGreaterThan(0);
   });
 });

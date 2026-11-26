@@ -522,7 +522,6 @@ export function reducer(state, action) {
 
 export function canProceedForState(state) {
   if (!state) return false;
-  if (state.isContentReady) return true;
   if (state.step === 1) return !!state.postType;
   if (state.step === 2) {
     const hasText = Boolean(
@@ -537,19 +536,31 @@ export function canProceedForState(state) {
       case 'question':
         return hasText;
       case 'image':
-      case 'video':
         return (state.mediaItems?.length || 0) > 0 || hasText;
+      case 'video':
+        return (
+          (state.mediaItems?.length || 0) > 0 ||
+          Boolean(state.typeData?.video?.file || state.typeData?.video?.url) ||
+          hasText
+        );
       case 'audio':
         return Boolean(
           state.typeData?.audio?.file ||
             state.typeData?.audio?.url ||
-            state.typeData?.audio?.previewUrl
+            state.typeData?.audio?.previewUrl ||
+            (state.mediaItems || []).some(
+              (m) => m.type === 'audio' || m.file?.type?.startsWith('audio/')
+            )
         );
-      case 'poll':
-        return (
-          hasText &&
-          (state.typeData?.poll?.options || []).filter((o) => o && o.trim()).length >= 2
-        );
+      case 'poll': {
+        const cleanOptions = (state.typeData?.poll?.options || [])
+          .map((o) => (typeof o === 'string' ? o.trim() : (o?.text || '').trim()))
+          .filter(Boolean);
+        const uniqueCount = new Set(cleanOptions.map((o) => o.toLowerCase())).size;
+        const hasValidClosing =
+          !state.pollClosesAt || new Date(state.pollClosesAt).getTime() > Date.now();
+        return hasText && cleanOptions.length >= 2 && uniqueCount >= 2 && hasValidClosing;
+      }
       case 'event':
         return (
           hasText &&
@@ -558,7 +569,13 @@ export function canProceedForState(state) {
         );
       case 'link': {
         const rawUrl = (state.typeData?.link?.url || '').trim();
-        return rawUrl.startsWith('http://') || rawUrl.startsWith('https://');
+        if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) return false;
+        try {
+          const parsed = new URL(rawUrl);
+          return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+          return false;
+        }
       }
       default:
         return true;
