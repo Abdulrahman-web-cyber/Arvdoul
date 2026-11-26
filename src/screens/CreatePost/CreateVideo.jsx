@@ -271,7 +271,7 @@ const EmptyState = React.memo(({ onUpload }) => (
 const CaptionComposer = React.memo(({ value, onChange, maxLength, isDark }) => {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: false }),
+      StarterKit.configure({ heading: false, link: false }),
       Placeholder.configure({
         placeholder: "What's happening in this video? Write a caption...",
         emptyEditorClass: 'is-editor-empty',

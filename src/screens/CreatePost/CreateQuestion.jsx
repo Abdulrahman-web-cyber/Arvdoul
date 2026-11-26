@@ -97,6 +97,8 @@ export default function CreateQuestion() {
         italic: true,
         strike: true,
         code: false,
+        link: false,
+        underline: false,
       }),
       Underline,
       Placeholder.configure({
