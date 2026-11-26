@@ -18,10 +18,17 @@ import VideoComments from '../components/Videos/VideoComments';
 import VideoBottomSheet from '../components/Videos/VideoBottomSheet';
 import VideoGiftModal from '../components/Videos/VideoGiftModal';
 import { cn } from '../lib/utils';
-import { formatDuration, generateShareUrl } from '../utils/videoUtils';
+import { formatDuration } from '../utils/videoUtils';
 import { ArrowLeft, Volume2, VolumeX, Loader2, Play, Trash2, Clock } from 'lucide-react';
 import { LazyImage } from '../components/Shared/LazyImage';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
+import {
+  useSparkViewTracking,
+  toggleSparkCreatorFollow,
+  toggleSparkLike,
+  toggleSparkSave,
+  shareSpark,
+} from '../hooks/useSparkInteractions.js';
 
 export default function VideoDetailScreen() {
   const { videoId } = useParams();
@@ -48,8 +55,6 @@ export default function VideoDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [watchNext, setWatchNext] = useState({ loading: false, items: [], error: null });
-  const viewStartRef = useRef(null);
-  const flushedViewIdRef = useRef(null);
   const videoRef = useRef(null);
 
   const canonicalId = video?.canonicalPostId || video?.id;
@@ -65,7 +70,6 @@ export default function VideoDetailScreen() {
 
   useEffect(() => {
     const urlParam = searchParams.get('url');
-    flushedViewIdRef.current = null;
     (async () => {
       setLoading(true);
       setError(null);
@@ -135,100 +139,106 @@ export default function VideoDetailScreen() {
   }, [videoId, searchParams, user?.uid]);
 
   // Flush real elapsed watch duration when leaving or hiding the page
-  useEffect(() => {
-    const activeId = video?.id;
-    if (!activeId || !user?.uid) return undefined;
-    viewStartRef.current = Date.now();
-    flushedViewIdRef.current = null;
-
-    const flushView = () => {
-      if (!viewStartRef.current || flushedViewIdRef.current === activeId) return;
-      const seconds = Math.round((Date.now() - viewStartRef.current) / 1000);
-      viewStartRef.current = null;
-      if (seconds >= 1) {
-        flushedViewIdRef.current = activeId;
-        videoService.recordVideoView(activeId, { watchDuration: seconds, duration: seconds }).catch((e) => {
-          console.warn('[VideoDetail] view not recorded', e?.message);
-        });
-      }
-    };
-
-    window.addEventListener('pagehide', flushView);
-    return () => {
-      window.removeEventListener('pagehide', flushView);
-      flushView();
-    };
-  }, [video?.id, user?.uid]);
+  useSparkViewTracking(
+    video?.id,
+    user?.uid,
+    (id, meta) => videoService.recordVideoView(id, meta),
+    'VideoDetail'
+  );
 
   const handleFollowToggle = async () => {
-    if (!user?.uid) { toast.info('Sign in to follow creators.'); return; }
-    if (!ownerId || ownerId === user.uid) return;
+    if (!ownerId || ownerId === user?.uid || followBusy) return;
     setFollowBusy(true);
     try {
       const { getUserService } = await import('../services/userService.js');
       const svc = getUserService();
-      if (followState.requestStatus === 'pending') {
-        await svc.cancelFollowRequest(user.uid, ownerId);
-        setFollowState({ isFollowing: false, requestStatus: null });
-        return;
-      }
-      if (followState.isFollowing) {
-        await svc.unfollowUser(user.uid, ownerId);
-        setFollowState({ isFollowing: false, requestStatus: null });
-        return;
-      }
-      const res = await svc.followUser(user.uid, ownerId);
-      if (res?.requested || res?.requestStatus === 'pending') {
-        setFollowState({ isFollowing: false, requestStatus: 'pending' });
-        toast.success('Follow request sent');
-      } else {
-        setFollowState({ isFollowing: true, requestStatus: null });
-        toast.success(`Following @${creator?.username || creator?.name || 'creator'}`);
-      }
-    } catch (err) {
-      toast.error(err?.message || 'Could not update follow state.');
+      await toggleSparkCreatorFollow({
+        viewerUid: user?.uid,
+        creatorId: ownerId,
+        creatorLabel: creator?.username || creator?.name,
+        wasFollowing: followState.isFollowing,
+        wasRequested: followState.requestStatus === 'pending',
+        applyState: (next) => setFollowState(
+          next?.requestStatus === 'pending'
+            ? { isFollowing: false, requestStatus: 'pending' }
+            : { isFollowing: Boolean(next?.isFollowing), requestStatus: null }
+        ),
+        actions: {
+          follow: (uid, id) => svc.followUser(uid, id),
+          unfollow: (uid, id) => svc.unfollowUser(uid, id),
+          cancelRequest: (_uid, targetId) => svc.cancelFollowRequest(user.uid, targetId),
+        },
+      });
     } finally {
       setFollowBusy(false);
     }
   };
 
   const handleLike = async () => {
-    if (!user?.uid) { toast.info('Sign in to like Sparks.'); return; }
-    if (!ownerId) { toast.info('External videos cannot be liked.'); return; }
-    try {
-      const res = await videoService.likeVideo(video.id);
-      const nowLiked = res?.action ? res.action === 'liked' : (res?.data?.liked ?? !liked);
-      setLiked(nowLiked);
-      setLikeCount((c) => (c === null ? null : Math.max(0, c + (nowLiked ? 1 : -1))));
-    } catch (err) {
-      toast.error(err?.message || 'Could not like Spark.');
-    }
+    if (!video) return;
+    const applyLikeState = ({ isLiked, likes }) => {
+      setLiked(isLiked);
+      setLikeCount(likes);
+    };
+    await toggleSparkLike({
+      video,
+      viewerUid: user?.uid,
+      wasLikedOverride: liked,
+      knownLikesOverride: likeCount,
+      requireOwner: true,
+      likeFn: (id) => videoService.likeVideo(id),
+      applyState: applyLikeState,
+    });
   };
 
   const handleShare = async () => {
-    const url = generateShareUrl(canonicalId);
-    try {
-      if (navigator.share) await navigator.share({ title: video?.title || 'Spark on Arvdoul', url });
-      else { await navigator.clipboard.writeText(url); toast.success('Spark link copied!'); }
-    } catch { /* user canceled share sheet */ }
-    videoService.shareVideo(video.id).catch((e) => {
-      console.warn('[VideoDetail] share not recorded', e?.message);
+    if (!video?.id) return;
+    await shareSpark({
+      videoId: video.id,
+      canonicalId,
+      title: video?.title || 'Spark on Arvdoul',
+      shareFn: (id, platform) => videoService.shareVideo(id, platform),
+      onShared: () => {
+        setVideo((prev) => {
+          if (!prev) return prev;
+          const current = prev.stats?.shares ?? prev.shares;
+          if (typeof current !== 'number') return prev;
+          return {
+            ...prev,
+            shares: current + 1,
+            stats: prev.stats ? { ...prev.stats, shares: current + 1 } : prev.stats,
+          };
+        });
+      },
     });
   };
 
   const handleSave = async () => {
-    if (!user?.uid) { toast.info('Sign in to save Sparks.'); return; }
     if (!video?.id) return;
-    const wasSaved = saved;
-    setSaved(!wasSaved);
-    try {
-      if (wasSaved) await videoService.unsaveVideo(video.id, user.uid);
-      else await videoService.saveVideo(video.id, user.uid);
-      toast.success(wasSaved ? 'Removed from saved' : 'Saved to your collection');
-    } catch (err) {
-      setSaved(wasSaved);
-      toast.error(err?.message || 'Could not sync save');
-    }
+    const currentSaves =
+      typeof video.stats?.saves === 'number'
+        ? video.stats.saves
+        : (typeof video.saves === 'number' ? video.saves : null);
+    const applySaveState = ({ isSaved, saves }) => {
+      setSaved(isSaved);
+      setVideo((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          saves,
+          stats: prev.stats ? { ...prev.stats, saves } : prev.stats,
+        };
+      });
+    };
+    await toggleSparkSave({
+      video,
+      viewerUid: user?.uid,
+      wasSavedOverride: saved,
+      knownSavesOverride: currentSaves,
+      saveFn: (id, uid) => videoService.saveVideo(id, uid),
+      unsaveFn: (id, uid) => videoService.unsaveVideo(id, uid),
+      applyState: applySaveState,
+    });
   };
 
   const handleDeleteSpark = async () => {
@@ -265,7 +275,7 @@ export default function VideoDetailScreen() {
     const el = videoRef.current;
     if (!el) return;
     if (el.paused) {
-      el.play().then(() => setIsPlaying(true)).catch(() => {});
+      el.play().then(() => setIsPlaying(true)).catch(() => { /* playback deferred until ready */ });
     } else {
       el.pause();
       setIsPlaying(false);
@@ -277,7 +287,7 @@ export default function VideoDetailScreen() {
     if (!el || !Number.isFinite(Number(seconds))) return;
     el.currentTime = Math.max(0, Number(seconds));
     if (el.paused) {
-      el.play().then(() => setIsPlaying(true)).catch(() => {});
+      el.play().then(() => setIsPlaying(true)).catch(() => { /* playback deferred until ready */ });
     }
   };
 
@@ -325,7 +335,7 @@ export default function VideoDetailScreen() {
           </div>
         )}
         {loading ? (
-          <div className="flex justify-center py-24"><Loader2 className="w-8 h-8 text-violet-500 animate-spin" /></div>
+          <div className="flex justify-center py-24"><Loader2 className="w-8 h-8 text-arvdoul-purple animate-spin" /></div>
         ) : error ? (
           <div className="text-center py-24">
             <p className={cn('font-semibold mb-4', colors.text)}>{error}</p>

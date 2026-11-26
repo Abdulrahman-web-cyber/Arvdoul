@@ -890,6 +890,9 @@ function CreatePostProvider({ children }) {
       dispatch({ type: 'RESET' });
       dispatch({ type: 'SET_POST_TYPE', payload: null });
       dispatch({ type: 'SET_STEP', payload: 1 });
+    } else if (unsavedAction === 'exit-edit') {
+      dispatch({ type: 'RESET' });
+      navigate(-1);
     } else if (unsavedAction === 'switch-type' && pendingType) {
       const existingDraft = draftsListRef.current.find((d) => d.postType === pendingType);
       if (existingDraft) {
@@ -903,7 +906,7 @@ function CreatePostProvider({ children }) {
     }
     setUnsavedAction(null);
     setPendingType(null);
-  }, [unsavedAction, pendingType]);
+  }, [unsavedAction, pendingType, navigate]);
 
   const cancelDiscard = useCallback(() => {
     setShowUnsavedModal(false);
@@ -930,6 +933,15 @@ function CreatePostProvider({ children }) {
   }, [pendingType]);
 
   const goBackToLauncher = useCallback(() => {
+    if (stateRef.current.editPostId) {
+      if (stateRef.current.isDirty) {
+        setUnsavedAction('exit-edit');
+        setShowUnsavedModal(true);
+        return;
+      }
+      navigate(-1);
+      return;
+    }
     if (stateRef.current.isDirty) {
       setUnsavedAction('back');
       setShowUnsavedModal(true);
@@ -938,7 +950,7 @@ function CreatePostProvider({ children }) {
     dispatch({ type: 'RESET' });
     dispatch({ type: 'SET_POST_TYPE', payload: null });
     dispatch({ type: 'SET_STEP', payload: 1 });
-  }, []);
+  }, [navigate]);
 
   const loadTemplates = useCallback(async () => {
     const uid = userRef.current?.uid;

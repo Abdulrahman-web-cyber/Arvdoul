@@ -35,5 +35,5 @@
     "src/services/storyService.js": 2,
     "src/services/videoService.js": 1
   },
-  "runtimeDependencies": 65
+  "runtimeDependencies": 68
 }

@@ -59,17 +59,47 @@ export default function PostDetails() {
 
   const handleShare = useCallback(async () => {
     triggerHaptic('light');
+    let shared = false;
     if (navigator.share) {
       try {
         await navigator.share({ title: post?.content?.substring(0, 100), url: window.location.href });
-      } catch {
-        /* the user dismissed the native share sheet — not an error */
+        shared = true;
+      } catch (err) {
+        if (err?.name !== 'AbortError') {
+          try {
+            await navigator.clipboard?.writeText?.(window.location.href);
+            toast.success('Link copied');
+            shared = true;
+          } catch {
+            /* clipboard not available */
+          }
+        }
       }
     } else {
       await navigator.clipboard?.writeText?.(window.location.href);
       toast.success('Link copied');
+      shared = true;
     }
-  }, [post?.content]);
+
+    if (shared && post?.id) {
+      setPost((prev) =>
+        prev
+          ? {
+              ...prev,
+              stats: {
+                ...(prev.stats || {}),
+                shares: (prev.stats?.shares ?? 0) + 1,
+              },
+            }
+          : prev
+      );
+      if (currentUser?.uid) {
+        firestoreService.sharePost?.(post.id, currentUser.uid).catch((e) => {
+          console.warn('[PostDetails] share not recorded', e?.message);
+        });
+      }
+    }
+  }, [post?.id, post?.content, currentUser?.uid]);
 
   useEffect(() => {
     const onDetailShare = () => {
@@ -149,8 +179,46 @@ export default function PostDetails() {
         </div>
       </motion.div>
 
-      {showComments && <Suspense fallback={<div className="p-4">Loading comments…</div>}><CommentsDrawer isOpen={showComments} onClose={() => setShowComments(false)} post={post} currentUser={currentUser} theme={theme} /></Suspense>}
-      {showOptions && <Suspense fallback={null}><PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={post} currentUser={currentUser} onPostDeleted={() => navigate('/home')} onAnalytics={trackAnalyticsEvent} /></Suspense>}
+      {showComments && (
+        <Suspense fallback={<div className="p-4">Loading comments…</div>}>
+          <CommentsDrawer
+            isOpen={showComments}
+            onClose={() => setShowComments(false)}
+            post={post}
+            currentUser={currentUser}
+            theme={theme}
+            onCommentAdded={() => {
+              setPost((prev) =>
+                prev ? { ...prev, stats: { ...(prev.stats || {}), comments: (prev.stats?.comments ?? 0) + 1 } } : prev
+              );
+            }}
+            onCommentDeleted={() => {
+              setPost((prev) =>
+                prev
+                  ? { ...prev, stats: { ...(prev.stats || {}), comments: Math.max(0, (prev.stats?.comments ?? 1) - 1) } }
+                  : prev
+              );
+            }}
+          />
+        </Suspense>
+      )}
+      {showOptions && (
+        <Suspense fallback={null}>
+          <PostOptionsDrawer
+            isOpen={showOptions}
+            onClose={() => setShowOptions(false)}
+            post={post}
+            currentUser={currentUser}
+            theme={theme}
+            onPostDeleted={() => navigate('/home')}
+            onPostRemoved={() => navigate('/home')}
+            onPostUpdated={(_, updates) => {
+              setPost((prev) => (prev ? { ...prev, ...updates } : prev));
+            }}
+            onAnalytics={trackAnalyticsEvent}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

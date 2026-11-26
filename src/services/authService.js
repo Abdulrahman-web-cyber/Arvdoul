@@ -93,9 +93,21 @@ class ProductionAuthService {
       const firebaseApp = await import('../firebase/firebase.js');
       const authInstance = firebaseApp.auth || (await firebaseApp.getAuthInstance?.());
       this.auth = authInstance;
-      // Firebase Auth persistence must settle before getRedirectResult and
-      // before AuthContext installs its initial auth-state observer.
-      this.authPersistenceMode = await firebaseApp.authPersistenceReady;
+      const raceWithTimeout = (promise, ms, fallbackValue) =>
+        Promise.race([
+          promise,
+          new Promise((resolve) => setTimeout(() => resolve(fallbackValue), ms)),
+        ]);
+
+      // Firebase Auth persistence should settle before getRedirectResult and
+      // before AuthContext installs its initial auth-state observer, but must
+      // never hang indefinitely on restricted WebViews or Termux LAN origins.
+      const awaitPersistenceReady = async () => await firebaseApp.authPersistenceReady;
+      this.authPersistenceMode = await raceWithTimeout(
+        awaitPersistenceReady(),
+        2000,
+        'session',
+      );
       
       // Ensure auth.settings object exists.
       if (!this.auth.settings) {
@@ -105,14 +117,19 @@ class ProductionAuthService {
       this.firebase = firebaseApp;
 
       // Resolve a pending OAuth redirect BEFORE AuthContext subscribes to
-      // onAuthStateChanged. Otherwise the observer can publish an initial
-      // signed-out state, clear session markers, and leave LoginScreen mounted
-      // while Firebase is still consuming the Google redirect response.
+      // onAuthStateChanged, bounded tightly when no redirect is pending so
+      // cold boot never stalls offline or on non-HTTPS dev origins.
       this.googleRedirectError = null;
       try {
         const { getRedirectResult, getAdditionalUserInfo, updateProfile } = await import('firebase/auth');
         const hadPendingGoogleRedirect = hasGoogleRedirectPending();
-        const redirectResult = await getRedirectResult(this.auth);
+        const redirectTimeoutMs = hadPendingGoogleRedirect ? 10000 : 1500;
+        const readRedirectResult = async () => await getRedirectResult(this.auth);
+        const redirectResult = await raceWithTimeout(
+          readRedirectResult(),
+          redirectTimeoutMs,
+          null,
+        );
         const redirectUser = redirectResult?.user || this.auth.currentUser || null;
         if (redirectUser) {
           clearGoogleRedirectPending();

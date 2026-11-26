@@ -132,7 +132,7 @@ const STYLES = `
     linear-gradient(180deg,rgba(255,255,255,0.82),rgba(255,255,255,0.22) 60%,transparent);
   --ppr-streak:linear-gradient(90deg,transparent,rgba(255,255,255,0.52) 46%,rgba(255,255,255,0.18) 62%,transparent);
   --ppr-rim:conic-gradient(from 200deg at 50% 50%,#FFFFFF,${brandRgba(0.32)} 24%,rgba(5,91,251,0.44) 48%,rgba(255,255,255,0.70) 68%,${brandRgba(0.28)} 84%,#FFFFFF);
-  --ppr-title:#0F172A;--ppr-sub:#4B5873;--ppr-meta:#51607C;--ppr-accent:#4431F7;
+  --ppr-title:#0F172A;--ppr-sub:#4B5873;--ppr-meta:#51607C;--ppr-accent:var(--arv-brand-indigo);
   --ppr-track:rgba(70,85,170,0.14);--ppr-track-edge:rgba(255,255,255,0.75);--ppr-track-inset:rgba(60,75,160,0.16);
   --ppr-fill-glow:${brandRgba(0.24)};
   --ppr-rep:#1D4ED8;--ppr-streak-c:#6D28D9;--ppr-reward:#475569;

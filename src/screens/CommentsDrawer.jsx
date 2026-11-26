@@ -8,7 +8,9 @@ import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { MessageCircle, X, Send, Loader2, Flag, Reply, Edit3, Trash2, Pin, Heart, MoreHorizontal, AlertTriangle, Search, ChevronDown, ChevronUp, Mic, StopCircle, ChevronsDown, RefreshCw, Link } from "lucide-react";
+import { MessageCircle, X, Send, Loader2, Flag, Reply, Edit3, Trash2, Pin, Heart, MoreHorizontal, AlertTriangle, Search, ChevronDown, ChevronUp, Mic, StopCircle, ChevronsDown, RefreshCw, Link, Lock } from "lucide-react";
+import { useTheme } from '../context/ThemeContext';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import commentService from '../services/commentService.js';
 import notificationsService from '../services/notificationsService.js';
 import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../utils/avatarUtils.js';
@@ -431,6 +433,7 @@ const VoiceRecorder = memo(({ onRecordingComplete, onCancel }) => {
   const [locked, setLocked] = useState(false);
   const [duration, setDuration] = useState(0);
   const [cancelZone, setCancelZone] = useState(false);
+  const cancelZoneRef = useRef(false);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunksRef = useRef([]);
@@ -466,12 +469,20 @@ const VoiceRecorder = memo(({ onRecordingComplete, onCancel }) => {
   const startRecording = async () => {
     if (recording) return;
     try {
+      cancelZoneRef.current = false;
+      setCancelZone(false);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       const recorder = new MediaRecorder(stream);
       recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
       recorder.onstop = async () => {
-        if (cancelZone) { chunksRef.current = []; setCancelZone(false); return; }
+        if (cancelZoneRef.current) {
+          chunksRef.current = [];
+          cancelZoneRef.current = false;
+          setCancelZone(false);
+          onCancel?.();
+          return;
+        }
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         onRecordingComplete(blob);
         chunksRef.current = [];
@@ -509,17 +520,18 @@ const VoiceRecorder = memo(({ onRecordingComplete, onCancel }) => {
     if (deltaY > 60 && !locked) {
       setLocked(true);
       triggerHaptic('medium');
-      toast.info('🔒 Locked – release to stop');
+      toast.info('Locked – release to stop');
     } else if (deltaY < -30 && locked) {
       setLocked(false);
       toast.info('Unlocked');
     }
-    setCancelZone(deltaX < -60);
+    const nextCancel = deltaX < -60;
+    cancelZoneRef.current = nextCancel;
+    setCancelZone(nextCancel);
   };
-  const handlePointerUp = (e) => {
+  const handlePointerUp = () => {
     if (!recording) return;
-    if (cancelZone) { stopRecording(); toast.info('Recording cancelled'); }
-    else if (locked) stopRecording();
+    if (cancelZoneRef.current) { stopRecording(); toast.info('Recording cancelled'); }
     else stopRecording();
     if (pointerIdRef.current !== null && buttonRef.current) {
       try { buttonRef.current.releasePointerCapture(pointerIdRef.current); } catch (ex) {
@@ -530,13 +542,14 @@ const VoiceRecorder = memo(({ onRecordingComplete, onCancel }) => {
   };
 
   return (
-    <div className="flex items-center gap-3 p-2 bg-gray-100 dark:bg-gray-800 rounded-full backdrop-blur-sm">
+    <div className="flex items-center gap-3 p-2 bg-gray-100 dark:bg-white/10 rounded-full backdrop-blur-sm">
       <button
+        type="button"
         ref={buttonRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        className="flex items-center justify-center w-12 h-12 rounded-full transition-all touch-none bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md hover:scale-105 active:scale-95 focus:outline-none relative"
+        className="flex items-center justify-center w-12 h-12 rounded-full transition-all touch-none bg-arvdoul-gradient text-white shadow-md hover:scale-105 active:scale-95 focus:outline-none relative"
         style={{ minWidth: '44px', minHeight: '44px' }}
         aria-label="Voice message"
       >
@@ -547,8 +560,9 @@ const VoiceRecorder = memo(({ onRecordingComplete, onCancel }) => {
           </div>
         )}
         {recording && locked && (
-          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
-            🔒 locked
+          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap inline-flex items-center gap-1">
+            <Lock className="w-3 h-3" aria-hidden="true" />
+            <span>Locked</span>
           </div>
         )}
         {recording && cancelZone && (
@@ -610,7 +624,7 @@ const CommentComposer = memo(({ onSubmit, loading, placeholder = "Write a commen
   const handleVoiceCancel = useCallback(() => setIsRecording(false), []);
 
   return (
-    <div className="p-3 border-t dark:border-gray-800 bg-white dark:bg-gray-900 backdrop-blur-sm bg-opacity-90">
+    <div className="p-3 border-t border-slate-200/70 dark:border-white/10 bg-[#F6F8FC]/95 dark:bg-[#080F2E]/95 backdrop-blur-xl">
       <div className="flex gap-2">
         <LazyImage
           src={getSafeAvatarUrl(currentUser?.photoURL, pickDisplayName([currentUser?.displayName], { fallback: 'You' }), currentUser?.uid)}
@@ -621,28 +635,31 @@ const CommentComposer = memo(({ onSubmit, loading, placeholder = "Write a commen
           {isRecording ? (
             <VoiceRecorder onRecordingComplete={handleVoiceComplete} onCancel={handleVoiceCancel} />
           ) : (
-            <textarea aria-label=") : ("
+            <textarea
+              aria-label="Write a comment"
               ref={inputRef}
               value={content}
               onChange={handleChange}
               placeholder={placeholder}
-              className="w-full p-2 pr-20 rounded-2xl border dark:border-gray-700 dark:bg-gray-800 dark:text-white resize-none text-sm focus:ring-2 focus:ring-arvdoul-purple/50 transition-shadow"
+              className="w-full p-2 pr-20 rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 text-slate-900 dark:text-white resize-none text-sm focus:ring-2 focus:ring-arvdoul-purple/50 transition-shadow"
               rows={2}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit('text'); } }}
             />
           )}
           <div className="absolute right-2 bottom-2 flex gap-2">
             <button
+              type="button"
               onClick={() => setIsRecording(true)}
-              className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md transition active:scale-95 hover:scale-105 focus:outline-none"
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-arvdoul-gradient text-white shadow-md transition active:scale-95 hover:scale-105 focus:outline-none"
               aria-label="Start voice message"
             >
               <Mic className="w-5 h-5" />
             </button>
             <button
+              type="button"
               onClick={() => handleSubmit('text')}
               disabled={!content.trim() || loading}
-              className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white disabled:opacity-50 shadow-md transition active:scale-95 hover:scale-105 focus:outline-none"
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-arvdoul-gradient text-white disabled:opacity-50 shadow-md transition active:scale-95 hover:scale-105 focus:outline-none"
               aria-label="Send comment"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
@@ -915,7 +932,7 @@ const CommentItem = memo(({
         </div>
       )}
       <div className="flex gap-2 py-2 group">
-        <button onClick={() => navigate(`/profile/${encodeURIComponent(comment.userId)}`)} className="flex-shrink-0">
+        <button type="button" onClick={() => navigate(`/profile/${encodeURIComponent(comment.userId)}`)} aria-label={`Visit ${commentDisplayName}'s profile`} className="flex-shrink-0">
           <LazyImage src={getSafeAvatarUrl(avatarUrl, commentDisplayName, comment.userId)} alt="" className="w-9 h-9 rounded-full object-cover ring-1 ring-purple-300/50 dark:ring-purple-500/30" onError={(e) => { e.target.src = generateDefaultAvatarSvg(comment.userId, comment.userName); }} />
         </button>
         <div className="flex-1 min-w-0">
@@ -923,15 +940,15 @@ const CommentItem = memo(({
             <span className="font-bold text-sm dark:text-white truncate">{commentDisplayName}</span>
             {timeAgo && <span className="text-xs text-gray-500 dark:text-gray-400">{timeAgo}</span>}
             {comment.isEdited && (
-              <button onClick={() => onToggleHistory(comment)} className="text-[10px] text-purple-400 underline hover:text-purple-600 transition-colors">edited</button>
+              <button type="button" onClick={() => onToggleHistory(comment)} className="text-[10px] text-purple-400 underline hover:text-purple-600 transition-colors">edited</button>
             )}
           </div>
           {isEditing ? (
             <div className="mt-1 space-y-2">
-              <textarea aria-label="edited" value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-arvdoul-purple/50" rows={2} autoFocus />
+              <textarea aria-label="Edit comment" value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-arvdoul-purple/50" rows={2} autoFocus />
               <div className="flex gap-2">
-                <button onClick={handleSaveEdit} className="px-3 py-1 rounded-full bg-purple-600 text-white text-xs hover:bg-purple-700 transition-colors">Save</button>
-                <button onClick={() => setIsEditing(false)} className="px-3 py-1 rounded-full border dark:border-gray-700 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                <button type="button" onClick={handleSaveEdit} className="px-3 py-1 rounded-full bg-purple-600 text-white text-xs hover:bg-purple-700 transition-colors">Save</button>
+                <button type="button" onClick={() => setIsEditing(false)} className="px-3 py-1 rounded-full border dark:border-gray-700 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Cancel</button>
               </div>
             </div>
           ) : (
@@ -947,23 +964,23 @@ const CommentItem = memo(({
           <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
             <div className="flex gap-1">
               {['👍', '❤️', '😂', '😮', '😢', '😡', '🔥', '🎉'].map(emoji => (
-                <button key={emoji} onClick={() => onReact(commentId, emoji)} className="hover:scale-125 transition-transform">{emoji}</button>
+                <button type="button" key={emoji} onClick={() => onReact(commentId, emoji)} className="hover:scale-125 transition-transform" aria-label={`React ${emoji}`}>{emoji}</button>
               ))}
             </div>
-            <button onClick={() => onLike(commentId)} className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors">
+            <button type="button" onClick={() => onLike(commentId)} className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors" aria-label="Like comment">
               <Heart className={`w-3.5 h-3.5 ${likedByArray.includes(currentUser?.uid) ? 'fill-red-500 text-red-500' : ''}`} />
               <span>{formatCount(comment.likes)}</span>
             </button>
-            <button onClick={() => onReply(comment)} className="flex items-center gap-1 text-gray-500 hover:text-purple-500 transition-colors"><Reply className="w-3.5 h-3.5" /> Reply</button>
-            <button onClick={() => setShowActionSheet(!showActionSheet)} className="text-gray-500 hover:text-purple-500 transition-colors"><MoreHorizontal className="w-3.5 h-3.5" /></button>
+            <button type="button" onClick={() => onReply(comment)} className="flex items-center gap-1 text-gray-500 hover:text-purple-500 transition-colors"><Reply className="w-3.5 h-3.5" /> Reply</button>
+            <button type="button" onClick={() => setShowActionSheet(!showActionSheet)} aria-label="More comment actions" className="text-gray-500 hover:text-purple-500 transition-colors"><MoreHorizontal className="w-3.5 h-3.5" /></button>
             {isAuthor && (
               <>
-                <button onClick={() => setIsEditing(true)} className="text-gray-500 hover:text-yellow-500 transition-colors"><Edit3 className="w-3.5 h-3.5" /></button>
-                <button onClick={() => onDelete(commentId)} className="text-gray-500 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => setIsEditing(true)} aria-label="Edit comment" className="text-gray-500 hover:text-yellow-500 transition-colors"><Edit3 className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => onDelete(commentId)} aria-label="Delete comment" className="text-gray-500 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
               </>
             )}
-            <button onClick={() => onReport(comment)} className="text-gray-500 hover:text-red-500 transition-colors"><Flag className="w-3.5 h-3.5" /></button>
-            {canPin && <button onClick={() => onPin(commentId)} className="text-gray-500 hover:text-yellow-500 transition-colors"><Pin className="w-3.5 h-3.5" /></button>}
+            <button type="button" onClick={() => onReport(comment)} aria-label="Report comment" className="text-gray-500 hover:text-red-500 transition-colors"><Flag className="w-3.5 h-3.5" /></button>
+            {canPin && <button type="button" onClick={() => onPin(commentId)} aria-label="Pin comment" className="text-gray-500 hover:text-yellow-500 transition-colors"><Pin className="w-3.5 h-3.5" /></button>}
           </div>
           {comment.repliesCount > 0 && (
             <button
@@ -1025,11 +1042,13 @@ const CommentItem = memo(({
   );
 });
 
-export default function CommentsDrawer({ isOpen, onClose, post, currentUser, theme }) {
+export default function CommentsDrawer({ isOpen, onClose, post, currentUser, theme, onCommentAdded = undefined, onCommentDeleted = undefined }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const confirm = useConfirm();
-  const isDark = theme === 'dark';
+  const { theme: ctxTheme } = useTheme() || {};
+  const resolvedTheme = theme || ctxTheme || 'dark';
+  const isDark = resolvedTheme === 'dark';
   const postId = post?.id;
   const deepLinkedCommentId = searchParams.get('commentId');
 
@@ -1340,22 +1359,33 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     if (!parentId) prependRoot(postId, optimistic);
     else {
       addReply(postId, optimistic);
-      // Increment parent reply count optimistically
       const state = useCommentsStore.getState().getPostState(postId);
       const parent = state.byId[parentId];
       if (parent) updateComment(postId, parentId, { repliesCount: (parent.repliesCount || 0) + 1 });
     }
+    onCommentAdded?.(postId, optimistic);
 
     if (!navigator.onLine) {
-      try {
-        const key = `arvdoul_local_comments_${postId}`;
-        const current = JSON.parse(localStorage.getItem(key) || '[]');
-        current.unshift(optimistic);
-        localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
-      } catch (e) {
-        console.warn('Local comment cache write failed', e?.message);
+      await addToOfflineQueue(postId, activeUser.uid, content || '', parentId, {
+        tempId,
+        type,
+        mediaUrl: type === 'voice' ? blob : null,
+        userName: activeUser.displayName,
+        userUsername: activeUser.username,
+        userAvatar: activeUser.photoURL,
+      });
+      if (type !== 'voice') {
+        try {
+          const key = `arvdoul_local_comments_${postId}`;
+          const current = JSON.parse(localStorage.getItem(key) || '[]');
+          current.unshift(optimistic);
+          localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
+        } catch (e) {
+          console.warn('Local comment cache write failed', e?.message);
+        }
       }
-      toast.success('Comment posted');
+      toast.info('Comment queued and will sync when back online');
+      setReplyTarget(null);
       return;
     }
 
@@ -1404,22 +1434,21 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       setReplyTarget(null);
     } catch (err) {
       if (!mountedRef.current) return;
-      console.warn('Comment post error, retained as local comment:', err);
-      // Persist the optimistic comment so the "saved locally" claim is true —
-      // the read path merges `arvdoul_local_comments_<postId>`, so a
-      // memory-only comment vanished on the next load.
-      try {
-        const key = `arvdoul_local_comments_${postId}`;
-        const current = JSON.parse(localStorage.getItem(key) || '[]');
-        current.unshift(optimistic);
-        localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
-      } catch (e) {
-        console.warn('Local comment cache write failed', e?.message);
+      console.warn('Comment post error, queued:', err);
+      const qMeta = { tempId, type, mediaUrl: type === 'voice' ? blob : null, userName: activeUser.displayName, userUsername: activeUser.username, userAvatar: activeUser.photoURL };
+      await addToOfflineQueue(postId, activeUser.uid, content || '', parentId, qMeta).catch((e) => console.warn('Queue failed', e?.message));
+      if (type !== 'voice') {
+        try {
+          const key = `arvdoul_local_comments_${postId}`;
+          const current = JSON.parse(localStorage.getItem(key) || '[]');
+          current.unshift(optimistic);
+          localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
+        } catch (e) { console.warn('Local cache failed', e?.message); }
       }
       toast.success('Comment saved locally');
       setReplyTarget(null);
     }
-  }, [currentUser, postId, post?.authorId, prependRoot, addReply, replaceTempComment, updateComment, deleteCommentStore]);
+  }, [currentUser, postId, post, commentAccessAllowed, commentAccessNotice, prependRoot, addReply, replaceTempComment, updateComment, onCommentAdded]);
 
   // ── Load replies (pagination) ──────────────────────
   const loadReplies = useCallback(async (commentId, more = false) => {
@@ -1534,13 +1563,14 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     deleteCommentStore(postId, commentId);
     try {
       await commentService.deleteComment(commentId, currentUser.uid);
+      onCommentDeleted?.(postId, commentId);
       toast.success('Comment deleted');
     } catch (err) {
       toast.error('Delete failed');
       initialLoadLockRef.current = false;
       loadComments(true);
     }
-  }, [currentUser, postId, deleteCommentStore, loadComments]);
+  }, [currentUser, postId, deleteCommentStore, loadComments, onCommentDeleted]);
 
   const handleEdit = useCallback(async (commentId, newContent) => {
     if (!currentUser) return;
@@ -1720,6 +1750,8 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
           />
           <motion.div
             drag="y"
+            dragControls={dragControls}
+            dragListener={false}
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={0.2}
             onDrag={handleDrag}
@@ -1727,52 +1759,54 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             className={`fixed bottom-0 left-0 right-0 z-[91] rounded-t-3xl shadow-2xl flex flex-col ${
-              isDark ? 'bg-gray-900/95' : 'bg-white/95'
-            } backdrop-blur-lg border-t border-white/20 dark:border-white/10`}
+              isDark ? 'bg-[#080F2E]/95 text-white' : 'bg-[#F6F8FC]/95 text-slate-900'
+            } backdrop-blur-2xl border-t border-slate-200/70 dark:border-white/10`}
             style={{ height: `${drawerHeight}vh`, maxHeight: '100vh', paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             {/* Drag handle */}
             <div
               className="w-full flex justify-center pt-2 pb-1 cursor-grab active:cursor-grabbing touch-none"
-              onMouseDown={dragControls.start}
-              onTouchStart={dragControls.start}
+              onPointerDown={(e) => dragControls.start(e)}
             >
-              <div className="w-12 h-1.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
+              <div className="w-12 h-1.5 rounded-full" style={{ background: BRAND_GRADIENT }} />
             </div>
 
             {/* Header */}
-            <div className="px-4 py-3 border-b dark:border-gray-800 flex justify-between items-center">
+            <div className="px-4 py-3 border-b border-slate-200/70 dark:border-white/10 flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 shadow-md">
+                <div className="p-2 rounded-full bg-arvdoul-gradient shadow-md">
                   <MessageCircle className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg dark:text-white">Comments</h3>
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                  <h3 className="font-bold text-lg text-slate-900 dark:text-white">Comments</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     {post?.stats?.comments == null ? '—' : post.stats.comments} total
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setShowSearch(!showSearch)}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  aria-label="Toggle comment search"
+                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
                 >
                   <Search className="w-5 h-5" />
                 </button>
-                <select aria-label="Comments"
+                <select aria-label="Sort comments"
                   value={ranking}
                   onChange={(e) => setRanking(e.target.value)}
-                  className="text-xs bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-1 border-0 dark:text-white focus:ring-2 focus:ring-arvdoul-purple/50"
+                  className="text-xs bg-white dark:bg-white/10 rounded-full px-2.5 py-1 border border-slate-200/70 dark:border-white/10 text-slate-900 dark:text-white focus:ring-2 focus:ring-arvdoul-purple/50"
                 >
                   <option value="best">Best</option>
                   <option value="newest">Newest</option>
                   <option value="top">Top</option>
                 </select>
                 <button
+                  type="button"
                   onClick={onClose}
-                  aria-label="Close"
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  aria-label="Close comments"
+                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1876,10 +1910,10 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
             ) : (
               <>
                 {replyTarget && (
-                  <div className="border-t dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm p-2">
+                  <div className="border-t border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 backdrop-blur-sm p-2">
                     <div className="flex justify-between items-center mb-1 px-2">
                       <span className="text-xs text-purple-400">Replying to @{resolveActorName([replyTarget.userName], replyTarget.userId)}</span>
-                      <button onClick={() => setReplyTarget(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                      <button type="button" onClick={() => setReplyTarget(null)} aria-label="Cancel reply" className="text-gray-400 hover:text-gray-600 transition-colors">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -1907,12 +1941,12 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
             {/* Modals */}
             {reportingComment && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xl">
-                <div className={`p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 ${isDark ? 'bg-gray-900' : 'bg-white'} border border-gray-200 dark:border-gray-700`}>
+                <div className={`p-6 rounded-3xl shadow-2xl max-w-sm w-full mx-4 ${isDark ? 'bg-[#080F2E] border-white/10 text-white' : 'bg-[#F6F8FC] border-slate-200 text-slate-900'} border`}>
                   <h3 className="text-lg font-bold mb-4">Report comment</h3>
                   <select aria-label="Report comment"
                     value={reportReason}
                     onChange={(e) => setReportReason(e.target.value)}
-                    className="w-full p-2 rounded-xl border mb-4 dark:bg-gray-800 focus:ring-2 focus:ring-arvdoul-purple/50"
+                    className="w-full p-2 rounded-xl border border-slate-300 dark:border-white/15 bg-white dark:bg-white/5 mb-4 focus:ring-2 focus:ring-arvdoul-purple/50"
                   >
                     <option value="">Select reason...</option>
                     <option value="spam">Spam</option>

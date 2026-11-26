@@ -12,6 +12,8 @@ import * as userService from '../services/userService.js';
 import { getBalance, sendGift, boostPost, transferCoins, getUserPosition } from '../services/monetizationService.js';
 import feedService from '../services/feedService.js';
 import { callFunction, FUNCTIONS } from '../services/callableService.js';
+import { useTheme } from '../context/ThemeContext';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { LazyImage } from '../components/Shared/LazyImage';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
@@ -107,8 +109,21 @@ function uiReducer(state, action) {
   }
 }
 
-export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, theme, onAnalytics }) {
+export default function PostOptionsDrawer({
+  isOpen,
+  onClose,
+  post,
+  currentUser,
+  theme,
+  onAnalytics,
+  onPostDeleted = undefined,
+  onPostRemoved = undefined,
+  onPostRestored = undefined,
+  onPostUpdated = undefined,
+}) {
   const navigate = useNavigate();
+  const { theme: ctxTheme } = useTheme() || {};
+  const resolvedTheme = theme || ctxTheme || 'dark';
   const safePost = post || {};
 
   const ownerId = safePost.authorId || safePost.userId || safePost.ownerId;
@@ -169,7 +184,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
   const analyticsQueueRef = useRef([]);
   const analyticsTimerRef = useRef(null);
 
-  const isDark = theme === 'dark';
+  const isDark = resolvedTheme === 'dark';
   const hasMedia = !!(safePost.media && safePost.media.length > 0);
   const mediaUrl = hasMedia ? safePost.media[0].url : null;
   const mediaType = safePost.type || (safePost.media?.[0]?.type);
@@ -242,9 +257,9 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
         const score = typeof profile?.creatorScore === 'number' ? profile.creatorScore : null;
         const data = {
           position,
-          followerCount: profile?.followerCount ?? post.followerCount ?? null,
-          isCreator: profile?.isCreator || post.isCreator || false,
-          isVerified: profile?.isVerified || post.isVerified || false,
+          followerCount: profile?.followerCount ?? safePost.followerCount ?? null,
+          isCreator: profile?.isCreator || safePost.isCreator || false,
+          isVerified: Boolean(profile?.isVerified),
           creatorScore: score,
           loading: false,
         };
@@ -256,7 +271,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
       }
     })();
     return () => controller.abort();
-  }, [ownerId, post.followerCount, post.isCreator, post.isVerified]);
+  }, [ownerId, safePost.followerCount, safePost.isCreator]);
 
   // Follow state – refresh on drawer open
   useEffect(() => {
@@ -292,7 +307,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
           dispatchUI({ type: 'SET_SAVED', payload: Boolean(state.saved) });
         }
       })
-      .catch(() => {});
+      .catch(() => { /* ignore transient saved-state lookup failure */ });
     return () => { cancelled = true; };
   }, [isOpen, currentUser?.uid, safePost.id]);
 
@@ -375,24 +390,29 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     try {
       let shared = false;
       if (navigator.share) {
-        await navigator.share({ title: post.content?.slice(0, 100) || 'Arvdoul post', url: postUrl });
+        await navigator.share({ title: safePost.content?.slice(0, 100) || 'Arvdoul post', url: postUrl });
         shared = true;
       } else {
         await navigator.clipboard.writeText(postUrl);
         toast.success('Link copied!');
         shared = true;
       }
-      if (shared) {
-        await callWithRetry(() => firestoreService.sharePost(post.id, currentUser.uid)).catch((e) => {
+      if (shared && safePost.id) {
+        onPostUpdated?.(safePost.id, {
+          stats: {
+            ...(safePost.stats || {}),
+            shares: (safePost.stats?.shares ?? 0) + 1,
+          },
+        });
+        await callWithRetry(() => firestoreService.sharePost(safePost.id, currentUser.uid)).catch((e) => {
           console.warn('[PostOptions] share not recorded', e?.message);
         });
-        debouncedAnalytics('post_option_click', { action: 'share', postId: post.id });
+        debouncedAnalytics('post_option_click', { action: 'share', postId: safePost.id });
       }
     } catch (err) {
       if (err.name !== 'AbortError') toast.error('Share cancelled or failed');
     } finally {
       dispatchUI({ type: 'SET_LOADING_ACTION', payload: null });
-      // keep drawer open for quick re-share? – but it's ok, close after share to see result? We'll keep open for user to see toast and possibly copy again.
     }
   });
 
@@ -405,18 +425,18 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     const newSaved = !uiState.saved;
     dispatchUI({ type: 'SET_SAVED', payload: newSaved });
     if (!navigator.onLine) {
-      await addToOfflineQueue(newSaved ? 'save' : 'unsave', { postId: post.id, userId: currentUser.uid });
+      await addToOfflineQueue(newSaved ? 'save' : 'unsave', { postId: safePost.id, userId: currentUser.uid });
       toast.info('Saved offline');
       dispatchUI({ type: 'SET_SAVING', payload: false });
       dispatchUI({ type: 'SET_LOADING_ACTION', payload: null });
       return; // keep drawer open
     }
     try {
-      if (newSaved) await callWithRetry(() => firestoreService.savePost(post.id, currentUser.uid));
-      else await callWithRetry(() => firestoreService.unsavePost(post.id, currentUser.uid));
+      if (newSaved) await callWithRetry(() => firestoreService.savePost(safePost.id, currentUser.uid));
+      else await callWithRetry(() => firestoreService.unsavePost(safePost.id, currentUser.uid));
       if (!isValidVersion('save', version) || !mountedRef.current) return;
       toast.success(newSaved ? 'Saved' : 'Removed');
-      debouncedAnalytics('post_option_click', { action: newSaved ? 'save' : 'unsave', postId: post.id });
+      debouncedAnalytics('post_option_click', { action: newSaved ? 'save' : 'unsave', postId: safePost.id });
     } catch (err) {
       if (!isValidVersion('save', version) || !mountedRef.current) return;
       dispatchUI({ type: 'SET_SAVED', payload: !newSaved });
@@ -450,7 +470,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
   const handleEdit = requireAuth(() => {
     if (!checkRateLimit('edit')) return;
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'edit' });
-    navigate(`/edit/${post.id}`);
+    navigate(`/edit/${safePost.id}`);
     onClose(); // navigate away
   });
 
@@ -459,28 +479,31 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     if (!checkRateLimit('delete', 3000)) return;
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'delete' });
     try {
-      await callWithRetry(() => firestoreService.deletePost(post.id, currentUser.uid));
+      await callWithRetry(() => firestoreService.deletePost(safePost.id, currentUser.uid));
       if (!mountedRef.current) return;
+      onPostRemoved?.(safePost.id, { reason: 'delete' });
       toast.success('Post hidden (undo 10s) – tap Undo', {
         duration: 10000,
         action: {
           label: 'Undo',
           onClick: () => {
             clearDeleteTimer();
-            firestoreService.restorePost(post.id, currentUser.uid)
-              .then(() => { if (mountedRef.current) toast.success('Restored'); });
+            firestoreService.restorePost(safePost.id, currentUser.uid)
+              .then(() => {
+                onPostRestored?.(safePost);
+                if (mountedRef.current) toast.success('Restored');
+              });
             closeModal();
           },
         },
       });
       deleteTimerRef.current = setTimeout(() => {
         if (mountedRef.current) {
-          // remove post from feed visually (optional, parent component can handle)
-          console.log('Soft delete expired – Cloud Function will purge');
+          onPostDeleted?.(safePost.id);
           onClose();
         }
       }, 10000);
-      debouncedAnalytics('post_option_click', { action: 'delete', postId: post.id });
+      debouncedAnalytics('post_option_click', { action: 'delete', postId: safePost.id });
     } catch { toast.error('Delete failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); closeModal(); }
   });
@@ -490,10 +513,10 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     if (!checkRateLimit('report', 5000)) return;
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'report' });
     try {
-      await callWithRetry(() => callFunction(FUNCTIONS.REPORT_POST, { postId: post.id, reason: reportReason }));
+      await callWithRetry(() => callFunction(FUNCTIONS.REPORT_POST, { postId: safePost.id, reason: reportReason }));
       if (!mountedRef.current) return;
       toast.success('Report submitted');
-      debouncedAnalytics('post_option_click', { action: 'report', postId: post.id, reason: reportReason });
+      debouncedAnalytics('post_option_click', { action: 'report', postId: safePost.id, reason: reportReason });
       setReportReason('');
     } catch { toast.error('Report failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); closeModal(); }
@@ -505,8 +528,9 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     try {
       await callWithRetry(() => userService.blockUser(currentUser.uid, ownerId));
       if (!mountedRef.current) return;
-      toast.success(`Blocked @${post.authorUsername}`);
-      debouncedAnalytics('post_option_click', { action: 'block', postId: post.id, targetId: ownerId });
+      onPostRemoved?.(safePost.id, { authorId: ownerId, reason: 'block' });
+      toast.success(`Blocked @${safePost.authorUsername || 'user'}`);
+      debouncedAnalytics('post_option_click', { action: 'block', postId: safePost.id, targetId: ownerId });
       onClose();
     } catch { toast.error('Block failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); closeModal(); }
@@ -518,8 +542,9 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     try {
       await callWithRetry(() => userService.muteUser(currentUser.uid, ownerId));
       if (!mountedRef.current) return;
-      toast.success(`Muted @${post.authorUsername}`);
-      debouncedAnalytics('post_option_click', { action: 'mute', postId: post.id, targetId: ownerId });
+      onPostRemoved?.(safePost.id, { authorId: ownerId, reason: 'mute' });
+      toast.success(`Muted @${safePost.authorUsername || 'user'}`);
+      debouncedAnalytics('post_option_click', { action: 'mute', postId: safePost.id, targetId: ownerId });
       onClose();
     } catch { toast.error('Mute failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); closeModal(); }
@@ -529,10 +554,11 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     if (!checkRateLimit('hide')) return;
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'hide' });
     try {
-      await callWithRetry(() => feedService.demotePost(currentUser.uid, post.id, 'hide'));
+      await callWithRetry(() => feedService.demotePost(currentUser.uid, safePost.id, 'hide'));
       if (!mountedRef.current) return;
+      onPostRemoved?.(safePost.id, { reason: 'hide' });
       toast.success('Post hidden');
-      debouncedAnalytics('post_option_click', { action: 'hide', postId: post.id });
+      debouncedAnalytics('post_option_click', { action: 'hide', postId: safePost.id });
       onClose();
     } catch { toast.error('Hide failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); }
@@ -542,10 +568,11 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     if (!checkRateLimit('not_interested')) return;
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'not_interested' });
     try {
-      await callWithRetry(() => feedService.demotePost(currentUser.uid, post.id, 'not_interested'));
+      await callWithRetry(() => feedService.demotePost(currentUser.uid, safePost.id, 'not_interested'));
       if (!mountedRef.current) return;
+      onPostRemoved?.(safePost.id, { reason: 'not_interested' });
       toast.success("We'll show fewer posts like this");
-      debouncedAnalytics('post_option_click', { action: 'not_interested', postId: post.id });
+      debouncedAnalytics('post_option_click', { action: 'not_interested', postId: safePost.id });
       onClose();
     } catch { toast.error('Action failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); }
@@ -561,10 +588,11 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     const newPinned = !uiState.pinned;
     dispatchUI({ type: 'SET_PINNED', payload: newPinned });
     try {
-      await callWithRetry(() => firestoreService.updatePost(post.id, { pinned: newPinned }));
+      await callWithRetry(() => firestoreService.updatePost(safePost.id, { pinned: newPinned }));
       if (!isValidVersion('pin', version) || !mountedRef.current) return;
+      onPostUpdated?.(safePost.id, { pinned: newPinned });
       toast.success(newPinned ? 'Pinned' : 'Unpinned');
-      debouncedAnalytics('post_option_click', { action: newPinned ? 'pin' : 'unpin', postId: post.id });
+      debouncedAnalytics('post_option_click', { action: newPinned ? 'pin' : 'unpin', postId: safePost.id });
     } catch (err) {
       if (!isValidVersion('pin', version) || !mountedRef.current) return;
       dispatchUI({ type: 'SET_PINNED', payload: !newPinned });
@@ -572,7 +600,6 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     } finally {
       dispatchUI({ type: 'SET_PINNING', payload: false });
       dispatchUI({ type: 'SET_LOADING_ACTION', payload: null });
-      // keep drawer open
     }
   });
 
@@ -586,10 +613,11 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     const newArchived = !uiState.archived;
     dispatchUI({ type: 'SET_ARCHIVED', payload: newArchived });
     try {
-      await callWithRetry(() => firestoreService.updatePost(post.id, { archived: newArchived }));
+      await callWithRetry(() => firestoreService.updatePost(safePost.id, { archived: newArchived }));
       if (!isValidVersion('archive', version) || !mountedRef.current) return;
+      onPostUpdated?.(safePost.id, { archived: newArchived });
       toast.success(newArchived ? 'Archived' : 'Restored');
-      debouncedAnalytics('post_option_click', { action: newArchived ? 'archive' : 'unarchive', postId: post.id });
+      debouncedAnalytics('post_option_click', { action: newArchived ? 'archive' : 'unarchive', postId: safePost.id });
     } catch (err) {
       if (!isValidVersion('archive', version) || !mountedRef.current) return;
       dispatchUI({ type: 'SET_ARCHIVED', payload: !newArchived });
@@ -611,7 +639,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     dispatchUI({ type: 'SET_COMMENTS_ENABLED', payload: newState });
     try {
       await callWithRetry(() =>
-        firestoreService.updatePost(post.id, {
+        firestoreService.updatePost(safePost.id, {
           commentsEnabled: newState,
           enableComments: newState,
           allowComments: newState,
@@ -620,8 +648,18 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
         })
       );
       if (!isValidVersion('comments', version) || !mountedRef.current) return;
+      onPostUpdated?.(safePost.id, {
+        commentsEnabled: newState,
+        enableComments: newState,
+        allowComments: newState,
+        engagementControls: {
+          ...(safePost.engagementControls || {}),
+          enableComments: newState,
+          commentMode: newState ? 'everyone' : 'off',
+        },
+      });
       toast.success(newState ? 'Comments on' : 'Comments off');
-      debouncedAnalytics('post_option_click', { action: newState ? 'enable_comments' : 'disable_comments', postId: post.id });
+      debouncedAnalytics('post_option_click', { action: newState ? 'enable_comments' : 'disable_comments', postId: safePost.id });
     } catch (err) {
       if (!isValidVersion('comments', version) || !mountedRef.current) return;
       dispatchUI({ type: 'SET_COMMENTS_ENABLED', payload: !newState });
@@ -637,10 +675,10 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     if (!checkRateLimit('download', 2000)) return;
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'download' });
     try {
-      let url = mediaUrl, filename = `arvdoul_${post.id}.`, maxSize = 50;
+      let url = mediaUrl, filename = `arvdoul_${safePost.id}.`, maxSize = 50;
       if (mediaType === 'video') {
-        if (post.muxPlaybackId) {
-          const data = await callWithRetry(() => callFunction(FUNCTIONS.GET_MUX_PLAYBACK_URL, { playbackId: post.muxPlaybackId, videoId: post.id }));
+        if (safePost.muxPlaybackId) {
+          const data = await callWithRetry(() => callFunction(FUNCTIONS.GET_MUX_PLAYBACK_URL, { playbackId: safePost.muxPlaybackId, videoId: safePost.id }));
           url = data.url;
         } else if (mediaUrl && (mediaUrl.endsWith('.mp4') || mediaUrl.endsWith('.mov'))) {
           url = mediaUrl;
@@ -654,7 +692,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
       const success = await downloadFile(url, filename, maxSize);
       if (success) toast.success('Download started');
       else toast.error('Download failed');
-      debouncedAnalytics('post_option_click', { action: 'download', postId: post.id });
+      debouncedAnalytics('post_option_click', { action: 'download', postId: safePost.id });
     } catch { toast.error('Download failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); }
   });
@@ -664,18 +702,15 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     const version = getNextVersion('tip');
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'tip' });
     try {
-      const result = await callWithRetry(() => transferCoins(currentUser.uid, ownerId, amount, 'tip', { postId: post.id }));
+      const result = await callWithRetry(() => transferCoins(currentUser.uid, ownerId, amount, 'tip', { postId: safePost.id }));
       if (!isValidVersion('tip', version) || !mountedRef.current) return;
-      if (result.success) { toast.success(`Tipped ${amount} coins`); debouncedAnalytics('post_option_click', { action: 'tip', postId: post.id, amount }); }
+      if (result.success) { toast.success(`Tipped ${amount} coins`); debouncedAnalytics('post_option_click', { action: 'tip', postId: safePost.id, amount }); }
       else toast.error(result.error || 'Tip failed');
     } catch { toast.error('Tip failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); closeModal(); }
   });
 
   const getGiftValue = (giftType) => {
-    // Read the canonical price table — a local literal (rose 5 / crown 50 / …)
-    // drifts from the server's GIFT_VALUES and can advertise a price the
-    // `sendGift` callable never charges.
     const value = GIFT_VALUES[giftType];
     return typeof value === 'number' ? value : null;
   };
@@ -686,9 +721,18 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     const version = getNextVersion('gift');
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'gift' });
     try {
-      const result = await callWithRetry(() => sendGift(currentUser.uid, post.id, giftType));
+      const result = await callWithRetry(() => sendGift(currentUser.uid, safePost.id, giftType));
       if (!isValidVersion('gift', version) || !mountedRef.current) return;
-      if (result.success) { toast.success(`Sent ${giftType}${value != null ? ` (${value} coins)` : ''}`); debouncedAnalytics('post_option_click', { action: 'gift', postId: post.id, giftType, value }); }
+      if (result.success) {
+        onPostUpdated?.(safePost.id, {
+          stats: {
+            ...(safePost.stats || {}),
+            gifts: (safePost.stats?.gifts ?? 0) + 1,
+          },
+        });
+        toast.success(`Sent ${giftType}${value != null ? ` (${value} coins)` : ''}`);
+        debouncedAnalytics('post_option_click', { action: 'gift', postId: safePost.id, giftType, value });
+      }
       else toast.error(result.error || 'Gift failed');
     } catch { toast.error('Gift failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); closeModal(); }
@@ -700,9 +744,9 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     const version = getNextVersion('boost');
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'boost' });
     try {
-      const result = await callWithRetry(() => boostPost(currentUser.uid, post.id, days));
+      const result = await callWithRetry(() => boostPost(currentUser.uid, safePost.id, days));
       if (!isValidVersion('boost', version) || !mountedRef.current) return;
-      if (result.success) { toast.success(`Boosted ${days} day(s)`); debouncedAnalytics('post_option_click', { action: 'boost', postId: post.id, days }); }
+      if (result.success) { toast.success(`Boosted ${days} day(s)`); debouncedAnalytics('post_option_click', { action: 'boost', postId: safePost.id, days }); }
       else toast.error(result.error || 'Boost failed');
     } catch { toast.error('Boost failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); closeModal(); }
@@ -711,7 +755,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
   const handleAnalytics = requireAuth(() => {
     if (!isAuthor) { toast.error('Only author'); return; }
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'analytics' });
-    navigate(`/post/${post.id}/analytics`);
+    navigate(`/post/${safePost.id}/analytics`);
     onClose();
   });
 
@@ -723,14 +767,13 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'follow' });
 
     const wasRequested = uiState.followRequested;
-    // A pending request is withdrawn, not "unfollowed" (there is no edge yet).
     if (wasRequested) {
       dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: false });
       try {
         await userService.cancelFollowRequest(currentUser.uid, ownerId);
         if (!isValidVersion('follow', version) || !mountedRef.current) return;
         toast.success('Follow request withdrawn');
-        debouncedAnalytics('post_option_click', { action: 'cancel_follow_request', postId: post.id });
+        debouncedAnalytics('post_option_click', { action: 'cancel_follow_request', postId: safePost.id });
       } catch {
         if (!isValidVersion('follow', version) || !mountedRef.current) return;
         dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: true });
@@ -755,21 +798,19 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
       if (newState) {
         const res = await callWithRetry(() => userService.followUser(currentUser.uid, ownerId));
         if (!isValidVersion('follow', version) || !mountedRef.current) return;
-        // A private target yields `{requested:true}` and creates no edge; show
-        // "Requested" rather than claiming a completed follow.
         if (res?.requested || res?.requestStatus === 'pending') {
           dispatchUI({ type: 'SET_FOLLOW_STATE', payload: false });
           dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: true });
           toast.success('Follow request sent');
         } else {
-          toast.success(`Following @${post.authorUsername}`);
+          toast.success(`Following @${safePost.authorUsername || 'user'}`);
         }
-        debouncedAnalytics('post_option_click', { action: 'follow', postId: post.id });
+        debouncedAnalytics('post_option_click', { action: 'follow', postId: safePost.id });
       } else {
         await callWithRetry(() => userService.unfollowUser(currentUser.uid, ownerId));
         if (!isValidVersion('follow', version) || !mountedRef.current) return;
-        toast.success(`Unfollowed @${post.authorUsername}`);
-        debouncedAnalytics('post_option_click', { action: 'unfollow', postId: post.id });
+        toast.success(`Unfollowed @${safePost.authorUsername || 'user'}`);
+        debouncedAnalytics('post_option_click', { action: 'unfollow', postId: safePost.id });
       }
     } catch (err) {
       if (!isValidVersion('follow', version) || !mountedRef.current) return;
@@ -778,7 +819,6 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     } finally {
       dispatchUI({ type: 'SET_FOLLOW_LOADING', payload: false });
       dispatchUI({ type: 'SET_LOADING_ACTION', payload: null });
-      // keep drawer open
     }
   });
 
@@ -816,13 +856,13 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
 
   const handleOpenAdsCenter = requireAuth(() => {
     if (!isAuthor) { toast.error('Only author'); return; }
-    navigate(`/ads/create?postId=${encodeURIComponent(post.id)}`);
+    navigate(`/ads/create?postId=${encodeURIComponent(safePost.id)}`);
     onClose();
   });
 
   const handleOpenPartnershipAuth = requireAuth(() => {
     if (!isAuthor) { toast.error('Only author'); return; }
-    navigate(`/collaboration?tab=partnerships&postId=${encodeURIComponent(post.id)}`);
+    navigate(`/collaboration?tab=partnerships&postId=${encodeURIComponent(safePost.id)}`);
     onClose();
   });
 
@@ -871,8 +911,8 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                 ? 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-5xl rounded-3xl'
                 : 'fixed bottom-0 left-0 right-0 rounded-t-3xl',
               'z-[91] overflow-visible', // overflow-visible to avoid clipping shadows
-              isDark ? 'bg-gray-900/95' : 'bg-white/95',
-              'backdrop-blur-md border border-white/20 dark:border-white/10'
+              isDark ? 'bg-[#080F2E]/95' : 'bg-[#F6F8FC]/95',
+              'backdrop-blur-2xl border border-slate-200/80 dark:border-white/10'
             )}
             style={{ boxShadow: shadows.strong }}
             role="dialog" aria-modal="true" aria-label="Post options"
@@ -886,46 +926,46 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                   e.preventDefault();
                 }}
               >
-                <div className="w-12 h-1.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
+                <div className="w-12 h-1.5 rounded-full" style={{ background: BRAND_GRADIENT }} />
               </div>
             )}
 
             {/* Header */}
-            <div className="px-5 pt-5 pb-3 border-b dark:border-gray-800">
+            <div className="px-5 pt-5 pb-3 border-b border-slate-200/70 dark:border-white/10">
               <div className="flex items-center gap-4">
-                <button onClick={() => navigate(`/profile/${ownerId}`)} className="flex-shrink-0">
+                <button type="button" onClick={() => navigate(`/profile/${ownerId}`)} aria-label={`Visit ${safePost.authorName || 'author'}'s profile`} className="flex-shrink-0">
                   <LazyImage
-                    src={userService.getAvatarUrl(ownerId, post.authorName, post.authorPhoto)}
-                    alt={`${post.authorName}'s avatar`}
+                    src={userService.getAvatarUrl(ownerId, safePost.authorName, safePost.authorPhoto)}
+                    alt={`${safePost.authorName || 'Author'}'s avatar`}
                     className="w-16 h-16 rounded-full object-cover ring-3 ring-purple-500/50 shadow-lg"
                   />
                 </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-lg dark:text-white">{post.authorName}</h3>
+                    <h3 className="font-bold text-lg text-slate-900 dark:text-white">{safePost.authorName}</h3>
                     {authorMeta.isVerified && <CheckCircle className="w-5 h-5 text-cyan-400" aria-label="Verified" />}
                     {authorMeta.isCreator && <Sparkles className="w-5 h-5 text-amber-400" aria-label="Creator" />}
                     {authorMeta.position && !authorMeta.loading && (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-sm">
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full text-white shadow-sm" style={{ background: BRAND_GRADIENT }}>
                         {authorMeta.position.title} {authorMeta.position.emoji}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-3 text-sm mt-1 text-gray-500 dark:text-gray-400">
-                    <span>@{post.authorUsername}</span>
+                    <span>@{safePost.authorUsername}</span>
                     <span>•</span>
                     <span className="flex items-center gap-1"><Users className="w-4 h-4" aria-label="Followers" /> {authorMeta.followerCount == null ? '—' : authorMeta.followerCount.toLocaleString()}</span>
                   </div>
                   {authorMeta.isCreator && authorMeta.creatorScore > 0 && (
                     <div className="mt-2 flex items-center gap-2">
                       <div className="h-1.5 flex-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" style={{ width: `${Math.min(100, authorMeta.creatorScore)}%` }} />
+                        <div className="h-full rounded-full" style={{ width: `${Math.min(100, authorMeta.creatorScore)}%`, background: BRAND_GRADIENT }} />
                       </div>
                       <span className="text-xs font-semibold text-purple-400">Creator Score {authorMeta.creatorScore}</span>
                     </div>
                   )}
                 </div>
-                <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Close">
+                <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 transition-colors" aria-label="Close">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -942,6 +982,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
               >
                 {primaryRow.map(act => (
                   <motion.button
+                    type="button"
                     key={act.id}
                     onClick={act.onClick}
                     disabled={act.disabled || uiState.loadingAction === act.id}
@@ -949,8 +990,8 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                     className={cn(
                       'flex items-center justify-center gap-3 py-4 rounded-2xl transition-all',
                       act.primary
-                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
+                        ? 'bg-arvdoul-gradient text-white hover:opacity-95'
+                        : 'bg-white/80 dark:bg-white/5 text-slate-800 dark:text-gray-200 border border-slate-200/70 dark:border-white/10',
                       (act.disabled || uiState.loadingAction === act.id) && 'opacity-50 cursor-wait'
                     )}
                     style={{ boxShadow: shadows.card, transition: 'box-shadow 0.2s, transform 0.1s' }}
@@ -1024,8 +1065,8 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                       className={cn(
                         'flex flex-col items-center justify-center min-h-[80px] p-3 rounded-xl transition-all',
                         act.primary
-                          ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                          : 'bg-gray-100/70 dark:bg-gray-800/70 text-gray-700 dark:text-gray-300',
+                          ? 'bg-arvdoul-gradient text-white'
+                          : 'bg-white/80 dark:bg-white/5 text-slate-700 dark:text-gray-300 border border-slate-200/70 dark:border-white/10',
                         uiState.loadingAction === act.id && 'opacity-50 cursor-wait'
                       )}
                       style={{ boxShadow: shadows.card, transition: 'box-shadow 0.2s, transform 0.1s' }}
@@ -1153,7 +1194,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                   onConfirm={handleDelete}
                   onCancel={closeModal}
                   loading={uiState.loadingAction === 'delete'}
-                  theme={theme}
+                  theme={resolvedTheme}
                 />
               </div>
             )}
@@ -1166,35 +1207,35 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                   onConfirm={handleReport}
                   onCancel={closeModal}
                   loading={uiState.loadingAction === 'report'}
-                  theme={theme}
+                  theme={resolvedTheme}
                 />
               </div>
             )}
             {modal === 'block' && (
               <div ref={modalRef}>
                 <ConfirmModal
-                  title={`Block @${post.authorUsername}?`}
+                  title={`Block @${safePost.authorUsername || 'user'}?`}
                   message="They won't be able to interact."
                   confirmText="Block"
                   danger
                   onConfirm={handleBlock}
                   onCancel={closeModal}
                   loading={uiState.loadingAction === 'block'}
-                  theme={theme}
+                  theme={resolvedTheme}
                 />
               </div>
             )}
             {modal === 'mute' && (
               <div ref={modalRef}>
                 <ConfirmModal
-                  title={`Mute @${post.authorUsername}?`}
+                  title={`Mute @${safePost.authorUsername || 'user'}?`}
                   message="You won't see their posts."
                   confirmText="Mute"
                   danger={false}
                   onConfirm={handleMute}
                   onCancel={closeModal}
                   loading={uiState.loadingAction === 'mute'}
-                  theme={theme}
+                  theme={resolvedTheme}
                 />
               </div>
             )}
@@ -1205,7 +1246,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                   onCancel={closeModal}
                   loading={uiState.loadingAction === 'tip'}
                   coinBalance={coinBalance}
-                  theme={theme}
+                  theme={resolvedTheme}
                 />
               </div>
             )}
@@ -1216,7 +1257,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                   onCancel={closeModal}
                   loading={uiState.loadingAction === 'gift'}
                   coinBalance={coinBalance}
-                  theme={theme}
+                  theme={resolvedTheme}
                 />
               </div>
             )}
@@ -1227,7 +1268,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                   onCancel={closeModal}
                   loading={uiState.loadingAction === 'boost'}
                   coinBalance={coinBalance}
-                  theme={theme}
+                  theme={resolvedTheme}
                   costPerDay={BOOST_DAILY_RATE_COINS}
                 />
               </div>
@@ -1248,14 +1289,14 @@ const ConfirmModal = ({ title, message, confirmText, danger, onConfirm, onCancel
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className={cn('relative w-full max-w-md p-5 rounded-2xl shadow-2xl', isDark ? 'bg-gray-900' : 'bg-white')}
+        className={cn('relative w-full max-w-md p-5 rounded-3xl shadow-2xl border backdrop-blur-2xl', isDark ? 'bg-[#080F2E] border-white/10 text-white' : 'bg-[#F6F8FC] border-slate-200 text-slate-900')}
       >
         <AlertCircle className={cn('w-14 h-14 mx-auto mb-3', danger ? 'text-red-500' : 'text-yellow-500')} />
         <h3 className="text-xl font-bold mb-2 text-center">{title}</h3>
-        <p className="text-center dark:text-gray-300 mb-5 text-sm">{message}</p>
+        <p className="text-center text-slate-600 dark:text-gray-300 mb-5 text-sm">{message}</p>
         <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border dark:border-gray-700 text-sm">Cancel</button>
-          <button onClick={onConfirm} disabled={loading} className={cn('flex-1 py-2.5 rounded-xl font-medium text-white text-sm', danger ? 'bg-gradient-to-r from-red-500 to-pink-500' : 'bg-gradient-to-r from-purple-500 to-pink-500', loading && 'opacity-50')}>{loading ? 'Processing...' : confirmText}</button>
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-white/15 text-sm">Cancel</button>
+          <button type="button" onClick={onConfirm} disabled={loading} className={cn('flex-1 py-2.5 rounded-xl font-medium text-white text-sm', danger ? 'bg-gradient-to-r from-red-500 to-rose-600' : 'bg-arvdoul-gradient', loading && 'opacity-50')}>{loading ? 'Processing...' : confirmText}</button>
         </div>
       </motion.div>
     </div>
@@ -1271,16 +1312,16 @@ const ReportModal = ({ reasons, value, onChange, onConfirm, onCancel, loading, t
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className={cn('relative w-full max-w-md p-5 rounded-2xl shadow-2xl', isDark ? 'bg-gray-900' : 'bg-white')}
+        className={cn('relative w-full max-w-md p-5 rounded-3xl shadow-2xl border backdrop-blur-2xl', isDark ? 'bg-[#080F2E] border-white/10 text-white' : 'bg-[#F6F8FC] border-slate-200 text-slate-900')}
       >
         <h3 className="text-xl font-bold mb-4 text-center">Report Post</h3>
-        <select aria-label="Report Post" value={value} onChange={(e) => onChange(e.target.value)} className="w-full p-2.5 rounded-xl border dark:border-gray-700 dark:bg-gray-800 mb-4 text-sm">
+        <select aria-label="Report Post" value={value} onChange={(e) => onChange(e.target.value)} className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-white/15 bg-white dark:bg-white/5 mb-4 text-sm">
           <option value="">Select reason...</option>
           {reasons.map(r => <option key={r}>{r}</option>)}
         </select>
         <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border dark:border-gray-700 text-sm">Cancel</button>
-          <button onClick={onConfirm} disabled={!value || loading} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium text-sm disabled:opacity-50">{loading ? 'Submitting...' : 'Submit'}</button>
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-white/15 text-sm">Cancel</button>
+          <button type="button" onClick={onConfirm} disabled={!value || loading} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium text-sm disabled:opacity-50">{loading ? 'Submitting...' : 'Submit'}</button>
         </div>
       </motion.div>
     </div>
@@ -1296,14 +1337,24 @@ const TipModal = ({ onSelectAmount, onCancel, loading, coinBalance, theme }) => 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className={cn('relative w-full max-w-md p-5 rounded-2xl shadow-2xl', theme==='dark'?'bg-gray-900':'bg-white')}
+        className={cn('relative w-full max-w-md p-5 rounded-3xl shadow-2xl border backdrop-blur-2xl', theme==='dark'?'bg-[#080F2E] border-white/10 text-white':'bg-[#F6F8FC] border-slate-200 text-slate-900')}
       >
         <h3 className="text-xl font-bold mb-2 text-center">Tip Creator</h3>
-        {coinBalance!==null && <p className="text-center text-sm mb-4">Your balance: {coinBalance} 🪙</p>}
+        {coinBalance!==null && (
+          <p className="text-center text-sm mb-4 inline-flex items-center justify-center gap-1 w-full">
+            <span>Your balance: {coinBalance}</span>
+            <Coins className="w-4 h-4 text-amber-500" aria-hidden="true" />
+          </p>
+        )}
         <div className="grid grid-cols-3 gap-2.5 mb-5">
-          {amounts.map(amt => <button key={amt} onClick={()=>onSelectAmount(amt)} disabled={loading} className="py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium text-sm shadow-md">{amt} 🪙</button>)}
+          {amounts.map(amt => (
+            <button type="button" key={amt} onClick={()=>onSelectAmount(amt)} disabled={loading} className="py-2.5 rounded-xl bg-arvdoul-gradient text-white font-medium text-sm shadow-md inline-flex items-center justify-center gap-1">
+              <span>{amt}</span>
+              <Coins className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          ))}
         </div>
-        <button onClick={onCancel} className="w-full py-2.5 rounded-xl border dark:border-gray-700 text-sm">Cancel</button>
+        <button type="button" onClick={onCancel} className="w-full py-2.5 rounded-xl border border-slate-300 dark:border-white/15 text-sm">Cancel</button>
       </motion.div>
     </div>
   );
@@ -1320,18 +1371,23 @@ const GiftModal = ({ onSelectGift, onCancel, loading, coinBalance, theme }) => {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className={cn('relative w-full max-w-md p-5 rounded-2xl shadow-2xl', theme==='dark'?'bg-gray-900':'bg-white')}
+        className={cn('relative w-full max-w-md p-5 rounded-3xl shadow-2xl border backdrop-blur-2xl', theme==='dark'?'bg-[#080F2E] border-white/10 text-white':'bg-[#F6F8FC] border-slate-200 text-slate-900')}
       >
         <h3 className="text-xl font-bold mb-2 text-center">Send a Gift</h3>
-        {coinBalance!==null && <p className="text-center text-sm mb-4">Balance: {coinBalance} 🪙</p>}
+        {coinBalance!==null && (
+          <p className="text-center text-sm mb-4 inline-flex items-center justify-center gap-1 w-full">
+            <span>Balance: {coinBalance}</span>
+            <Coins className="w-4 h-4 text-amber-500" aria-hidden="true" />
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-2.5 mb-5">
           {gifts.map(g => (
-            <button key={g.value} onClick={()=>onSelectGift(g.value)} disabled={loading} className="py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium text-sm shadow-md flex items-center justify-center gap-1.5">
-              {g.icon} {g.name}
+            <button type="button" key={g.value} onClick={()=>onSelectGift(g.value)} disabled={loading} className="py-2.5 rounded-xl bg-arvdoul-gradient text-white font-medium text-sm shadow-md flex items-center justify-center gap-1.5">
+              <span>{g.icon}</span> <span>{g.name}</span>
             </button>
           ))}
         </div>
-        <button onClick={onCancel} className="w-full py-2.5 rounded-xl border dark:border-gray-700 text-sm">Cancel</button>
+        <button type="button" onClick={onCancel} className="w-full py-2.5 rounded-xl border border-slate-300 dark:border-white/15 text-sm">Cancel</button>
       </motion.div>
     </div>
   );
@@ -1346,23 +1402,30 @@ const BoostModal = ({ onSelectDays, onCancel, loading, coinBalance, theme, costP
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className={cn('relative w-full max-w-md p-5 rounded-2xl shadow-2xl', theme==='dark'?'bg-gray-900':'bg-white')}
+        className={cn('relative w-full max-w-md p-5 rounded-3xl shadow-2xl border backdrop-blur-2xl', theme==='dark'?'bg-[#080F2E] border-white/10 text-white':'bg-[#F6F8FC] border-slate-200 text-slate-900')}
       >
         <h3 className="text-xl font-bold mb-2 text-center">Boost Post</h3>
         <p className="text-center text-sm mb-2">Reach more people with coins</p>
-        {coinBalance!==null && <p className="text-center text-sm mb-4">Balance: {coinBalance} 🪙</p>}
+        {coinBalance!==null && (
+          <p className="text-center text-sm mb-4 inline-flex items-center justify-center gap-1 w-full">
+            <span>Balance: {coinBalance}</span>
+            <Coins className="w-4 h-4 text-amber-500" aria-hidden="true" />
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-2.5 mb-5">
           {days.map(d => {
             const total = d * costPerDay;
             const insufficient = coinBalance !== null && total > coinBalance;
             return (
-              <button key={d} onClick={()=>onSelectDays(d)} disabled={loading || insufficient} className={cn('py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium text-sm shadow-md', insufficient && 'opacity-50 cursor-not-allowed')}>
-                {d} day{d!==1?'s':''} ({total} 🪙)
+              <button type="button" key={d} onClick={()=>onSelectDays(d)} disabled={loading || insufficient} className={cn('py-2.5 rounded-xl bg-arvdoul-gradient text-white font-medium text-sm shadow-md inline-flex items-center justify-center gap-1', insufficient && 'opacity-50 cursor-not-allowed')}>
+                <span>{d} day{d!==1?'s':''} ({total}</span>
+                <Coins className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>)</span>
               </button>
             );
           })}
         </div>
-        <button onClick={onCancel} className="w-full py-2.5 rounded-xl border dark:border-gray-700 text-sm">Cancel</button>
+        <button type="button" onClick={onCancel} className="w-full py-2.5 rounded-xl border border-slate-300 dark:border-white/15 text-sm">Cancel</button>
       </motion.div>
     </div>
   );

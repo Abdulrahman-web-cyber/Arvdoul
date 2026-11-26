@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import settingsService from '../services/settingsService.js';
 import { useTheme } from '../context/ThemeContext';
@@ -36,7 +35,14 @@ import {
 } from "lucide-react";
 import videoService from '../services/videoService';
 import useHlsVideo from '../hooks/useHlsVideo.js';
-import { generateShareUrl } from '../utils/videoUtils';
+import {
+  useSparkViewTracking,
+  useSparkCreatorFollowMap,
+  toggleSparkCreatorFollow,
+  toggleSparkLike,
+  toggleSparkSave,
+  shareSpark,
+} from '../hooks/useSparkInteractions.js';
 import { getUserService } from '../services/userService';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar';
@@ -257,40 +263,47 @@ const formatDuration = (seconds) => {
     return () => window.removeEventListener('arvdoul:sparks_channel_change', onChannelChange);
   }, []);
 
-  // Resolve the follow state for the loaded creators (never a local-only fake).
-  // Uses the canonical batched edge read (`getFollowStates` → `getEdgeSet`) so
-  // it never scans the viewer's whole follow graph.
-  const creatorIdsKey = useMemo(
-    () => [...new Set(reels.map((r) => r.creator?.id).filter(Boolean))].join(','),
+  // Resolve the follow state for loaded creators via the shared graph helper
+  // without scanning the viewer's entire follow graph.
+  const creatorIds = useMemo(
+    () => reels.map((r) => r.creator?.id).filter(Boolean),
     [reels]
+  );
+  const loadFollowStates = useCallback(
+    (uid, ids) => getUserService().getFollowStates(uid, ids),
+    []
+  );
+  const { followStates, setCreatorFollowState } = useSparkCreatorFollowMap(
+    creatorIds,
+    user?.uid,
+    loadFollowStates
   );
 
   useEffect(() => {
-    if (!user?.uid || !creatorIdsKey) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const creatorIds = creatorIdsKey.split(',').filter(Boolean);
-        if (creatorIds.length === 0) return;
-        const states = await getUserService().getFollowStates(user.uid, creatorIds);
-        if (cancelled) return;
-        setReels((prev) => prev.map((r) => {
-          const state = states.get(r.creator?.id);
-          return {
-            ...r,
-            creator: {
-              ...r.creator,
-              isFollowing: Boolean(state?.isFollowing),
-              requestStatus: state?.requestStatus ?? null,
-            },
-          };
-        }));
-      } catch (err) {
-        console.warn('Could not resolve follow state:', err);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user?.uid, creatorIdsKey]);
+    if (followStates.size === 0) return;
+    setReels((prev) =>
+      prev.map((r) => {
+        const state = followStates.get(r.creator?.id);
+        if (!state) return r;
+        const nextFollowing = Boolean(state.isFollowing);
+        const nextRequest = state.requestStatus ?? null;
+        if (
+          r.creator.isFollowing === nextFollowing &&
+          (r.creator.requestStatus ?? null) === nextRequest
+        ) {
+          return r;
+        }
+        return {
+          ...r,
+          creator: {
+            ...r.creator,
+            isFollowing: nextFollowing,
+            requestStatus: nextRequest,
+          },
+        };
+      })
+    );
+  }, [followStates]);
 
   useEffect(() => {
     setCaptionExpanded(false);
@@ -370,121 +383,90 @@ const formatDuration = (seconds) => {
     }
   }, [currentReel?.duration]);
 
-  // Toggle Like — server-authoritative via the likeVideo callable. The
-  // callable TOGGLES (like/unlike), so it is invoked for both directions and
-  // the returned `action` is the source of truth for the final state.
+  // Toggle Like — server-authoritative via the likeVideo callable & shared hook.
   const handleLike = async () => {
-    if (!currentReel || !user?.uid) {
-      if (!user?.uid) toast.error('Sign in to like reels');
-      return;
-    }
+    if (!currentReel) return;
     const reel = currentReel;
-    const wasLiked = reel.isLiked;
-    patchReel(reel.id, {
-      isLiked: !wasLiked,
-      stats: { ...reel.stats, likes: reel.stats.likes == null ? null : Math.max(0, reel.stats.likes + (wasLiked ? -1 : 1)) },
-    });
-    try {
-      const res = await videoService.likeVideo(reel.id);
-      const serverLiked = res?.action ? res.action === 'liked' : !wasLiked;
-      const serverDelta = serverLiked === wasLiked ? 0 : (serverLiked ? 1 : -1);
+    const applyLikeState = ({ isLiked, likes }) => {
       patchReel(reel.id, {
-        isLiked: serverLiked,
-        stats: { ...reel.stats, likes: reel.stats.likes == null ? null : Math.max(0, reel.stats.likes + serverDelta) },
+        isLiked,
+        stats: { ...reel.stats, likes },
       });
-    } catch (err) {
-      patchReel(reel.id, { isLiked: wasLiked, stats: reel.stats });
-      toast.error('Could not update like');
-    }
-  };
-
-  // Toggle Bookmark — real server persistence via videoService.
-  const handleSave = async () => {
-    if (!currentReel || !user?.uid) {
-      if (!user?.uid) toast.error('Sign in to save reels');
-      return;
-    }
-    const reel = currentReel;
-    const wasSaved = reel.isSaved;
-    patchReel(reel.id, {
-      isSaved: !wasSaved,
-      stats: { ...reel.stats, saves: reel.stats.saves == null ? null : Math.max(0, reel.stats.saves + (wasSaved ? -1 : 1)) },
+    };
+    await toggleSparkLike({
+      video: reel,
+      viewerUid: user?.uid,
+      knownLikesOverride: reel.stats?.likes ?? null,
+      likeFn: (id) => videoService.likeVideo(id),
+      applyState: applyLikeState,
     });
-    try {
-      if (wasSaved) await videoService.unsaveVideo(reel.id, user.uid);
-      else await videoService.saveVideo(reel.id, user.uid);
-      toast.success(wasSaved ? 'Removed from saved' : 'Saved to your collection');
-    } catch (err) {
-      patchReel(reel.id, { isSaved: wasSaved, stats: reel.stats });
-      toast.error(err?.message || 'Could not sync save');
-    }
   };
 
-  // Toggle Follow Creator — real follow/unfollow via userService.
+  // Toggle Bookmark — real server persistence via videoService & shared hook.
+  const handleSave = async () => {
+    if (!currentReel) return;
+    const reel = currentReel;
+    const applySaveState = ({ isSaved, saves }) => {
+      patchReel(reel.id, {
+        isSaved,
+        stats: { ...reel.stats, saves },
+      });
+    };
+    await toggleSparkSave({
+      video: reel,
+      viewerUid: user?.uid,
+      knownSavesOverride: reel.stats?.saves ?? null,
+      syncWatchLater: false,
+      saveFn: (id, uid) => videoService.saveVideo(id, uid),
+      unsaveFn: (id, uid) => videoService.unsaveVideo(id, uid),
+      applyState: applySaveState,
+    });
+  };
+
+  // Toggle Follow Creator — real follow/unfollow/request via userService & shared hook.
   const handleFollow = async (creator) => {
-    if (!user?.uid) {
-      toast.error('Sign in to follow creators');
-      return;
-    }
-    if (!creator?.id || creator.id === user.uid) return;
-    const wasFollowing = creator.isFollowing;
-    const wasRequested = creator.requestStatus === 'pending';
-    const applyCreator = (isFollowing, requestStatus = null) => setReels((prev) => prev.map((r) => (
-      r.creator.id === creator.id
-        ? { ...r, creator: { ...r.creator, isFollowing, requestStatus } }
-        : r
-    )));
-    // Optimistic: a private target becomes a pending request, not a follow.
-    applyCreator(!wasFollowing && !wasRequested, null);
-    try {
-      if (wasFollowing || wasRequested) {
-        if (wasRequested) await getUserService().cancelFollowRequest(user.uid, creator.id);
-        else await getUserService().unfollowUser(user.uid, creator.id);
-        applyCreator(false, null);
-        toast.success(wasRequested ? 'Request withdrawn' : `Unfollowed @${creator.username}`);
-      } else {
-        const res = await getUserService().followUser(user.uid, creator.id);
-        // A private account yields `{requested:true}` and creates no edge.
-        if (res?.requested || res?.requestStatus === 'pending') {
-          applyCreator(false, 'pending');
-          toast.success('Follow request sent');
-        } else {
-          applyCreator(true, null);
-          toast.success(`Following @${creator.username}`);
-        }
-      }
-    } catch (err) {
-      applyCreator(wasFollowing, wasRequested ? 'pending' : null);
-      toast.error(err?.message || 'Could not update follow');
-    }
+    if (!creator?.id) return;
+    const applyCreator = ({ isFollowing, requestStatus = null }) => {
+      setCreatorFollowState(creator.id, { isFollowing, requestStatus });
+      setReels((prev) =>
+        prev.map((r) =>
+          r.creator.id === creator.id
+            ? { ...r, creator: { ...r.creator, isFollowing, requestStatus } }
+            : r
+        )
+      );
+    };
+
+    await toggleSparkCreatorFollow({
+      viewerUid: user?.uid,
+      creatorId: creator.id,
+      creatorLabel: creator.username || creator.name,
+      wasFollowing: Boolean(creator.isFollowing),
+      wasRequested: creator.requestStatus === 'pending',
+      applyState: applyCreator,
+      actions: {
+        follow: (_uid, targetId) => getUserService().followUser(user.uid, targetId),
+        unfollow: (_uid, targetId) => getUserService().unfollowUser(user.uid, targetId),
+        cancelRequest: (_uid, targetId) => getUserService().cancelFollowRequest(user.uid, targetId),
+      },
+    });
   };
 
-
-  // Share — real server-side share counter + native share/clipboard.
+  // Share — real server-side share counter + AbortError-safe native share/clipboard.
   const handleShare = async () => {
     if (!currentReel) return;
     const reel = currentReel;
-    const url = generateShareUrl(reel.canonicalPostId || reel.id);
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: reel.title || 'Watch this on ARVDOUL', url });
-      } else {
-        await navigator.clipboard?.writeText(url);
-        toast.success('Spark link copied');
-      }
-    } catch (err) {
-      // User dismissed the native share sheet — not a failure, not a share.
-      if (err?.name === 'AbortError') return;
-      toast.error('Could not share reel');
-      return;
-    }
-    // Count only after the share actually happened; the server owns the value.
-    try {
-      const res = await videoService.shareVideo(reel.id, 'arvdoul');
-      if (res?.success) {
-        if (reel.stats.shares != null) patchReel(reel.id, { stats: { ...reel.stats, shares: reel.stats.shares + 1 } });
-      }
-    } catch { /* counter stays authoritative */ }
+    await shareSpark({
+      videoId: reel.id,
+      canonicalId: reel.canonicalPostId || reel.id,
+      title: reel.title || 'Watch this on ARVDOUL',
+      shareFn: (id, platform) => videoService.shareVideo(id, platform),
+      onShared: () => {
+        if (reel.stats.shares != null) {
+          patchReel(reel.id, { stats: { ...reel.stats, shares: reel.stats.shares + 1 } });
+        }
+      },
+    });
   };
 
   // Reporting is owned by VideoBottomSheet (videoService.reportVideo); the reels
@@ -513,36 +495,19 @@ const formatDuration = (seconds) => {
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (isPlaying) el.play().catch(() => {});
+    if (isPlaying) el.play().catch(() => { /* ignore autoplay lock until user gesture */ });
     else el.pause();
   }, [isPlaying, currentReelIndex]);
 
   // Record a real, server-deduplicated view for each reel as the viewer leaves
   // it or backgrounds/closes the page, passing watchDuration.
-  const reelViewStartRef = useRef(null);
-  const flushedReelViewRef = useRef(null);
   const activeReelId = reels[currentReelIndex]?.id;
-  useEffect(() => {
-    if (!activeReelId || !user?.uid) return undefined;
-    reelViewStartRef.current = Date.now();
-    flushedReelViewRef.current = null;
-    const flushReelView = () => {
-      if (!reelViewStartRef.current || flushedReelViewRef.current === activeReelId) return;
-      const seconds = Math.round((Date.now() - reelViewStartRef.current) / 1000);
-      reelViewStartRef.current = null;
-      if (seconds >= 1) {
-        flushedReelViewRef.current = activeReelId;
-        videoService.recordVideoView(activeReelId, { watchDuration: seconds, duration: seconds }).catch((e) => {
-          console.warn('[Reels] view not recorded', e?.message);
-        });
-      }
-    };
-    window.addEventListener('pagehide', flushReelView);
-    return () => {
-      window.removeEventListener('pagehide', flushReelView);
-      flushReelView();
-    };
-  }, [activeReelId, user?.uid]);
+  const recordReelView = useCallback((id, meta) => (
+    videoService.recordVideoView(id, meta).catch((e) => {
+      console.warn('[Reels] view not recorded', e?.message);
+    })
+  ), []);
+  useSparkViewTracking(activeReelId, user?.uid, recordReelView, 'Reels');
 
   if (feedLoading && reels.length === 0) {
     return (

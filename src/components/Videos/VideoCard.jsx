@@ -18,6 +18,7 @@ import { formatDuration, formatViewCount } from '../../utils/videoUtils';
 import { BRAND_GRADIENT, brandRgba } from '../../design-system/tokens.js';
 import useDoubleTap from '../../hooks/useDoubleTap.js';
 import useHlsVideo from '../../hooks/useHlsVideo.js';
+import { toggleSparkCreatorFollow } from '../../hooks/useSparkInteractions.js';
 import VideoQualitySelector from './VideoQualitySelector';
 import VideoSpeedSelector from './VideoSpeedSelector';
 import { toast } from 'sonner';
@@ -117,7 +118,7 @@ const VideoCard = memo(({
           .catch(() => {
             if (videoRef.current) {
               videoRef.current.muted = true;
-              videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+              videoRef.current.play().then(() => setIsPlaying(true)).catch(() => { /* ignore autoplay policy lock */ });
             }
           });
       }
@@ -142,7 +143,7 @@ const VideoCard = memo(({
     if (!videoRef.current) return;
 
     if (videoRef.current.paused) {
-      videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+      videoRef.current.play().then(() => setIsPlaying(true)).catch(() => { /* playback deferred until ready */ });
     } else {
       videoRef.current.pause();
       setIsPlaying(false);
@@ -228,7 +229,7 @@ const VideoCard = memo(({
     setCurrentTime(nextTime);
     if (duration > 0) setProgress((nextTime / duration) * 100);
     if (videoRef.current.paused) {
-      videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+      videoRef.current.play().then(() => setIsPlaying(true)).catch(() => { /* playback deferred until ready */ });
     }
   }, [duration]);
 
@@ -257,48 +258,32 @@ const VideoCard = memo(({
 
   const handleFollowClick = async (e) => {
     e.stopPropagation();
-    if (!user?.uid) {
-      toast.error('Sign in to follow creators');
-      return;
-    }
     const targetId = ownerId;
-    if (!targetId) {
-      toast.error('Cannot follow: creator unknown');
-      return;
-    }
-    if (targetId === user.uid) return;
-    if (followBusy) return;
+    if (followBusy || (targetId && user?.uid && targetId === user.uid)) return;
 
-    const prev = isFollowing;
-    const prevRequested = isRequested;
     setFollowBusy(true);
-    setIsFollowing(!prev && !prevRequested);
     try {
       const { getUserService } = await import('../../services/userService.js');
       const svc = getUserService();
-      const handle = video?.creator?.username ? `@${video.creator.username}` : 'this creator';
-      if (prev || prevRequested) {
-        if (prevRequested) await svc.cancelFollowRequest(user.uid, targetId);
-        else await svc.unfollowUser(user.uid, targetId);
-        setIsRequested(false);
-        toast.success(prevRequested ? 'Request withdrawn' : `Unfollowed ${handle}`);
-        onFollow?.(video?.creator, { isFollowing: false, requestStatus: null });
-      } else {
-        const res = await svc.followUser(user.uid, targetId);
-        if (res?.requested || res?.requestStatus === 'pending') {
-          setIsFollowing(false);
-          setIsRequested(true);
-          toast.success('Follow request sent');
-          onFollow?.(video?.creator, { isFollowing: false, requestStatus: 'pending' });
-        } else {
-          toast.success(`Following ${handle}`);
-          onFollow?.(video?.creator, { isFollowing: true, requestStatus: null });
-        }
+      const finalState = await toggleSparkCreatorFollow({
+        viewerUid: user?.uid,
+        creatorId: targetId,
+        creatorLabel: video?.creator?.username || video?.creator?.name,
+        wasFollowing: isFollowing,
+        wasRequested: isRequested,
+        applyState: (next) => {
+          setIsFollowing(Boolean(next.isFollowing));
+          setIsRequested(next.requestStatus === 'pending');
+        },
+        actions: {
+          follow: (uid, id) => svc.followUser(uid, id),
+          unfollow: (uid, id) => svc.unfollowUser(uid, id),
+          cancelRequest: (uid, id) => svc.cancelFollowRequest(uid, id),
+        },
+      });
+      if (finalState && onFollow) {
+        onFollow(video?.creator, finalState);
       }
-    } catch (err) {
-      setIsFollowing(prev);
-      setIsRequested(prevRequested);
-      toast.error(err?.message || 'Could not update follow status');
     } finally {
       setFollowBusy(false);
     }

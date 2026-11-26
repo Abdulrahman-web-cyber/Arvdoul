@@ -470,6 +470,10 @@ export function AuthProvider({ children }) {
         console.error('❌ Service initialization failed:', error);
         setError('Failed to initialize authentication services');
         setAuthError(error?.message || 'Service initialization error');
+        setAuthState(AuthState.ERROR);
+        setLoading(false);
+        setAuthInitialized(true);
+        setProfileResolved(true);
         debouncedToast('Authentication service unavailable. Please refresh.', 'error');
       }
     };
@@ -827,6 +831,9 @@ export function AuthProvider({ children }) {
         setAuthError('Google sign-in is taking too long to return. Check your connection, then retry sign-in in Chrome.');
       }
       setAuthInitialized(true);
+      setLoading(false);
+      setProfileResolved(true);
+      setAuthState((prev) => (prev === AuthState.BOOTING ? AuthState.UNAUTHENTICATED : prev));
     }, pendingGoogleRedirect ? 20000 : (storedSession ? 8000 : 3500));
     
     const setupAuthListener = async () => {
@@ -1047,6 +1054,7 @@ export function AuthProvider({ children }) {
         debouncedToast('Authentication system error', 'error');
         setLoading(false);
         setAuthInitialized(true);
+        setProfileResolved(true);
         setAuthState(AuthState.ERROR);
       }
     };

@@ -7,7 +7,7 @@ import { readLocalLikes, setLocalLike } from '../utils/localContentCache.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
-import { tokens, BRAND_GRADIENT } from '../design-system/tokens.js';
+import { tokens, BRAND_GRADIENT, brandRgba } from '../design-system/tokens.js';
 import firestoreService from '../services/firestoreService';
 import { trackAnalyticsEvent } from '../services/analyticsService';
 import commentService from '../services/commentService';
@@ -19,7 +19,7 @@ import notificationService from '../services/notificationsService';
 import { triggerHaptic } from '../utils/haptics';
 import { formatDistanceToNow } from 'date-fns';
 import { resolveActorName } from '../services/profileReadModel.js';
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, BarChart3, Coins, Send, AlertTriangle, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink, Handshake, Tag, Eye, ShieldAlert, FileText } from "lucide-react";
+import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, BarChart3, Coins, Send, AlertTriangle, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink, Handshake, Tag, Eye, ShieldAlert, FileText, Sparkles } from "lucide-react";
 import { FaHeart, FaWhatsapp, FaTelegram, FaTwitter, FaFacebook, FaInstagram } from 'react-icons/fa6';
 
 // Sub‑cards
@@ -38,30 +38,31 @@ import { LazyImage } from '../components/Shared/LazyImage';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
-// 1. DESIGN TOKENS – Perfectly rounded, compact, neon purple
+// 1. DESIGN TOKENS – Arvdoul liquid-glass surfaces
 const getDesignTokens = (theme) => {
   const isDark = theme === 'dark';
   return {
-    primary: isDark ? '#8B5CF6' : '#3B82F6',
-    secondary: isDark ? '#A78BFA' : '#60A5FA',
+    primary: isDark ? tokens.color.brand.violet : tokens.color.brand.blue,
+    secondary: isDark ? tokens.color.brand.indigo : tokens.color.brand.cyan,
     accent: '#FF2D55',
     gold: '#D4AF37',
-    surface: isDark ? '#121217' : '#FFFFFF',
-    border: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)',
-    text: isDark ? '#FFFFFF' : '#0F172A',
+    surface: isDark ? tokens.color.bg.darkElevated : tokens.color.bg.lightElevated,
+    border: isDark ? tokens.color.surface.borderDark : 'rgba(15,23,42,0.08)',
+    text: isDark ? tokens.color.text.primaryDark : '#0F172A',
     textMuted: isDark ? '#9CA3AF' : '#475569',
-    textSecondary: isDark ? '#6B7280' : '#64748B',
-    cardBg: isDark ? '#121217' : '#FFFFFF',
-    cardBgAlt: isDark ? '#1A1A24' : '#F8FAFC',
-    overlayBg: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.4)',
-    overlayPanel: isDark ? '#1f1f2b' : '#FFFFFF',
-    overlayPanelBorder: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+    textSecondary: isDark ? 'rgba(255,255,255,0.62)' : '#64748B',
+    cardBg: isDark ? 'rgba(8, 15, 46, 0.88)' : 'rgba(255, 255, 255, 0.92)',
+    cardBgAlt: isDark ? 'rgba(255, 255, 255, 0.04)' : tokens.color.bg.light,
+    overlayBg: isDark ? tokens.color.surface.overlay : 'rgba(15, 23, 42, 0.45)',
+    overlayPanel: isDark ? tokens.color.bg.darkElevated : tokens.color.bg.lightElevated,
+    overlayPanelBorder: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.1)',
     actionBarBg: BRAND_GRADIENT,
     shadowDirectional: isDark
-      ? '0 20px 35px -12px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.2)'
-      : '0 20px 35px -12px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.05)',
+      ? '0 20px 40px -14px rgba(2,4,18,0.75), 0 2px 10px rgba(2,4,18,0.35)'
+      : '0 18px 35px -12px rgba(15,23,42,0.12), 0 2px 8px rgba(15,23,42,0.05)',
     neonPurple: BRAND_GRADIENT,
-    actionBarGlow: '0 0 12px rgba(236, 72, 153, 0.4), 0 0 20px rgba(147, 51, 234, 0.3)',
+    followGlow: tokens.shadow.glow,
+    actionBarGlow: tokens.shadow.glowStrong,
   };
 };
 
@@ -123,7 +124,7 @@ class PostErrorBoundary extends React.Component {
 }
 
 // 5. SHARE SHEET (tap outside / ESC, download only if hasMedia)
-const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, postData, isCreator, hasMedia, navigate, currentUser, allowRepost = true, allowDownload = true }) => {
+const CardShareSheet = React.memo(({ url, content, onClose, onShared, tokens, postId, postData, isCreator, hasMedia, navigate, currentUser, allowRepost = true, allowDownload = true }) => {
   const sheetRef = useRef(null);
   const overlayRef = useRef(null);
 
@@ -138,19 +139,42 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
     if (e.target === overlayRef.current) onClose();
   };
 
+  const recordShare = useCallback((channel = 'share') => {
+    onShared?.(channel);
+    if (postId && currentUser?.uid) {
+      firestoreService.sharePost?.(postId, currentUser.uid).catch((e) => {
+        console.warn('[PostCard] share persistence skipped:', e?.message);
+      });
+    }
+  }, [postId, currentUser?.uid, onShared]);
+
   const copyLink = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(url);
+      recordShare('copy');
       toast.success('Link copied!');
       onClose();
     } catch { toast.error('Copy failed'); }
-  }, [url, onClose]);
+  }, [url, recordShare, onClose]);
 
-  const shareNative = useCallback(() => {
-    if (navigator.share) navigator.share({ title: content, url }).catch(() => copyLink());
-    else copyLink();
-    onClose();
-  }, [content, url, copyLink, onClose]);
+  const shareNative = useCallback(async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: content, url });
+        recordShare('native');
+        onClose();
+        return;
+      } catch (err) {
+        if (err?.name === 'AbortError') {
+          onClose();
+          return;
+        }
+        await copyLink();
+        return;
+      }
+    }
+    await copyLink();
+  }, [content, url, recordShare, copyLink, onClose]);
 
   const repost = useCallback(async () => {
     if (!postId) return;
@@ -163,28 +187,31 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
       if (res?.alreadyReposted) {
         toast.info('You already reposted this');
       } else {
-        toast.success('Reposted to your profile! 🔁');
+        recordShare('repost');
+        toast.success('Reposted to your profile!');
       }
     } catch (err) {
       toast.error(err?.message || 'Failed to repost');
     }
     onClose();
-  }, [postId, currentUser?.uid, onClose]);
+  }, [postId, currentUser?.uid, recordShare, onClose]);
 
   const quotePost = useCallback(() => {
     if (!postId || !navigate) return;
+    recordShare('quote');
     const snippet = (postData?.content || postData?.title || '').slice(0, 180);
     const params = new URLSearchParams();
     if (snippet) params.set('quote', snippet);
     navigate(`/create-post?${params.toString()}`);
     onClose();
-  }, [postId, postData, navigate, onClose]);
+  }, [postId, postData, navigate, recordShare, onClose]);
 
   const sendToFriends = useCallback(() => {
     if (!postId || !navigate) return;
+    recordShare('direct');
     navigate(`/messages/new?sharePost=${encodeURIComponent(postId)}`);
     onClose();
-  }, [postId, navigate, onClose]);
+  }, [postId, navigate, recordShare, onClose]);
 
   const downloadMedia = useCallback(async () => {
     if (!postData?.media?.length) {
@@ -304,7 +331,7 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
       <motion.div
         ref={sheetRef}
         initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
-        className="rounded-2xl shadow-2xl border max-w-[360px] w-full mx-4 p-5 max-h-[80vh] overflow-y-auto"
+        className="rounded-3xl shadow-2xl border backdrop-blur-2xl max-w-[360px] w-full mx-4 p-5 max-h-[80vh] overflow-y-auto"
         style={{ backgroundColor: tokens.overlayPanel, borderColor: tokens.overlayPanelBorder }}
         onClick={(e) => e.stopPropagation()}
         tabIndex={-1} role="dialog" aria-modal="true" aria-label="Share options"
@@ -316,11 +343,11 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
         <div className="grid grid-cols-4 gap-3 mb-4" role="listbox">
           <button type="button" onClick={shareNative} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><Share2 className="w-6 h-6 text-blue-500" /><span className="text-xs">Share</span></button>
           <button type="button" onClick={copyLink} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><Copy className="w-6 h-6" /><span className="text-xs">Copy</span></button>
-          <button type="button" onClick={() => { window.open(`https://wa.me/?text=${encodeURIComponent(content + ' ' + url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaWhatsapp className="w-6 h-6 text-green-500" /><span className="text-xs">WA</span></button>
-          <button type="button" onClick={() => { window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(content)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaTelegram className="w-6 h-6 text-blue-500" /><span className="text-xs">TG</span></button>
-          <button type="button" onClick={() => { window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(content)}&url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaTwitter className="w-6 h-6 text-sky-500" /><span className="text-xs">X</span></button>
-          <button type="button" onClick={() => { window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaFacebook className="w-6 h-6 text-blue-600" /><span className="text-xs">FB</span></button>
-          <button type="button" onClick={() => { navigator.clipboard.writeText(url); toast.success('Link copied – share in Instagram DM'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaInstagram className="w-6 h-6 text-pink-500" /><span className="text-xs">IG</span></button>
+          <a href={`https://wa.me/?text=${encodeURIComponent(content + ' ' + url)}`} target="_blank" rel="noopener noreferrer" onClick={() => { recordShare('whatsapp'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaWhatsapp className="w-6 h-6 text-green-500" /><span className="text-xs">WA</span></a>
+          <a href={`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(content)}`} target="_blank" rel="noopener noreferrer" onClick={() => { recordShare('telegram'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaTelegram className="w-6 h-6 text-blue-500" /><span className="text-xs">TG</span></a>
+          <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(content)}&url=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer" onClick={() => { recordShare('x'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaTwitter className="w-6 h-6 text-sky-500" /><span className="text-xs">X</span></a>
+          <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer" onClick={() => { recordShare('facebook'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaFacebook className="w-6 h-6 text-blue-600" /><span className="text-xs">FB</span></a>
+          <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(url); recordShare('instagram'); toast.success('Link copied – share in Instagram DM'); } catch { toast.error('Copy failed'); } onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaInstagram className="w-6 h-6 text-pink-500" /><span className="text-xs">IG</span></button>
           {allowRepost && (
             <button type="button" onClick={repost} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><RefreshCw className="w-6 h-6 text-green-500" /><span className="text-xs">Repost</span></button>
           )}
@@ -502,6 +529,16 @@ const engagementReducer = (state, action) => {
       const delta = newLiked && !state.liked ? 1 : (!newLiked && state.liked ? -1 : 0);
       return { ...state, reaction: action.payload, liked: newLiked, likeCount: state.likeCount == null ? null : Math.max(0, state.likeCount + delta) };
     }
+    case 'HYDRATE_VIEWER_STATE': {
+      const liked = Boolean(action.payload?.liked);
+      const reaction = action.payload?.reaction ?? (liked ? (state.reaction || '👍') : null);
+      return {
+        ...state,
+        liked,
+        reaction,
+        saved: Boolean(action.payload?.saved),
+      };
+    }
     case 'SET_SAVED':
       return { ...state, saved: action.payload };
     case 'SET_FOLLOW_STATE':
@@ -614,15 +651,24 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         if (res?.isFollowing) dispatch({ type: 'SET_FOLLOW_STATE', payload: 'following' });
         else if (res?.requestStatus === 'pending') dispatch({ type: 'SET_FOLLOW_STATE', payload: 'requested' });
       })
-      .catch(() => {});
+      .catch(() => { /* ignore transient follow lookup failure */ });
     return () => { cancelled = true; };
   }, [currentUser?.uid, post.authorId]);
 
+  useEffect(() => {
+    dispatch({
+      type: 'UPDATE_STATS',
+      payload: {
+        likes: post.stats?.likes,
+        comments: post.stats?.comments,
+        shares: post.stats?.shares,
+        gifts: post.stats?.gifts,
+      },
+    });
+  }, [post.stats?.likes, post.stats?.comments, post.stats?.shares, post.stats?.gifts]);
+
   // Hydrate the viewer's real like/save/reaction state from their own
-  // subcollection docs. The post document carries none of these, so without
-  // this read the heart/bookmark only reflected an in-session or device-local
-  // action. The local like registry is the offline source of truth and wins
-  // until the server read resolves.
+  // subcollection docs without double-counting the server's like total.
   useEffect(() => {
     const uid = currentUser?.uid;
     if (!uid || !post.id) return undefined;
@@ -630,13 +676,16 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     firestoreService.getPostViewerState?.(post.id, uid)
       .then((state) => {
         if (cancelled || !state) return;
-        if (state.liked || readLocalLikes(uid)[post.id]) {
-          dispatch({ type: 'SET_LIKED', payload: true });
-        }
-        if (state.saved) dispatch({ type: 'SET_SAVED', payload: true });
-        if (state.reaction) dispatch({ type: 'SET_REACTION', payload: state.reaction });
+        dispatch({
+          type: 'HYDRATE_VIEWER_STATE',
+          payload: {
+            liked: Boolean(state.liked || readLocalLikes(uid)[post.id]),
+            saved: Boolean(state.saved),
+            reaction: state.reaction ?? null,
+          },
+        });
       })
-      .catch(() => {});
+      .catch(() => { /* ignore transient viewer-state hydration failure */ });
     return () => { cancelled = true; };
   }, [currentUser?.uid, post.id]);
 
@@ -1182,7 +1231,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       // repeat gift. Omitting the key lets the service mint a fresh one.
       const res = await monetizationService.sendGift(currentUser.uid, post.id, giftType);
       if (res?.success) {
-        dispatch({ type: 'UPDATE_STATS', payload: { gifts: engagementRef.current.giftCount + 1 } });
+        dispatch({ type: 'UPDATE_STATS', payload: { gifts: (engagementRef.current.giftCount ?? 0) + 1 } });
         toast.success(`Sent ${giftType}!`);
         setUi(prev => ({ ...prev, showGiftPicker: false }));
       } else {
@@ -1259,7 +1308,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       exit={{ opacity: 0, y: 12 }}
       transition={{ type: "spring", damping: 26, stiffness: 280 }}
       whileHover={{ scale: 1.004, transition: { duration: 0.2 } }}
-      className="relative overflow-hidden my-2 rounded-3xl border shadow-lg"
+      className="relative overflow-hidden my-2 rounded-3xl border shadow-lg backdrop-blur-xl"
       style={{
         backgroundColor: tokens.cardBg,
         borderColor: tokens.border,
@@ -1271,7 +1320,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {/* HEADER – larger avatar (w-10 h-10), compact padding */}
       <div className="p-3 flex items-start gap-3">
         <button type="button" onClick={() => navigate(`/profile/${post.authorId}`)} className="relative flex-shrink-0" aria-label={`Visit ${post.authorName}'s profile`}>
-          <div className={`absolute -inset-0.5 rounded-full ${isPremium ? 'bg-gradient-to-r from-amber-400 to-yellow-600' : isCreator ? 'bg-gradient-to-r from-purple-400 to-pink-600' : 'bg-transparent'}`} />
+          <div className={`absolute -inset-0.5 rounded-full ${isPremium ? 'bg-gradient-to-r from-amber-400 to-yellow-600' : isCreator ? 'bg-arvdoul-gradient' : 'bg-transparent'}`} />
           <LazyImage src={userService.getAvatarUrl(post.authorId, post.authorName, post.authorPhoto)} alt={post.authorName} className="relative w-10 h-10 rounded-full object-cover border-2" style={{ borderColor: tokens.border }} />
           {isPremium && <Crown className="absolute -top-1 -right-1 w-3 h-3 text-yellow-400" />}
           {isVerified && <CheckCircle className="absolute -bottom-0.5 -right-0.5 w-3 h-3 text-cyan-400" />}
@@ -1319,9 +1368,9 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
               whileTap={{ scale: 0.96 }}
               className="px-2 py-0.5 rounded-full text-xs font-semibold shadow-md transition-all"
               style={{
-                background: engagement.followState === 'none' ? tokens.neonPurple : (theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'),
-                boxShadow: engagement.followState === 'none' ? `0 0 6px rgba(236,72,153,0.4), 0 0 8px rgba(147,51,234,0.2)` : 'none',
-                color: engagement.followState === 'none' ? '#fff' : (theme === 'dark' ? '#fff' : '#333'),
+                background: engagement.followState === 'none' ? tokens.neonPurple : (theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'),
+                boxShadow: engagement.followState === 'none' ? tokens.followGlow : 'none',
+                color: engagement.followState === 'none' ? '#fff' : (theme === 'dark' ? '#fff' : '#0F172A'),
               }}
               aria-label={engagement.followState === 'following' ? `Unfollow ${post.authorName}` : engagement.followState === 'requested' ? `Follow request pending for ${post.authorName}` : `Follow ${post.authorName}`}
             >
@@ -1664,7 +1713,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
                 aria-label={engagement.liked ? 'Unlike' : 'Like'}
                 aria-pressed={engagement.liked}
               >
-                {engagement.reaction ? <span className="text-base">{engagement.reaction}</span> : <Heart className="w-4 h-4" style={{ color: engagement.liked ? '#ef4444' : 'white' }} />}
+                {engagement.reaction ? <span className="text-base">{engagement.reaction}</span> : <Heart className={cn('w-4 h-4', engagement.liked && 'fill-red-500')} style={{ color: engagement.liked ? '#ef4444' : 'white' }} />}
                 <span className="text-xs text-white/90">Like</span>
                 {engagement.likeCount > 0 && (
                   <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-red-500 rounded-full flex items-center justify-center shadow-sm tabular-nums">
@@ -1682,11 +1731,11 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
                   }
                   setUi(prev => ({ ...prev, showReactionsPicker: !prev.showReactionsPicker }));
                 }}
-                className="ml-1 p-0.5 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition text-xs"
+                className="ml-1 p-0.5 rounded-full hover:bg-white/10 text-white/75 hover:text-white transition text-xs"
                 title="Reactions"
                 aria-label="Reactions"
               >
-                ✨
+                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
             </div>
           )}
@@ -1736,7 +1785,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
               aria-label={engagement.saved ? 'Unsave' : 'Save'}
               aria-pressed={engagement.saved}
             >
-              <Bookmark className="w-4 h-4" />
+              <Bookmark className={cn('w-4 h-4', engagement.saved && 'fill-current')} />
               <span className="text-xs">Save</span>
             </button>
           )}
@@ -1761,7 +1810,28 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       <AnimatePresence>
         {ui.showHeartBurst && <DoubleTapHeart position={ui.tapPosition} onFinish={() => setUi(prev => ({ ...prev, showHeartBurst: false }))} prefersReducedMotion={prefersReducedMotion} />}
         {ui.showReactionsPicker && canReact && <CardReactionsPicker onSelect={handleReactionSelect} onClose={closeReactionsPicker} tokens={tokens} targetRect={reactionsTargetRect} />}
-        {ui.showShareSheet && canShare && <CardShareSheet url={`${typeof window !== 'undefined' ? window.location.origin : ''}${isVideo ? `/sparks/${post.canonicalPostId || post.id}` : `/post/${post.id}`}`} content={post.content?.substring(0, 100) || 'Check out this post'} onClose={() => setUi(prev => ({ ...prev, showShareSheet: false }))} tokens={tokens} postId={post.id} postData={post} isCreator={isCreator} hasMedia={hasMedia} navigate={navigate} currentUser={currentUser} allowRepost={canRepost} allowDownload={canDownload} />}
+        {ui.showShareSheet && canShare && (
+          <CardShareSheet
+            url={`${typeof window !== 'undefined' ? window.location.origin : ''}${isVideo ? `/sparks/${post.canonicalPostId || post.id}` : `/post/${post.id}`}`}
+            content={post.content?.substring(0, 100) || 'Check out this post'}
+            onClose={() => setUi(prev => ({ ...prev, showShareSheet: false }))}
+            onShared={() => {
+              dispatch({
+                type: 'UPDATE_STATS',
+                payload: { shares: engagementRef.current.shareCount == null ? 1 : engagementRef.current.shareCount + 1 },
+              });
+            }}
+            tokens={tokens}
+            postId={post.id}
+            postData={post}
+            isCreator={isCreator}
+            hasMedia={hasMedia}
+            navigate={navigate}
+            currentUser={currentUser}
+            allowRepost={canRepost}
+            allowDownload={canDownload}
+          />
+        )}
         {ui.showGiftPicker && (
           <CardGiftPicker
             tokens={tokens}
@@ -1777,7 +1847,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
 }
 
 // Gift picker — real coin amounts, server-validated via sendGift
-const CardGiftPicker = ({ onSelect, onClose, sending, balance, tokens }) => {
+const CardGiftPicker = ({ onSelect, onClose, sending, balance, tokens: cardTokens }) => {
   const [selected, setSelected] = useState(VIRTUAL_GIFTS[0]);
   const canAfford = balance == null || balance >= selected.coins;
   return (
@@ -1789,17 +1859,17 @@ const CardGiftPicker = ({ onSelect, onClose, sending, balance, tokens }) => {
       <motion.div
         initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-5 border"
-        style={{ backgroundColor: tokens.cardBg, borderColor: tokens.border }}
+        className="w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-5 border backdrop-blur-2xl shadow-2xl"
+        style={{ backgroundColor: cardTokens.overlayPanel, borderColor: cardTokens.overlayPanelBorder }}
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold" style={{ color: tokens.text }}>Send a Gift</h3>
-          <button type="button" onClick={onClose} disabled={sending} className="p-1" style={{ color: tokens.textSecondary }} aria-label="Close">
+          <h3 className="font-bold" style={{ color: cardTokens.text }}>Send a Gift</h3>
+          <button type="button" onClick={onClose} disabled={sending} className="p-1" style={{ color: cardTokens.textSecondary }} aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="flex items-center justify-between mb-4 text-sm">
-          <span style={{ color: tokens.textSecondary }}>Your balance</span>
+          <span style={{ color: cardTokens.textSecondary }}>Your balance</span>
           <span className="font-bold text-amber-500 flex items-center gap-1 tabular-nums">
             <Coins className="w-4 h-4" /> {balance == null ? '—' : balance.toLocaleString()}
           </span>
@@ -1812,13 +1882,16 @@ const CardGiftPicker = ({ onSelect, onClose, sending, balance, tokens }) => {
               onClick={() => setSelected(gift)}
               className="rounded-2xl p-3 border text-center transition-colors"
               style={{
-                borderColor: selected.type === gift.type ? '#8B5CF6' : tokens.border,
-                backgroundColor: selected.type === gift.type ? 'rgba(139,92,246,0.15)' : 'transparent',
+                borderColor: selected.type === gift.type ? tokens.color.brand.violet : cardTokens.border,
+                backgroundColor: selected.type === gift.type ? brandRgba(0.15) : 'transparent',
               }}
             >
               <div className="text-2xl mb-1">{gift.emoji}</div>
-              <div className="text-xs font-semibold truncate" style={{ color: tokens.text }}>{gift.name}</div>
-              <div className="text-xs font-bold text-amber-500 tabular-nums">{gift.coins} 🪙</div>
+              <div className="text-xs font-semibold truncate" style={{ color: cardTokens.text }}>{gift.name}</div>
+              <div className="text-xs font-bold text-amber-500 tabular-nums inline-flex items-center justify-center gap-1">
+                <span>{gift.coins}</span>
+                <Coins className="w-3 h-3" aria-hidden="true" />
+              </div>
             </button>
           ))}
         </div>

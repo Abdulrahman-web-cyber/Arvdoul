@@ -16,9 +16,14 @@ import VideoTopBar from './VideoTopBar';
 import videoService from '../../services/videoService';
 import settingsService from '../../services/settingsService';
 import { Loader2, RefreshCw, AlertCircle } from 'lucide-react';
-import { toast } from 'sonner';
 import PropTypes from 'prop-types';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import {
+  useSparkViewTracking,
+  useSparkCreatorFollowMap,
+  toggleSparkLike,
+  toggleSparkSave,
+} from '../../hooks/useSparkInteractions.js';
 
 /**
  * VideoFeed - Vertical snap Spark feed with gesture navigation and rich overlays
@@ -45,8 +50,6 @@ const VideoFeed = memo(({
     setCurrentIndex: storeSetIndex,
     updateVideo,
     removeVideo,
-    addToWatchLater,
-    removeFromWatchLater,
     notInterestedIds,
   } = useVideoStore();
   const [currentIndex, setCurrentIndex] = useState(() => Math.max(0, storeIndex || 0));
@@ -65,8 +68,6 @@ const VideoFeed = memo(({
     return rawVideos.filter((v) => v?.id && !blocked.has(v.id));
   }, [rawVideos, notInterestedIds]);
 
-  const videosSignature = useMemo(() => videos.map((v) => v.id).join(','), [videos]);
-
   // Restore scroll position when returning from GridView with a selected video index.
   useEffect(() => {
     if (!containerRef.current || videos.length === 0) return;
@@ -78,55 +79,27 @@ const VideoFeed = memo(({
     }
   }, [storeIndex, videos.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const viewStartRef = useRef(null);
-  const flushedViewRef = useRef(null);
   const activeVideoId = videos[currentIndex]?.id;
-  useEffect(() => {
-    if (!activeVideoId || !user?.uid) return undefined;
-    viewStartRef.current = Date.now();
-    flushedViewRef.current = null;
-    const flushView = () => {
-      if (!viewStartRef.current || flushedViewRef.current === activeVideoId) return;
-      const seconds = Math.round((Date.now() - viewStartRef.current) / 1000);
-      viewStartRef.current = null;
-      if (seconds >= 1) {
-        flushedViewRef.current = activeVideoId;
-        videoService.recordVideoView(activeVideoId, { watchDuration: seconds, duration: seconds }).catch((e) => {
-          console.warn('[VideoFeed] view not recorded', e?.message);
-        });
-      }
-    };
-    window.addEventListener('pagehide', flushView);
-    return () => {
-      window.removeEventListener('pagehide', flushView);
-      flushView();
-    };
-  }, [activeVideoId, user?.uid]);
+  useSparkViewTracking(
+    activeVideoId,
+    user?.uid,
+    (id, meta) => videoService.recordVideoView(id, meta),
+    'VideoFeed'
+  );
 
-  const [followStates, setFollowStates] = useState(() => new Map());
-  useEffect(() => {
-    if (!user?.uid || videos.length === 0) {
-      setFollowStates(new Map());
-      return undefined;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const creatorIds = [...new Set(videos.map((v) => v.userId || v.authorId || v.creator?.id).filter(Boolean))];
-        if (creatorIds.length === 0) return;
-        const { getUserService } = await import('../../services/userService.js');
-        const states = await getUserService().getFollowStates(user.uid, creatorIds);
-        if (cancelled) return;
-        setFollowStates(new Map([...states].map(([id, s]) => [id, {
-          isFollowing: Boolean(s?.isFollowing),
-          requestStatus: s?.requestStatus ?? null,
-        }])));
-      } catch (err) {
-        console.warn('Could not resolve follow state:', err);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user?.uid, videosSignature]); // eslint-disable-line react-hooks/exhaustive-deps
+  const creatorIds = useMemo(
+    () => videos.map((v) => v.userId || v.authorId || v.creator?.id).filter(Boolean),
+    [videos]
+  );
+  const loadFollowStates = useCallback(async (uid, ids) => {
+    const { getUserService } = await import('../../services/userService.js');
+    return getUserService().getFollowStates(uid, ids);
+  }, []);
+  const { followStates, setCreatorFollowState } = useSparkCreatorFollowMap(
+    creatorIds,
+    user?.uid,
+    loadFollowStates
+  );
 
   const currentVideo = videos[currentIndex] || videos[0] || null;
   const activeModalVideo = selectedVideo
@@ -235,34 +208,24 @@ const VideoFeed = memo(({
     delta: 50,
   });
 
-  const handleLike = useCallback(async (video) => {
+  const handleLike = useCallback((video) => {
     if (!video) return;
-    if (!user?.uid) {
-      toast.error('Sign in to like Sparks');
-      return;
-    }
-    const wasLiked = video.isLiked;
-    const knownLikes = typeof video.likes === 'number' ? video.likes : null;
-    const shift = (base) => (base === null ? null : Math.max(0, base + (wasLiked ? -1 : 1)));
-    const withFormatted = (n) => (
-      n === null
+    const applyLikeState = ({ isLiked, likes }) => {
+      const formatted = likes === null
         ? { likes: null, likesFormatted: null, stats: { ...(video.stats || {}), likes: null } }
-        : { likes: n, likesFormatted: n > 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}`, stats: { ...(video.stats || {}), likes: n } }
-    );
-
-    updateVideo(video.id, { isLiked: !wasLiked, ...withFormatted(shift(knownLikes)) });
-
-    try {
-      const res = await videoService.likeVideo(video.id);
-      const serverLiked = res?.action ? res.action === 'liked' : !wasLiked;
-      const serverLikes = knownLikes === null || serverLiked === wasLiked
-        ? knownLikes
-        : Math.max(0, knownLikes + (serverLiked ? 1 : -1));
-      updateVideo(video.id, { isLiked: serverLiked, ...withFormatted(serverLikes) });
-    } catch {
-      updateVideo(video.id, { isLiked: wasLiked, ...withFormatted(knownLikes) });
-      toast.error('Could not update like');
-    }
+        : {
+          likes,
+          likesFormatted: likes > 1000 ? `${(likes / 1000).toFixed(1)}K` : `${likes}`,
+          stats: { ...(video.stats || {}), likes },
+        };
+      updateVideo(video.id, { isLiked, ...formatted });
+    };
+    toggleSparkLike({
+      video,
+      viewerUid: user?.uid,
+      likeFn: (id) => videoService.likeVideo(id),
+      applyState: applyLikeState,
+    });
   }, [updateVideo, user?.uid]);
 
   const handleComment = useCallback((video) => {
@@ -275,48 +238,23 @@ const VideoFeed = memo(({
     setShowShareSheet(true);
   }, []);
 
-  const handleSave = useCallback(async (video) => {
+  const handleSave = useCallback((video) => {
     if (!video) return;
-    if (!user?.uid) {
-      toast.error('Sign in to save Sparks');
-      return;
-    }
-    const wasSaved = video.isSaved;
-    const knownSaves = typeof video.saves === 'number'
-      ? video.saves
-      : (typeof video.stats?.saves === 'number' ? video.stats.saves : null);
-    const shiftSaves = (base) => (base === null ? null : Math.max(0, base + (wasSaved ? -1 : 1)));
-    const nextSaves = shiftSaves(knownSaves);
-    updateVideo(video.id, {
-      isSaved: !wasSaved,
-      saves: nextSaves,
-      stats: { ...(video.stats || {}), saves: nextSaves },
-    });
-    if (!wasSaved) {
-      addToWatchLater(video);
-      toast.success('Saved to your collection');
-    } else {
-      removeFromWatchLater(video.id);
-      toast.info('Removed from saved');
-    }
-
-    try {
-      if (wasSaved) {
-        await videoService.unsaveVideo(video.id, user.uid);
-      } else {
-        await videoService.saveVideo(video.id, user.uid);
-      }
-    } catch (err) {
+    const applySaveState = ({ isSaved, saves }) => {
       updateVideo(video.id, {
-        isSaved: wasSaved,
-        saves: knownSaves,
-        stats: { ...(video.stats || {}), saves: knownSaves },
+        isSaved,
+        saves,
+        stats: { ...(video.stats || {}), saves },
       });
-      if (wasSaved) addToWatchLater(video);
-      else removeFromWatchLater(video.id);
-      toast.error(err?.message || 'Could not sync save');
-    }
-  }, [updateVideo, addToWatchLater, removeFromWatchLater, user?.uid]);
+    };
+    toggleSparkSave({
+      video,
+      viewerUid: user?.uid,
+      saveFn: (id, uid) => videoService.saveVideo(id, uid),
+      unsaveFn: (id, uid) => videoService.unsaveVideo(id, uid),
+      applyState: applySaveState,
+    });
+  }, [updateVideo, user?.uid]);
 
   const handleGift = useCallback((video) => {
     setSelectedVideo(video);
@@ -387,11 +325,7 @@ const VideoFeed = memo(({
                 onFollow={(_creator, nextState) => {
                   const creatorId = video.userId || video.authorId || video.creator?.id;
                   if (!creatorId || !nextState) return;
-                  setFollowStates((prev) => {
-                    const next = new Map(prev);
-                    next.set(creatorId, nextState);
-                    return next;
-                  });
+                  setCreatorFollowState(creatorId, nextState);
                 }}
               />
             </div>
@@ -404,7 +338,7 @@ const VideoFeed = memo(({
           <div className={`h-24 flex items-center justify-center backdrop-blur-xl ${
             isDark ? 'bg-black/80' : 'bg-[#F6F8FC]/90'
           }`}>
-            <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+            <Loader2 className="w-8 h-8 text-arvdoul-purple animate-spin" />
           </div>
         )}
       </div>
@@ -433,7 +367,7 @@ const VideoFeed = memo(({
               <div className={`w-14 h-14 rounded-full flex items-center justify-center border ${
                 isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-sm'
               }`}>
-                <div className="w-6 h-6 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+                <div className="w-6 h-6 rounded-full border-2 border-arvdoul-purple border-t-transparent animate-spin" />
               </div>
             </div>
 

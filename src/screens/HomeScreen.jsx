@@ -323,6 +323,42 @@ const feedReducer = (state, action) => {
         order: state.order,
       };
     }
+    case 'ADJUST_POST_STAT': {
+      const { postId, field, delta } = action.payload || {};
+      const existing = state.byId[postId];
+      if (!existing || !field || typeof delta !== 'number') return state;
+      const currentVal = existing.stats?.[field] ?? 0;
+      const nextVal = Math.max(0, currentVal + delta);
+      return {
+        byId: {
+          ...state.byId,
+          [postId]: {
+            ...existing,
+            stats: { ...(existing.stats || {}), [field]: nextVal },
+          },
+        },
+        order: state.order,
+      };
+    }
+    case 'REMOVE_POST': {
+      const { postId, authorId } = action.payload || {};
+      if (!postId && !authorId) return state;
+      const newById = { ...state.byId };
+      const newOrder = [];
+      for (const id of state.order) {
+        const item = newById[id];
+        if (!item) continue;
+        const removeMatch =
+          (postId && id === postId) ||
+          (authorId && (item.authorId === authorId || item.userId === authorId || item.ownerId === authorId));
+        if (removeMatch) {
+          delete newById[id];
+        } else {
+          newOrder.push(id);
+        }
+      }
+      return { byId: newById, order: newOrder };
+    }
     case 'REPLACE_POST_ID': {
       const { oldId, newId } = action.payload;
       if (!oldId || !newId || !state.byId[oldId]) return state;
@@ -747,12 +783,12 @@ export default function HomeScreen() {
   const rewardTimerRef = useRef(null);
 
   const FEED_CATEGORIES = useMemo(() => [
-    { id: 'foryou', label: '✨ For You', desc: 'Recommended posts tailored to you' },
-    { id: 'following', label: '👥 Following', desc: 'Posts exclusively from creators you follow' },
-    { id: 'discover', label: '🔍 Discover', desc: 'Explore trending voices and viral creators' },
-    { id: 'trending', label: '🔥 Trending', desc: 'Top momentum posts across Arvdoul' },
-    { id: 'media', label: '🎬 Media & Clips', desc: 'High-res photos and video sparks' },
-    { id: 'spaces', label: '🎙️ Live Spaces', desc: 'Real-time live audio rooms and podcasts', action: () => navigate('/spaces') },
+    { id: 'foryou', label: 'For You', desc: 'Recommended posts tailored to you' },
+    { id: 'following', label: 'Following', desc: 'Posts exclusively from creators you follow' },
+    { id: 'discover', label: 'Discover', desc: 'Explore trending voices and viral creators' },
+    { id: 'trending', label: 'Trending', desc: 'Top momentum posts across Arvdoul' },
+    { id: 'media', label: 'Media & Clips', desc: 'High-res photos and video sparks' },
+    { id: 'spaces', label: 'Live Spaces', desc: 'Real-time live audio rooms and podcasts', action: () => navigate('/spaces') },
   ], [navigate]);
 
   const activeCategoryObj = useMemo(() => {
@@ -1754,7 +1790,7 @@ export default function HomeScreen() {
                     if (isTrulyIdle) {
                       return (
                         <p className="text-center text-gray-400 dark:text-gray-600 text-sm py-8">
-                          You're all caught up ✨
+                          You're all caught up
                         </p>
                       );
                     }
@@ -1767,10 +1803,57 @@ export default function HomeScreen() {
         </div>
 
         {showComments && activePost && (
-          <CommentsDrawer isOpen={showComments} onClose={() => setShowComments(false)} post={activePost} currentUser={user} theme={theme} />
+          <CommentsDrawer
+            isOpen={showComments}
+            onClose={() => setShowComments(false)}
+            post={activePost}
+            currentUser={user}
+            theme={theme}
+            onCommentAdded={(targetPostId) => {
+              dispatchFeed({ type: 'ADJUST_POST_STAT', payload: { postId: targetPostId, field: 'comments', delta: 1 } });
+              setActivePost((prev) =>
+                prev && prev.id === targetPostId
+                  ? { ...prev, stats: { ...(prev.stats || {}), comments: (prev.stats?.comments ?? 0) + 1 } }
+                  : prev
+              );
+            }}
+            onCommentDeleted={(targetPostId) => {
+              dispatchFeed({ type: 'ADJUST_POST_STAT', payload: { postId: targetPostId, field: 'comments', delta: -1 } });
+              setActivePost((prev) =>
+                prev && prev.id === targetPostId
+                  ? { ...prev, stats: { ...(prev.stats || {}), comments: Math.max(0, (prev.stats?.comments ?? 1) - 1) } }
+                  : prev
+              );
+            }}
+          />
         )}
         {showOptions && activePost && (
-          <PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={activePost} currentUser={user} theme={theme} onAnalytics={trackAnalyticsEvent} />
+          <PostOptionsDrawer
+            isOpen={showOptions}
+            onClose={() => setShowOptions(false)}
+            post={activePost}
+            currentUser={user}
+            theme={theme}
+            onAnalytics={trackAnalyticsEvent}
+            onPostDeleted={(postId) => {
+              dispatchFeed({ type: 'REMOVE_POST', payload: { postId } });
+              setActivePost((prev) => (prev?.id === postId ? null : prev));
+            }}
+            onPostRemoved={(postId, meta) => {
+              dispatchFeed({ type: 'REMOVE_POST', payload: { postId, authorId: meta?.authorId } });
+              setActivePost((prev) => (prev?.id === postId ? null : prev));
+            }}
+            onPostRestored={(restoredPost) => {
+              if (restoredPost?.id) {
+                dispatchFeed({ type: 'PREPEND_FEED', payload: [hydratePost(restoredPost)] });
+                setActivePost(restoredPost);
+              }
+            }}
+            onPostUpdated={(postId, updates) => {
+              dispatchFeed({ type: 'UPDATE_POST', payload: { postId, updates } });
+              setActivePost((prev) => (prev && prev.id === postId ? { ...prev, ...updates } : prev));
+            }}
+          />
         )}
 
         {/* Sponsored Reward Ad Modal for In-Feed Monetization */}

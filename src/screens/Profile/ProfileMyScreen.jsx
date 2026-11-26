@@ -812,6 +812,12 @@ export default function ProfileMyScreen() {
     return results;
   }, [markSlice]);
 
+  const authUserProfileRef = useRef(authUserProfile);
+  authUserProfileRef.current = authUserProfile;
+  const authUserProfileKey = authUserProfile
+    ? (asUid(authUserProfile.uid || authUserProfile.id) || '__self__')
+    : '';
+
   // Initial load and every perspective change share this single effect. Rapid switching is safe:
   // each run bumps the generation, so earlier runs can no longer update the screen.
   useEffect(() => {
@@ -842,19 +848,20 @@ export default function ProfileMyScreen() {
       loadContext(currentUserId, viewAs, gen, { quiet: true });
       return;
     }
+    const latestAuthProfile = authUserProfileRef.current;
     const authProfileMatchesOwner = Boolean(
       viewAs === 'owner' &&
-      authUserProfile &&
-      (!authUserProfile.uid || authUserProfile.uid === currentUserId) &&
-      (!authUserProfile.id || authUserProfile.id === currentUserId) &&
-      snap.hydrateOwnerSnapshot?.(currentUserId, authUserProfile)
+      latestAuthProfile &&
+      (!latestAuthProfile.uid || latestAuthProfile.uid === currentUserId) &&
+      (!latestAuthProfile.id || latestAuthProfile.id === currentUserId) &&
+      snap.hydrateOwnerSnapshot?.(currentUserId, latestAuthProfile)
     );
     if (authProfileMatchesOwner) {
       setLoadState({
         key,
         slices: {
           profile: 'ok',
-          ...(typeof authUserProfile.level === 'number' ? { level: 'ok' } : {}),
+          ...(typeof latestAuthProfile.level === 'number' ? { level: 'ok' } : {}),
         },
       });
       loadContext(currentUserId, viewAs, gen, { quiet: true });
@@ -862,7 +869,7 @@ export default function ProfileMyScreen() {
     }
     setLoadState({ key, slices: EMPTY_SLICES });
     loadContext(currentUserId, viewAs, gen);
-  }, [currentUserId, viewAs, authUserProfile, loadContext]);
+  }, [currentUserId, viewAs, authUserProfileKey, loadContext]);
 
   // Analytics load separately so a timeframe change never re-fetches profile or posts. Owner only.
   useEffect(() => {

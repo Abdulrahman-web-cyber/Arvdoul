@@ -8,11 +8,9 @@ import { useAnalytics } from "../../hooks/useAnalytics.js";
 import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
 import { Search, Menu, X, ChevronLeft, SlidersHorizontal, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2, Camera, Calendar, Settings, WifiOff, Flame, LayoutGrid, Smartphone, Sparkles } from "lucide-react";
-import { useAppStore } from "../../store/appStore";
-import { useAuth } from "../../context/AuthContext";
 import { resolveActorName } from "../../services/profileReadModel.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
-import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, brandHexRgba, brandRgba, tokens } from '../../design-system/tokens.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
 import { backgroundSyncService } from '../../services/BackgroundSyncService.js';
 import { subscribeSyncStatus } from '../../offline/syncEngine.js';
@@ -28,16 +26,17 @@ const SPRING = {
 
 const TOKENS = {
   dark: {
-    bg: "#03071B",
+    bg: tokens.color.bg.dark,
     surface: "rgba(255, 255, 255, 0.06)",
-    border: "rgba(255, 255, 255, 0.08)",
+    glassBg: `linear-gradient(155deg, ${brandHexRgba(tokens.color.bg.darkElevated, 0.88)} 0%, ${brandHexRgba(tokens.color.bg.dark, 0.92)} 100%)`,
+    border: "rgba(255, 255, 255, 0.11)",
     textPrimary: "#FFFFFF",
-    textSecondary: "rgba(255, 255, 255, 0.7)",
+    textSecondary: "rgba(255, 255, 255, 0.72)",
     brandGradient:
       BRAND_GRADIENT,
     brandLine:
       `linear-gradient(90deg, ${tokens.color.brand.pink} 0%, ${tokens.color.brand.violet} 34%, ${tokens.color.brand.indigo} 66%, ${tokens.color.brand.cyan} 100%)`,
-    shadow: "0 20px 48px rgba(0, 0, 0, 0.5)",
+    shadow: `0 20px 48px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 28px ${brandRgba(0.14)}`,
     iconPrimary: "#FFFFFF",
     iconSecondary: "rgba(255,255,255,0.82)",
     iconActive: "#FFFFFF",
@@ -46,22 +45,23 @@ const TOKENS = {
     iconRing: brandRgba(0.5),
   },
   light: {
-    bg: "#F6F8FC",
+    bg: tokens.color.bg.light,
     surface: "rgba(255, 255, 255, 0.85)",
-    border: "rgba(0, 0, 0, 0.08)",
+    glassBg: `linear-gradient(155deg, rgba(255, 255, 255, 0.94) 0%, ${brandHexRgba(tokens.color.bg.light, 0.88)} 100%)`,
+    border: "rgba(15, 23, 42, 0.09)",
     textPrimary: "#111827",
-    textSecondary: "rgba(0, 0, 0, 0.6)",
+    textSecondary: "rgba(17, 24, 39, 0.62)",
     brandGradient:
       BRAND_GRADIENT,
     brandLine:
       `linear-gradient(90deg, ${tokens.color.brand.pink} 0%, ${tokens.color.brand.violet} 34%, ${tokens.color.brand.indigo} 66%, ${tokens.color.brand.cyan} 100%)`,
-    shadow: "0 18px 40px rgba(17, 24, 39, 0.09)",
+    shadow: `0 16px 38px rgba(17, 24, 39, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 22px ${brandRgba(0.08)}`,
     iconPrimary: "#111827",
     iconSecondary: "rgba(17,24,39,0.78)",
     iconActive: tokens.color.brand.indigo,
-    iconBg: "rgba(255,255,255,0.6)",
-    iconBorder: "rgba(0,0,0,0.08)",
-    iconRing: brandRgba(0.3),
+    iconBg: "rgba(255,255,255,0.72)",
+    iconBorder: "rgba(15,23,42,0.08)",
+    iconRing: brandRgba(0.32),
   },
 };
 
@@ -75,12 +75,18 @@ const ROUTES = {
 /* Scroll State Hook – works with any scroll container                        */
 /* ========================================================================== */
 
-function useScrollState(scrollContainerRef) {
+function useScrollState(scrollContainerRef, resetKey) {
   const [scrollState, setScrollState] = useState("expanded"); // 'expanded' | 'compact' | 'hidden'
   const lastScrollYRef = useRef(0);
   const frameRef = useRef(null);
   const directionRef = useRef(null);
   const accumulatedRef = useRef(0);
+
+  useEffect(() => {
+    setScrollState("expanded");
+    accumulatedRef.current = 0;
+    directionRef.current = null;
+  }, [resetKey]);
 
   useEffect(() => {
     const container = scrollContainerRef?.current || window;
@@ -248,6 +254,7 @@ export const TopAppBar = ({
   onOpenMenu, // better than hardcoded /menu
   showOfflineBanner = true,
   scrollContainerRef,
+  contained = false,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -258,7 +265,7 @@ export const TopAppBar = ({
   const isDark = theme === "dark";
   const tokens = isDark ? TOKENS.dark : TOKENS.light;
 
-  const scrollState = useScrollState(scrollContainerRef);
+  const scrollState = useScrollState(scrollContainerRef, location.pathname);
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
@@ -470,9 +477,6 @@ export const TopAppBar = ({
     }
   }, [isOnline, isSyncing]);
 
-  useAuth();
-  useAppStore((state) => state.currentUser);
-
   // Determine mode
   const currentMode = useMemo(() => {
     if (propMode) return propMode;
@@ -495,9 +499,12 @@ export const TopAppBar = ({
       return "stories";
     if (
       path.startsWith("/create-post") ||
+      path.startsWith("/edit/") ||
       path.startsWith("/create-story")
     )
       return "composer";
+    if (path.startsWith("/post/") && !path.endsWith("/analytics"))
+      return "detail";
     if (path === "/messages") return "messages_inbox";
     if (path.startsWith("/messages/")) {
       const parts = path.split("/").filter(Boolean);
@@ -596,7 +603,20 @@ export const TopAppBar = ({
     if (path.startsWith("/achievements")) return "Achievements";
     if (path.startsWith("/creator/onboarding") || path.startsWith("/creator-onboarding")) return "Creator Accreditation";
     if (path.startsWith("/create-post")) return composerHeaderState?.title || "Create Post";
+    if (path.startsWith("/edit/")) return composerHeaderState?.title || "Edit Post";
     if (path.startsWith("/create-story")) return "Create Story";
+    if (path.startsWith("/post/")) return "Post";
+    if (path.startsWith("/gift/")) return "Send Gift";
+    if (path.startsWith("/call/")) return "Call";
+    if (path.startsWith("/live/")) return "Live Room";
+    if (path.startsWith("/support")) return "Support";
+    if (path.startsWith("/blocked")) return "Blocked Accounts";
+    if (path.startsWith("/subscription")) return "Subscriptions & Perks";
+    if (path.startsWith("/projects")) return "Creator Projects";
+    if (path.startsWith("/creator-payout")) return "Creator Payouts";
+    if (path.startsWith("/ai-studio")) return "Creator Co-Pilot";
+    if (path.startsWith("/privacy-policy")) return "Privacy Policy";
+    if (path.startsWith("/terms")) return "Terms of Service";
     if (path.startsWith("/video-editor")) return "Video Studio";
     if (path.startsWith("/audio-editor")) return "Audio Studio";
     if (path.startsWith("/thumbnail-designer")) return "Thumbnail Designer";
@@ -623,7 +643,7 @@ export const TopAppBar = ({
       return "Profile";
     }
     return "Arvdoul";
-  }, [location.pathname, propTitle, chatHeaderState?.title]);
+  }, [location.pathname, propTitle, chatHeaderState?.title, composerHeaderState?.title]);
 
   const handleBack = useCallback(() => {
     if (onBack) {
@@ -635,7 +655,10 @@ export const TopAppBar = ({
     }
   }, [onBack, navigate, track]);
 
-  const isHidden = scrollState === "hidden";
+  const inlineSearchActive =
+    inboxSearchOpen || storiesSearchOpen || notificationsSearchOpen || networkSearchOpen;
+  const isHidden = !contained && scrollState === "hidden" && !inlineSearchActive;
+  const isCompact = scrollState !== "expanded" && !inlineSearchActive;
   const translateY = isHidden ? -100 : 0;
   const opacity = isHidden ? 0 : 1;
 
@@ -650,7 +673,14 @@ export const TopAppBar = ({
             ? { duration: 0 }
             : { type: "spring", stiffness: 300, damping: 30 }
         }
-        className="fixed top-0 left-0 right-0 z-40 px-3 sm:px-6 pt-2 sm:pt-3 pointer-events-none"
+        className={cn(
+          contained
+            ? "relative z-40 shrink-0 w-full px-2.5 sm:px-6 pb-1 pointer-events-none"
+            : "fixed top-0 left-0 right-0 z-40 px-3 sm:px-6 pointer-events-none"
+        )}
+        style={{
+          paddingTop: "max(0.5rem, env(safe-area-inset-top))",
+        }}
       >
         <div
           className={cn(
@@ -665,13 +695,16 @@ export const TopAppBar = ({
           {/* Glass pill with optical layers */}
           <div
             className={cn(
-              "w-full rounded-[26px] px-3 sm:px-5 py-2.5 sm:py-3",
-              isDark
-                ? "bg-gray-900/85 backdrop-blur-2xl border border-white/10"
-                : "bg-white/90 backdrop-blur-2xl border border-gray-200/70",
-              "shadow-2xl transition-all duration-300 relative overflow-hidden"
+              "w-full rounded-[24px] sm:rounded-[26px] px-3 sm:px-5 transition-all duration-300 relative overflow-hidden border",
+              isCompact ? "py-2 sm:py-2.5" : "py-2.5 sm:py-3"
             )}
-            style={{ boxShadow: tokens.shadow }}
+            style={{
+              background: tokens.glassBg,
+              borderColor: tokens.border,
+              boxShadow: tokens.shadow,
+              backdropFilter: "blur(26px) saturate(180%)",
+              WebkitBackdropFilter: "blur(26px) saturate(180%)",
+            }}
           >
             {/* Subtle glass edge specular highlight */}
             <span
@@ -688,9 +721,13 @@ export const TopAppBar = ({
             <div className="relative z-10">
               {currentMode === "brand" && (
                 <div className="flex items-center justify-between gap-3">
-                  <div
+                  <button
+                    type="button"
+                    aria-label="Arvdoul Home"
                     onClick={() => {
-                      // Use scroll container
+                      window.dispatchEvent(
+                        new CustomEvent("arvdoul:scroll_top", { detail: { source: "top_app_bar" } })
+                      );
                       if (scrollContainerRef?.current) {
                         scrollContainerRef.current.scrollTo({
                           top: 0,
@@ -701,7 +738,7 @@ export const TopAppBar = ({
                       }
                       track?.("top_nav_home_click");
                     }}
-                    className="flex items-center gap-3 cursor-pointer group select-none"
+                    className="flex items-center gap-3 cursor-pointer group select-none text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     <div className="relative">
                       <ArvdoulEmblem
@@ -729,7 +766,7 @@ export const TopAppBar = ({
                       </div>
                       <BrandBaseline visible={!isHidden} gradient={tokens.brandLine} />
                     </div>
-                  </div>
+                  </button>
 
                   <div className="flex items-center gap-2">
                     <CircularButton
@@ -1361,167 +1398,176 @@ export const TopAppBar = ({
                       ...(activeChannel === "trending" ? [{ id: "trending", label: "Trending" }] : []),
                     ];
 
+                const renderChannelNav = (idSuffix) => (
+                  <nav
+                    aria-label={isReelsMode ? "Reels feed channels" : "Sparks feed channels"}
+                    className={cn(
+                      "flex items-center gap-0.5 sm:gap-1 px-1 py-0.5 rounded-full border overflow-x-auto no-scrollbar min-w-0",
+                      isDark
+                        ? "bg-white/[0.06] border-white/10"
+                        : "bg-slate-100/90 border-slate-200/80"
+                    )}
+                  >
+                    {channels.map((tab) => {
+                      const isActive = activeChannel === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          aria-pressed={isActive}
+                          onClick={() => {
+                            setSparksHeaderState((prev) => ({ ...prev, activeTab: tab.id }));
+                            window.dispatchEvent(
+                              new CustomEvent("arvdoul:sparks_channel_change", {
+                                detail: { channel: tab.id, mode: isReelsMode ? "reels" : "sparks" },
+                              })
+                            );
+                          }}
+                          className={cn(
+                            "relative min-h-[34px] sm:min-h-[38px] px-2.5 sm:px-3.5 text-xs font-extrabold tracking-wide whitespace-nowrap shrink-0 rounded-full flex items-center gap-1 transition-all",
+                            isActive
+                              ? isDark ? "text-white" : "text-slate-950"
+                              : isDark ? "text-white/60 hover:text-white/95" : "text-slate-600 hover:text-slate-950"
+                          )}
+                        >
+                          {tab.featured && (
+                            <Sparkles
+                              className={cn(
+                                "w-3.5 h-3.5",
+                                isActive
+                                  ? isDark ? "text-amber-300 fill-amber-300" : "text-amber-500 fill-amber-500"
+                                  : "text-amber-400"
+                              )}
+                              aria-hidden="true"
+                            />
+                          )}
+                          <span>{tab.label}</span>
+                          {isActive && (
+                            <motion.span
+                              layoutId={`topBarSparksTabIndicator-${idSuffix}`}
+                              className="absolute bottom-0.5 left-2 right-2 h-0.5 rounded-full"
+                              style={{
+                                background: BRAND_GRADIENT,
+                                boxShadow: `0 0 8px ${brandRgba(0.65)}`,
+                              }}
+                              transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </nav>
+                );
+
                 return (
-                  <div className="flex items-center justify-between gap-2 min-w-0">
-                    {/* Left: Emblem / Back + Title */}
-                    <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-                      {isReelsMode ? (
-                        <CircularButton
-                          icon={ChevronLeft}
-                          label="Back"
-                          theme={theme}
-                          onClick={handleBack}
-                        />
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isReelsMode) {
-                            navigate("/sparks");
-                          } else {
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }
-                        }}
-                        aria-label={isReelsMode ? "Open Sparks" : "Arvdoul Sparks"}
-                        className="flex items-center gap-2 text-left rounded-xl focus:outline-none group"
-                      >
-                        <ArvdoulEmblem
-                          size={30}
-                          theme={theme}
-                          animate={false}
-                          showPlate={false}
-                          className="group-hover:scale-105 transition-transform shrink-0"
-                        />
-                        <div className="hidden md:flex flex-col min-w-0">
-                          <h2
-                            className="text-base font-black truncate leading-tight tracking-tight"
-                            style={{ color: tokens.textPrimary }}
-                          >
-                            {isReelsMode ? "Reels" : "Sparks"}
-                          </h2>
-                          <BrandBaseline visible={!isHidden} gradient={tokens.brandLine} />
-                        </div>
-                      </button>
-                    </div>
-
-                    {/* Center: Channel Switcher */}
-                    <nav
-                      aria-label={isReelsMode ? "Reels feed channels" : "Sparks feed channels"}
-                      className={cn(
-                        "flex items-center gap-0.5 sm:gap-1 px-1 py-0.5 rounded-full border overflow-x-auto no-scrollbar min-w-0",
-                        isDark
-                          ? "bg-white/[0.06] border-white/10"
-                          : "bg-slate-100/90 border-slate-200/80"
-                      )}
-                    >
-                      {channels.map((tab) => {
-                        const isActive = activeChannel === tab.id;
-                        return (
-                          <button
-                            key={tab.id}
-                            type="button"
-                            aria-pressed={isActive}
-                            onClick={() => {
-                              setSparksHeaderState((prev) => ({ ...prev, activeTab: tab.id }));
-                              window.dispatchEvent(
-                                new CustomEvent("arvdoul:sparks_channel_change", {
-                                  detail: { channel: tab.id, mode: isReelsMode ? "reels" : "sparks" },
-                                })
-                              );
-                            }}
-                            className={cn(
-                              "relative min-h-[34px] sm:min-h-[38px] px-2.5 sm:px-3.5 text-xs font-extrabold tracking-wide whitespace-nowrap shrink-0 rounded-full flex items-center gap-1 transition-all",
-                              isActive
-                                ? isDark ? "text-white" : "text-slate-950"
-                                : isDark ? "text-white/60 hover:text-white/95" : "text-slate-600 hover:text-slate-950"
-                            )}
-                          >
-                            {tab.featured && (
-                              <Sparkles
-                                className={cn(
-                                  "w-3.5 h-3.5",
-                                  isActive
-                                    ? isDark ? "text-amber-300 fill-amber-300" : "text-amber-500 fill-amber-500"
-                                    : "text-amber-400"
-                                )}
-                                aria-hidden="true"
-                              />
-                            )}
-                            <span>{tab.label}</span>
-                            {isActive && (
-                              <motion.span
-                                layoutId="topBarSparksTabIndicator"
-                                className="absolute bottom-0.5 left-2 right-2 h-0.5 rounded-full"
-                                style={{
-                                  background: BRAND_GRADIENT,
-                                  boxShadow: `0 0 8px ${brandRgba(0.65)}`,
-                                }}
-                                transition={{ type: "spring", stiffness: 450, damping: 32 }}
-                              />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </nav>
-
-                    {/* Right: Actions */}
-                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                      {!isReelsMode ? (
-                        <>
+                  <div className="flex flex-col gap-1.5 min-w-0">
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      {/* Left: Emblem / Back + Title */}
+                      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                        {isReelsMode ? (
                           <CircularButton
-                            icon={sparksHeaderState.viewMode === "feed" ? LayoutGrid : Smartphone}
-                            label={sparksHeaderState.viewMode === "feed" ? "Switch to Grid view" : "Switch to Sparks feed"}
+                            icon={ChevronLeft}
+                            label="Back"
                             theme={theme}
-                            active={sparksHeaderState.viewMode === "grid"}
-                            onClick={() =>
-                              window.dispatchEvent(
-                                new CustomEvent("arvdoul:sparks_toggle_view", {
-                                  detail: { source: "top_app_bar" },
-                                })
-                              )
+                            onClick={handleBack}
+                          />
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isReelsMode) {
+                              navigate("/sparks");
+                            } else {
+                              window.scrollTo({ top: 0, behavior: "smooth" });
                             }
-                          />
-                          <CircularButton
-                            icon={Flame}
-                            label="Open Reels"
+                          }}
+                          aria-label={isReelsMode ? "Open Sparks" : "Arvdoul Sparks"}
+                          className="flex items-center gap-2 text-left rounded-xl focus:outline-none group"
+                        >
+                          <ArvdoulEmblem
+                            size={30}
                             theme={theme}
-                            onClick={() => navigate("/reels")}
+                            animate={false}
+                            showPlate={false}
+                            className="group-hover:scale-105 transition-transform shrink-0"
                           />
-                        </>
-                      ) : (
-                        <div className="hidden sm:block">
+                          <div className="flex flex-col min-w-0">
+                            <h2
+                              className="text-sm sm:text-base font-black truncate leading-tight tracking-tight"
+                              style={{ color: tokens.textPrimary }}
+                            >
+                              {isReelsMode ? "Reels" : "Sparks"}
+                            </h2>
+                            <BrandBaseline visible={!isHidden} gradient={tokens.brandLine} />
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Center: Channel Switcher on sm+ */}
+                      <div className="hidden sm:flex min-w-0">
+                        {renderChannelNav("desktop")}
+                      </div>
+
+                      {/* Right: Actions */}
+                      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                        {!isReelsMode ? (
+                          <>
+                            <CircularButton
+                              icon={sparksHeaderState.viewMode === "feed" ? LayoutGrid : Smartphone}
+                              label={sparksHeaderState.viewMode === "feed" ? "Switch to Grid view" : "Switch to Sparks feed"}
+                              theme={theme}
+                              active={sparksHeaderState.viewMode === "grid"}
+                              onClick={() =>
+                                window.dispatchEvent(
+                                  new CustomEvent("arvdoul:sparks_toggle_view", {
+                                    detail: { source: "top_app_bar" },
+                                  })
+                                )
+                              }
+                            />
+                            <CircularButton
+                              icon={Flame}
+                              label="Open Reels"
+                              theme={theme}
+                              onClick={() => navigate("/reels")}
+                            />
+                          </>
+                        ) : (
                           <CircularButton
                             icon={Sparkles}
                             label="Open Sparks Feed"
                             theme={theme}
                             onClick={() => navigate("/sparks")}
                           />
-                        </div>
-                      )}
-                      <div className={isReelsMode ? "block" : "hidden sm:block"}>
+                        )}
                         <CircularButton
                           icon={Search}
                           label={isReelsMode ? "Search Reels" : "Search Sparks"}
                           theme={theme}
                           onClick={() => navigate("/search")}
                         />
+                        <CircularButton
+                          icon={Camera}
+                          label="Create Spark"
+                          theme={theme}
+                          active
+                          onClick={() => navigate("/create-post?type=video")}
+                        />
+                        <CircularButton
+                          icon={Menu}
+                          label="Menu"
+                          theme={theme}
+                          onClick={() => {
+                            if (onOpenMenu) onOpenMenu();
+                            else navigate(ROUTES.menu);
+                          }}
+                        />
                       </div>
-                      <CircularButton
-                        icon={Camera}
-                        label="Create Spark"
-                        theme={theme}
-                        active
-                        onClick={() => navigate("/create-post?type=video")}
-                      />
-                      <CircularButton
-                        icon={Menu}
-                        label="Menu"
-                        theme={theme}
-                        onClick={() => {
-                          if (onOpenMenu) onOpenMenu();
-                          else navigate(ROUTES.menu);
-                        }}
-                      />
+                    </div>
+
+                    {/* Mobile Channel Switcher */}
+                    <div className="sm:hidden flex justify-center min-w-0">
+                      {renderChannelNav("mobile")}
                     </div>
                   </div>
                 );
@@ -1802,7 +1848,7 @@ export const TopAppBar = ({
                       label="Share"
                       theme={theme}
                       onClick={() => {
-                        window.dispatchEvent(new CustomEvent('arvdoul:share_profile'));
+                        window.dispatchEvent(new CustomEvent('arvdoul:share_detail', { detail: { source: "top_app_bar" } }));
                       }}
                     />
                     <CircularButton
@@ -1843,6 +1889,10 @@ export const TopAppBar = ({
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           window.dispatchEvent(new CustomEvent("arvdoul:search_submit", { detail: searchQuery }));
+                        } else if (e.key === "Escape") {
+                          setSearchQuery("");
+                          onSearch?.("");
+                          window.dispatchEvent(new CustomEvent("arvdoul:search_query", { detail: "" }));
                         }
                       }}
                       placeholder="Search Arvdoul posts, creators, tags..."
@@ -1890,7 +1940,15 @@ export const TopAppBar = ({
                       icon={X}
                       label="Close"
                       theme={theme}
-                      onClick={handleBack}
+                      onClick={() => {
+                        if (onBack) {
+                          onBack();
+                        } else if (location.pathname.startsWith("/create-post") || location.pathname.startsWith("/edit/")) {
+                          window.dispatchEvent(new CustomEvent("arvdoul:composer_back", { detail: { source: "top_app_bar" } }));
+                        } else {
+                          handleBack();
+                        }
+                      }}
                     />
                     <span
                       className="text-base font-bold"
@@ -1976,14 +2034,16 @@ export const TopAppBar = ({
         </div>
       </motion.header>
 
-      {/* Spacer */}
-      <div
-        aria-hidden="true"
-        className="shrink-0"
-        style={{
-          height: "calc(72px + env(safe-area-inset-top))",
-        }}
-      />
+      {/* Spacer (only needed when fixed overlay mode is used outside MainLayout) */}
+      {!contained && (
+        <div
+          aria-hidden="true"
+          className="shrink-0"
+          style={{
+            height: "calc(72px + env(safe-area-inset-top))",
+          }}
+        />
+      )}
     </>
   );
 };

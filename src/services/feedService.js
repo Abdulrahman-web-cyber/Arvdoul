@@ -1499,40 +1499,45 @@ class UltimateFeedService {
     let lastAuthor = this._getLastAuthor(userId);
     let typeStreak = 0, lastType = null;
     let categoryStreak = 0, lastCategory = null;
-    let topicStreakCounts = { ...topicStreaks };
-    let idx = 0;
+    const topicStreakCounts = { ...topicStreaks };
     const remaining = [...posts];
 
-    while (diversified.length < targetLimit && idx < remaining.length) {
-      const post = remaining[idx];
-      idx++;
-      if (seenPosts.has(post.id)) continue;
-      if (post.authorId === lastAuthor) continue;
+    let madeProgress = true;
+    while (diversified.length < targetLimit && madeProgress) {
+      madeProgress = false;
+      for (const post of remaining) {
+        if (diversified.length >= targetLimit) break;
+        if (seenPosts.has(post.id)) continue;
+        if (post.authorId === lastAuthor) continue;
 
-      const postType = post.type || 'unknown';
-      if (postType === lastType) typeStreak++;
-      else { typeStreak = 0; lastType = postType; }
-      if (typeStreak >= FEED_CONFIG.DIVERSITY.MAX_SAME_TYPE) continue;
+        const postType = post.type || 'unknown';
+        const nextTypeStreak = postType === lastType ? typeStreak + 1 : 0;
+        if (nextTypeStreak >= FEED_CONFIG.DIVERSITY.MAX_SAME_TYPE) continue;
 
-      const postCategory = post.category || postType;
-      if (postCategory === lastCategory) categoryStreak++;
-      else { categoryStreak = 0; lastCategory = postCategory; }
-      if (categoryStreak >= FEED_CONFIG.ALGORITHM.DIVERSITY.MAX_SAME_CATEGORY) continue;
+        const postCategory = post.category || postType;
+        const nextCategoryStreak = postCategory === lastCategory ? categoryStreak + 1 : 0;
+        if (nextCategoryStreak >= FEED_CONFIG.ALGORITHM.DIVERSITY.MAX_SAME_CATEGORY) continue;
 
-      const postTopics = post.topics || [];
-      let topicViolation = false;
-      for (const topic of postTopics) {
-        if ((topicStreakCounts[topic] || 0) >= FEED_CONFIG.DIVERSITY.MAX_SAME_TOPIC) {
-          topicViolation = true;
-          break;
+        const postTopics = post.topics || [];
+        let topicViolation = false;
+        for (const topic of postTopics) {
+          if ((topicStreakCounts[topic] || 0) >= FEED_CONFIG.DIVERSITY.MAX_SAME_TOPIC) {
+            topicViolation = true;
+            break;
+          }
         }
-      }
-      if (topicViolation) continue;
+        if (topicViolation) continue;
 
-      diversified.push(post);
-      seenPosts.add(post.id);
-      lastAuthor = post.authorId;
-      for (const topic of postTopics) topicStreakCounts[topic] = (topicStreakCounts[topic] || 0) + 1;
+        diversified.push(post);
+        seenPosts.add(post.id);
+        lastAuthor = post.authorId;
+        typeStreak = nextTypeStreak;
+        lastType = postType;
+        categoryStreak = nextCategoryStreak;
+        lastCategory = postCategory;
+        for (const topic of postTopics) topicStreakCounts[topic] = (topicStreakCounts[topic] || 0) + 1;
+        madeProgress = true;
+      }
     }
 
     const randomNeeded = Math.min(FEED_CONFIG.RANDOMNESS.MAX_RANDOM_POSTS_PER_PAGE, targetLimit - diversified.length);
@@ -1546,6 +1551,20 @@ class UltimateFeedService {
         seenPosts.add(post.id);
         lastAuthor = post.authorId;
         for (const topic of (post.topics || [])) topicStreakCounts[topic] = (topicStreakCounts[topic] || 0) + 1;
+      }
+    }
+
+    // Backfill while still interleaving distinct authors before falling back to same-author posts.
+    let backfillProgress = true;
+    while (diversified.length < Math.min(targetLimit, remaining.length) && backfillProgress) {
+      backfillProgress = false;
+      for (const post of remaining) {
+        if (diversified.length >= targetLimit) break;
+        if (seenPosts.has(post.id) || post.authorId === lastAuthor) continue;
+        diversified.push(post);
+        seenPosts.add(post.id);
+        lastAuthor = post.authorId;
+        backfillProgress = true;
       }
     }
 

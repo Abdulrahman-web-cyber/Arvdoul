@@ -39,11 +39,24 @@ if (!isProd && !hasModule('vite')) missing.push('vite');
 if (missing.length > 0) {
   console.error(
     `\n[arvdoul] Missing required packages in node_modules: ${missing.join(', ')}.\n` +
-      'Run "npm install --no-audit --no-fund" first.\n' +
-      'If an optional native install script fails on Termux/Android, run:\n' +
-      '  npm install --no-audit --no-fund --ignore-scripts\n',
+      'Run "npm install --no-audit --no-fund --include=optional" first.\n' +
+      'If installing on Termux/Android, make sure optional native bindings install cleanly (do NOT pass --ignore-scripts if Vite native bindings are skipped).\n',
   );
   process.exit(1);
+}
+
+if (!isProd) {
+  try {
+    await import('vite');
+  } catch (err) {
+    console.error(
+      `\n[arvdoul] Vite failed to initialize (common on Termux/Android when native Rolldown bindings are missing): ${err?.message || err}\n` +
+        'Run:\n' +
+        '  rm -rf node_modules && npm install --no-audit --no-fund --include=optional\n' +
+        'On Termux/Android arm64, ensure Node.js LTS is updated ("pkg upgrade nodejs-lts") and optional bindings (@rolldown/binding-android-arm64) are installed.\n',
+    );
+    process.exit(1);
+  }
 }
 
 const [major, minor] = process.versions.node.split('.').map(Number);
