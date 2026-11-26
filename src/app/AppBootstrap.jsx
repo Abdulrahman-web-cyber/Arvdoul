@@ -14,7 +14,24 @@ import IncomingCallBanner from '../components/Shared/IncomingCallBanner.jsx';
 import ConfirmProvider from '../components/Shared/ConfirmProvider.jsx';
 import PWAInstallBanner from '../components/common/PWAInstallBanner.jsx';
 import SWUpdateBanner from '../components/common/SWUpdateBanner.jsx';
+import { RouteProgressBar } from '../components/Navigation/RouteProgressBar.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
+import { tokens } from '../design-system/tokens.js';
 import { initAppBackgroundPrefetch } from '../utils/routePrefetcher.js';
+
+const AppBootFallback = () => {
+  const { isDark } = useTheme();
+  return (
+    <div
+      className="min-h-[100dvh] w-full"
+      style={{ backgroundColor: isDark ? tokens.color.bg.dark : tokens.color.bg.light }}
+      aria-busy="true"
+      aria-label="Loading application"
+    >
+      <RouteProgressBar isAnimating={true} />
+    </div>
+  );
+};
 
 /**
  * System initialization manager
@@ -148,7 +165,7 @@ export default function AppBootstrap() {
                 {/* Global motion policy: every Framer Motion animation respects
                     prefers-reduced-motion (WCAG 2.2 2.3.3). */}
                 <MotionConfig reducedMotion="user">
-                  <Suspense fallback={null}>
+                  <Suspense fallback={<AppBootFallback />}>
                     <AppRoutes />
                   </Suspense>
                 </MotionConfig>

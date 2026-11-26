@@ -687,8 +687,6 @@ function SplashMark({ t, wait, waitOn, tier, mode, ring, ringSeconds }) {
 
 /* ───────────────────────── Wordmark ───────────────────────── */
 
-const WORD_ASPECT = WORDMARK.height / WORDMARK.width;
-
 /** One letter, written with the same round-capped stroke as the logo. */
 function WordLetter({ t, index, letter, color }) {
   const { start, step, span } = SEG.letters;

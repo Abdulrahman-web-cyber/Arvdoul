@@ -186,6 +186,18 @@ const RouteLoadingFallback = () => (
 );
 const RouteFallback = RouteLoadingFallback;
 
+// Layoutless routes (Intro, Login, Signup, Join Group) need a full themed canvas
+// while lazy route chunks load so users never see an unstyled flash.
+const PublicRouteFallback = () => (
+  <div
+    className="min-h-[100dvh] w-full bg-[#F6F8FC] dark:bg-[#03071B]"
+    aria-busy="true"
+    aria-label="Loading screen"
+  >
+    <RouteProgressBar isAnimating={true} />
+  </div>
+);
+
 const RedirectChatToMessages = () => {
   const { conversationId } = useParams();
   return <Navigate to={conversationId ? `/messages/${conversationId}` : "/messages"} replace />;
@@ -281,7 +293,7 @@ const AdminRoute = ({ children }) => {
   }, [user?.uid]);
 
   if (allowed === null) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="w-10 h-10 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>;
+    return <div className="min-h-[100dvh] w-full bg-[#F6F8FC] dark:bg-[#03071B] flex items-center justify-center"><div className="w-10 h-10 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>;
   }
   if (!allowed) return <Navigate to="/home" replace />;
   return <AppStateGuard><MainLayout>{children}</MainLayout></AppStateGuard>;
@@ -319,7 +331,7 @@ export default function AppRoutes() {
       
       <Route path="/intro" element={
         <PublicRoute>
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<PublicRouteFallback />}>
             <IntroScreen />
           </Suspense>
         </PublicRoute>
@@ -327,7 +339,7 @@ export default function AppRoutes() {
       
       <Route path="/login" element={
         <PublicRoute>
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<PublicRouteFallback />}>
             <LoginScreen />
           </Suspense>
         </PublicRoute>
@@ -337,7 +349,7 @@ export default function AppRoutes() {
 
       <Route path="/signup/step1" element={
         <PublicRoute>
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<PublicRouteFallback />}>
             <SignupStep1Personal />
           </Suspense>
         </PublicRoute>
@@ -345,7 +357,7 @@ export default function AppRoutes() {
       
       <Route path="/signup/step2" element={
         <PublicRoute>
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<PublicRouteFallback />}>
             <SignupStep2VerifyContact />
           </Suspense>
         </PublicRoute>
@@ -353,7 +365,7 @@ export default function AppRoutes() {
       
       <Route path="/otp-verification" element={
         <PublicRoute>
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<PublicRouteFallback />}>
             <OtpVerification />
           </Suspense>
         </PublicRoute>
@@ -361,7 +373,7 @@ export default function AppRoutes() {
       
       <Route path="/verify-email" element={
         <PublicRoute>
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<PublicRouteFallback />}>
             <VerifyEmailScreen />
           </Suspense>
         </PublicRoute>
@@ -369,7 +381,7 @@ export default function AppRoutes() {
       
       <Route path="/forgot-password" element={
         <PublicRoute>
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<PublicRouteFallback />}>
             <ForgotPasswordScreen />
           </Suspense>
         </PublicRoute>
@@ -377,7 +389,7 @@ export default function AppRoutes() {
       
       <Route path="/reset-password" element={
         <PublicRoute>
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<PublicRouteFallback />}>
             <ResetPasswordScreen />
           </Suspense>
         </PublicRoute>
@@ -818,7 +830,7 @@ export default function AppRoutes() {
           renders a sign-in prompt when logged out and joins via the
           joinGroupViaInvite callable when signed in. */}
       <Route path="/join-group" element={
-        <Suspense fallback={<RouteFallback />}>
+        <Suspense fallback={<PublicRouteFallback />}>
           <JoinGroupScreen />
         </Suspense>
       } />

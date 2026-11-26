@@ -88,20 +88,22 @@ const root = createRoot(rootElement);
 // re-renders once i18n is ready (react-i18next handles the re-render).
 initI18n().catch((err) => console.warn('⚠️ i18n init failed (fallback: English):', err.message));
 
-// Clean up any legacy pre-boot node synchronously before React mounts
-const removeLoadingSpinner = () => {
+// Clean up any stray pre-boot node OUTSIDE #root after React commits its first frame.
+// Removing .av-boot synchronously before root.render() creates a blank gap while
+// React schedules its initial render; React replaces #root's children atomically.
+const removeStaleBootNodes = () => {
   const selectors = ['.app-loading', '.av-boot'];
   selectors.forEach((selector) => {
-    const el = document.querySelector(selector);
-    if (el && el.parentNode) {
-      el.parentNode.removeChild(el);
-    }
+    document.querySelectorAll(selector).forEach((el) => {
+      if (!rootElement.contains(el) && el.parentNode) {
+        el.parentNode.removeChild(el);
+      }
+    });
   });
 };
 
 try {
   console.log('🚀 Arvdoul starting...');
-  removeLoadingSpinner();
 
   // Render app
   root.render(
@@ -109,7 +111,13 @@ try {
       <AppBootstrap />
     </React.StrictMode>
   );
-  
+
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(removeStaleBootNodes);
+  } else {
+    removeStaleBootNodes();
+  }
+
   console.log('✅ Application rendered');
   
 } catch (error) {

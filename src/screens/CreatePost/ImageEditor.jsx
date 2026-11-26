@@ -111,7 +111,6 @@ const IProps = pick('SlidersVertical', 'Settings2', 'Settings');
 const IAlignL = pick('AlignLeft');
 const IAlignC = pick('AlignCenter');
 const IAlignR = pick('AlignRight');
-const IFrame = pick('Scan', 'Square');
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Design tokens (shared with the Signup / Login / OTP / Verify / Setup screens)

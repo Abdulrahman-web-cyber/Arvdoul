@@ -540,10 +540,10 @@ export function canProceedForState(state) {
       case 'video':
         return (state.mediaItems?.length || 0) > 0 || hasText;
       case 'audio':
-        return (
-          state.typeData?.audio?.file !== null ||
-          !!state.typeData?.audio?.url ||
-          hasText
+        return Boolean(
+          state.typeData?.audio?.file ||
+            state.typeData?.audio?.url ||
+            state.typeData?.audio?.previewUrl
         );
       case 'poll':
         return (

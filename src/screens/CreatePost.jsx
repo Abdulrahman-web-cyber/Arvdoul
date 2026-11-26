@@ -233,10 +233,12 @@ function CreatePostProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
+    const previewUrls = mediaPreviewUrlsRef.current;
     return () => {
       mountedRef.current = false;
       clearTimeout(autoSaveTimerRef.current);
-      mediaPreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
 
@@ -1515,8 +1517,8 @@ const LauncherGrid = React.memo(() => {
 
       <div className={`grid gap-6 ${activeSidePanel ? 'lg:grid-cols-12 items-start' : 'grid-cols-1'}`}>
         <div className={activeSidePanel ? 'lg:col-span-7 space-y-5' : 'space-y-5'}>
-          {/* Compact Post Format Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+          {/* 3x3 Post Format Grid */}
+          <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
             {POST_TYPES.map((type) => {
               const draftCount = draftCounts[type.id] || 0;
               return (
@@ -1526,22 +1528,28 @@ const LauncherGrid = React.memo(() => {
                   onClick={() => selectPostType(type.id)}
                   onPointerEnter={() => preloadEditor(type.id)}
                   onFocus={() => preloadEditor(type.id)}
-                  className={`${SURFACE_GLASS_CLASS} group relative flex flex-col items-start justify-between p-4 sm:p-5 min-h-[132px] text-left hover:border-arvdoul-purple/50 active:scale-[0.98] transition-all focus-visible:ring-2 focus-visible:ring-arvdoul-purple`}
+                  className={`${SURFACE_GLASS_CLASS} group relative flex flex-col items-start justify-between p-3 sm:p-5 min-h-[116px] sm:min-h-[136px] text-left hover:border-arvdoul-purple/50 active:scale-[0.98] transition-all focus-visible:ring-2 focus-visible:ring-arvdoul-purple`}
                   aria-label={`Create ${type.label}`}
                 >
-                  <div className="flex items-center justify-between w-full mb-3">
-                    <type.icon className="w-11 h-11 transition-transform duration-200 group-hover:scale-105" />
+                  <div className="flex items-start justify-between w-full mb-2 sm:mb-3 gap-1">
+                    <type.icon className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 transition-transform duration-200 group-hover:scale-105" />
                     {draftCount > 0 && (
-                      <span className="text-[11px] font-semibold text-arvdoul-purple tabular-nums">
-                        {draftCount} draft{draftCount === 1 ? '' : 's'}
+                      <span
+                        className="text-[10px] sm:text-[11px] font-semibold text-arvdoul-purple tabular-nums leading-tight shrink-0"
+                        title={`${draftCount} draft${draftCount === 1 ? '' : 's'}`}
+                      >
+                        <span className="sm:hidden">{draftCount}</span>
+                        <span className="hidden sm:inline">
+                          {draftCount} draft{draftCount === 1 ? '' : 's'}
+                        </span>
                       </span>
                     )}
                   </div>
-                  <div>
-                    <span className="block text-sm font-semibold text-slate-900 dark:text-white">
+                  <div className="min-w-0 w-full">
+                    <span className="block text-[13px] sm:text-sm font-semibold text-slate-900 dark:text-white leading-tight truncate">
                       {type.label}
                     </span>
-                    <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    <span className="block text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-snug line-clamp-2 sm:line-clamp-1">
                       {type.subtitle}
                     </span>
                   </div>
