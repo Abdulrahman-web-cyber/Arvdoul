@@ -556,8 +556,8 @@ function SplashMark({ t, wait, waitOn, tier, mode, ring, ringSeconds }) {
   const masterGate = useSeg(t, SEG.master, easeSoft);
   const drawOpacity = useTransform(masterGate, [0.5, 1], [1, 0], { clamp: true });
 
-  // Intro pen: visible while the orbit draws, gone before the wordmark is written.
-  const penGate = useTransform(t, [SEG.orbit[0], 0.015, SEG.penFade[0], SEG.penFade[1]], [0, 1, 1, 0], {
+  // Intro pen: visible immediately from frame 0 while the orbit draws, gone before wordmark completes.
+  const penGate = useTransform(t, [0, 0.008, SEG.penFade[0], SEG.penFade[1]], [1, 1, 1, 0], {
     clamp: true,
   });
 
@@ -1029,8 +1029,8 @@ export default function SplashScreen({
   const ready = state === STATES.READY && Boolean(destination);
   const canRetry = typeof retry === "function";
 
-  // One timeline drives the whole reveal. `wait` is the "still working" lap.
-  const t = useMotionValue(mode === "reduced" ? 1 : 0);
+  // One timeline drives the whole reveal. Start at 0.025 so frame 0 already shows the luminous orbit tip.
+  const t = useMotionValue(mode === "reduced" ? 1 : 0.025);
   const wait = useMotionValue(0);
   const waitOn = useMotionValue(0);
 

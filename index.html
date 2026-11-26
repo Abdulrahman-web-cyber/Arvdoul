@@ -113,32 +113,6 @@
       * {
         -webkit-tap-highlight-color: transparent;
       }
-
-      /* Pre-React boot lockup: centered transparent Arvdoul emblem matching SplashScreen */
-      .av-boot {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: inherit;
-        z-index: 9999;
-        pointer-events: none;
-      }
-      .av-boot-mark {
-        width: clamp(104px, 29vw, 168px);
-        height: auto;
-        display: block;
-        overflow: visible;
-        animation: avBootPulse 1.6s ease-in-out infinite;
-      }
-      @keyframes avBootPulse {
-        0%, 100% { opacity: 0.92; transform: scale(1); }
-        50% { opacity: 1; transform: scale(1.02); }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .av-boot-mark { animation: none; }
-      }
     </style>
     
     <!-- Global error logging -->
@@ -153,30 +127,7 @@
   </head>
   <body>
     <!-- Root container -->
-    <div id="root">
-      <div class="av-boot" aria-hidden="true">
-        <svg class="av-boot-mark" viewBox="0 0 512 512" fill="none">
-          <defs>
-            <linearGradient id="av-boot-brand" gradientUnits="userSpaceOnUse" x1="60" y1="96" x2="440" y2="446">
-              <stop offset="0" stop-color="#BD03F6" />
-              <stop offset="0.2" stop-color="#A508F9" />
-              <stop offset="0.3" stop-color="#9210F8" />
-              <stop offset="0.4" stop-color="#7A1AF8" />
-              <stop offset="0.5" stop-color="#5A25FA" />
-              <stop offset="0.6" stop-color="#3434FA" />
-              <stop offset="0.7" stop-color="#1048FA" />
-              <stop offset="0.8" stop-color="#0160FB" />
-              <stop offset="1" stop-color="#0074F8" />
-            </linearGradient>
-          </defs>
-          <g stroke="url(#av-boot-brand)" stroke-linecap="round" stroke-linejoin="round" fill="none">
-            <path d="M328.2 446.3 A197 197 0 1 1 390.3 407.1" stroke-width="39" />
-            <path d="M154 352 L226.4 192 Q256.5 119 286.6 192 L386 408" stroke-width="47.5" />
-            <path d="M154 352 Q256 257 358 352" stroke-width="41" />
-          </g>
-        </svg>
-      </div>
-    </div>
+    <div id="root"></div>
     
     <!-- Main React Entry -->
     <script type="module" src="/src/main.jsx"></script>

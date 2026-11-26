@@ -553,24 +553,49 @@ export function AuthProvider({ children }) {
 
             if (isFirstSnapshot) {
               const today = new Date().toISOString().slice(0, 10);
-              import('../services/levelSystemService.js')
-                .then(({ levelSystemService }) =>
-                  levelSystemService.awardExperience({ userId: uid, action: 'daily_login', source: today })
-                )
-                .catch((err) => console.warn('[Auth] daily-login XP not credited', err?.message));
+              let shouldCreditDailyLogin = profile.lastActiveDay !== today;
+              if (shouldCreditDailyLogin) {
+                try {
+                  if (localStorage.getItem(`arvdoul_daily_login_${uid}`) === today) {
+                    shouldCreditDailyLogin = false;
+                  }
+                } catch { /* storage restricted */ }
+              }
+              if (shouldCreditDailyLogin) {
+                import('../services/levelSystemService.js')
+                  .then(({ levelSystemService }) =>
+                    levelSystemService.awardExperience({ userId: uid, action: 'daily_login', source: today })
+                  )
+                  .then(() => {
+                    try { localStorage.setItem(`arvdoul_daily_login_${uid}`, today); } catch { /* ignore */ }
+                  })
+                  .catch((err) => console.warn('[Auth] daily-login XP not credited', err?.message));
+              }
               if (userService?.updateLastActive) {
                 userService.updateLastActive(uid).catch((err) =>
                   console.warn('[Auth] last-active update failed', err?.message));
               }
-              import('../services/callableService.js')
-                .then(({ callFunction, FUNCTIONS }) =>
-                  callFunction(FUNCTIONS.REGISTER_DEVICE_SESSION, {
-                    deviceId: getOrCreateDeviceId(),
-                    label: getDeviceLabel(),
-                    platform: 'web',
+              const deviceId = getOrCreateDeviceId();
+              let shouldRegisterDevice = true;
+              try {
+                if (sessionStorage.getItem(`arvdoul_device_reg_${uid}:${deviceId}`) === '1') {
+                  shouldRegisterDevice = false;
+                }
+              } catch { /* storage restricted */ }
+              if (shouldRegisterDevice) {
+                import('../services/callableService.js')
+                  .then(({ callFunction, FUNCTIONS }) =>
+                    callFunction(FUNCTIONS.REGISTER_DEVICE_SESSION, {
+                      deviceId,
+                      label: getDeviceLabel(),
+                      platform: 'web',
+                    })
+                  )
+                  .then(() => {
+                    try { sessionStorage.setItem(`arvdoul_device_reg_${uid}:${deviceId}`, '1'); } catch { /* ignore */ }
                   })
-                )
-                .catch((err) => console.warn('[Auth] device session registration skipped', err?.message));
+                  .catch((err) => console.warn('[Auth] device session registration skipped', err?.message));
+              }
             }
 
             const status = profile.accountStatus;

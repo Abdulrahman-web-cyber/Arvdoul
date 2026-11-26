@@ -11,61 +11,61 @@
  * @component
  */
 
-import { memo, useMemo } from 'react';
+import { memo, useId, useMemo } from 'react';
 import { cn } from '../../lib/utils';
 
 // Curated noble palettes by decade (0 = Lvl 1-9 ... 9 = Lvl 90-100+), intentionally
-// distinct from the primary Arvdoul brand gradient.
+// distinct from the primary Arvdoul brand gradient and free of greenish tints.
 const NOBLE_PALETTES = [
-  // 1-9: Verdant Mint & Slate
+  // 1-9 (Arrival): Astral Sapphire & Royal Indigo
   {
-    light: { bg: '#ECFDF5', border: '#6EE7B7', text: '#065F46', accent: '#16A34A' },
-    dark: { bg: '#052E22', border: '#16A34A', text: '#A7F3D0', accent: '#34D399' },
+    light: { bg: '#EEF2FF', bgBottom: '#E0E7FF', border: '#818CF8', text: '#1E1B4B', accent: '#4F46E5' },
+    dark: { bg: '#131A45', bgBottom: '#0A0F2C', border: '#6366F1', text: '#E0E7FF', accent: '#A5B4FC' },
   },
   // 10-19: Cerulean Sea
   {
-    light: { bg: '#F0F9FF', border: '#7DD3FC', text: '#075985', accent: '#0284C7' },
-    dark: { bg: '#072238', border: '#38BDF8', text: '#BAE6FD', accent: '#38BDF8' },
+    light: { bg: '#F0F9FF', bgBottom: '#E0F2FE', border: '#7DD3FC', text: '#075985', accent: '#0284C7' },
+    dark: { bg: '#0A2540', bgBottom: '#06182B', border: '#38BDF8', text: '#BAE6FD', accent: '#38BDF8' },
   },
   // 20-29: Cobalt Herald
   {
-    light: { bg: '#EFF6FF', border: '#93C5FD', text: '#1E40AF', accent: '#2563EB' },
-    dark: { bg: '#0D1C3D', border: '#60A5FA', text: '#DBEAFE', accent: '#60A5FA' },
+    light: { bg: '#EFF6FF', bgBottom: '#DBEAFE', border: '#93C5FD', text: '#1E40AF', accent: '#2563EB' },
+    dark: { bg: '#0F214A', bgBottom: '#091533', border: '#60A5FA', text: '#DBEAFE', accent: '#60A5FA' },
   },
-  // 30-39: Teal Jadeite
+  // 30-39: Celestial Amethyst
   {
-    light: { bg: '#F0FDFA', border: '#5EEAD4', text: '#115E59', accent: '#0D9488' },
-    dark: { bg: '#062626', border: '#2DD4BF', text: '#CCFBF1', accent: '#2DD4BF' },
+    light: { bg: '#F5F3FF', bgBottom: '#EDE9FE', border: '#A78BFA', text: '#3B0764', accent: '#7C3AED' },
+    dark: { bg: '#1F1347', bgBottom: '#130B2E', border: '#8B5CF6', text: '#EDE9FE', accent: '#C4B5FD' },
   },
   // 40-49: Warm Amber Bronze
   {
-    light: { bg: '#FFFBEB', border: '#FCD34D', text: '#92400E', accent: '#B45309' },
-    dark: { bg: '#2B1B05', border: '#EAB308', text: '#FDE68A', accent: '#FBBF24' },
+    light: { bg: '#FFFBEB', bgBottom: '#FEF3C7', border: '#FCD34D', text: '#92400E', accent: '#B45309' },
+    dark: { bg: '#301E06', bgBottom: '#1F1203', border: '#EAB308', text: '#FDE68A', accent: '#FBBF24' },
   },
   // 50-59: Vermilion Coral
   {
-    light: { bg: '#FFF1F2', border: '#FDA4AF', text: '#9F1239', accent: '#E11D48' },
-    dark: { bg: '#300B16', border: '#FB7185', text: '#FECDD3', accent: '#FB7185' },
+    light: { bg: '#FFF1F2', bgBottom: '#FFE4E6', border: '#FDA4AF', text: '#9F1239', accent: '#E11D48' },
+    dark: { bg: '#360D19', bgBottom: '#21070F', border: '#FB7185', text: '#FECDD3', accent: '#FB7185' },
   },
   // 60-69: Orchid Magenta
   {
-    light: { bg: '#FDF4FF', border: '#F0ABFC', text: '#86198F', accent: '#A21CAF' },
-    dark: { bg: '#2B0933', border: '#E879F9', text: '#F5D0FE', accent: '#E879F9' },
+    light: { bg: '#FDF4FF', bgBottom: '#FAE8FF', border: '#F0ABFC', text: '#86198F', accent: '#A21CAF' },
+    dark: { bg: '#310B3B', bgBottom: '#1E0624', border: '#E879F9', text: '#F5D0FE', accent: '#E879F9' },
   },
   // 70-79: Imperial Ochre
   {
-    light: { bg: '#FEFCE8', border: '#FDE047', text: '#854D0E', accent: '#CA8A04' },
-    dark: { bg: '#282004', border: '#FACC15', text: '#FEF08A', accent: '#FACC15' },
+    light: { bg: '#FEFCE8', bgBottom: '#FEF9C3', border: '#FDE047', text: '#854D0E', accent: '#CA8A04' },
+    dark: { bg: '#2E2505', bgBottom: '#1C1603', border: '#FACC15', text: '#FEF08A', accent: '#FACC15' },
   },
   // 80-89: Silver Platinum
   {
-    light: { bg: '#F8FAFC', border: '#CBD5E1', text: '#0F172A', accent: '#475569' },
-    dark: { bg: '#131C31', border: '#94A3B8', text: '#F1F5F9', accent: '#CBD5E1' },
+    light: { bg: '#F8FAFC', bgBottom: '#E2E8F0', border: '#CBD5E1', text: '#0F172A', accent: '#475569' },
+    dark: { bg: '#162038', bgBottom: '#0D1426', border: '#94A3B8', text: '#F1F5F9', accent: '#CBD5E1' },
   },
   // 90-100: Sovereign Crown Gold
   {
-    light: { bg: '#FFF7ED', border: '#FDBA74', text: '#9A3412', accent: '#EA580C' },
-    dark: { bg: '#2C1504', border: '#FBBF24', text: '#FEF3C7', accent: '#EAB308' },
+    light: { bg: '#FFF7ED', bgBottom: '#FFEDD5', border: '#FDBA74', text: '#9A3412', accent: '#EA580C' },
+    dark: { bg: '#331905', bgBottom: '#1F0F03', border: '#FBBF24', text: '#FEF3C7', accent: '#EAB308' },
   },
 ];
 
@@ -115,6 +115,8 @@ const LevelNumeralBadge = memo(({
   onClick,
   title,
 }) => {
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const gradId = `lnb-fill-${uid}`;
   const num = Number(level);
   const valid = Number.isFinite(num) && num > 0;
   const intLevel = valid ? Math.floor(num) : null;
@@ -148,23 +150,27 @@ const LevelNumeralBadge = memo(({
       className={cn(boxClass, 'overflow-visible shrink-0')}
       aria-hidden="true"
     >
+      <defs>
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={palette.bg} />
+          <stop offset="100%" stopColor={palette.bgBottom || palette.bg} />
+        </linearGradient>
+      </defs>
       <path
         d={pathD}
-        fill={palette.bg}
+        fill={`url(#${gradId})`}
         stroke={palette.border}
         strokeWidth={strokeScaled}
         strokeLinejoin="round"
       />
-      {intLevel >= 10 && (
-        <path
-          d={pathD}
-          fill="none"
-          stroke={palette.accent}
-          strokeOpacity="0.34"
-          strokeWidth="0.95"
-          transform="translate(20,20) scale(0.82) translate(-20,-20)"
-        />
-      )}
+      <path
+        d={pathD}
+        fill="none"
+        stroke={palette.accent}
+        strokeOpacity={intLevel >= 10 ? '0.38' : '0.26'}
+        strokeWidth="0.95"
+        transform="translate(20,20) scale(0.84) translate(-20,-20)"
+      />
       {pips.map((p, idx) => (
         <circle
           key={idx}
@@ -172,7 +178,7 @@ const LevelNumeralBadge = memo(({
           cy={p.cy}
           r={isCompact ? 1.35 : 1.15}
           fill={palette.accent}
-          opacity="0.9"
+          opacity="0.95"
         />
       ))}
     </svg>

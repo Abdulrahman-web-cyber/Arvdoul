@@ -18,7 +18,7 @@ import { socialGraphService } from './socialGraphService.js';
 
 const USER_CONFIG = {
   MAX_USERNAME_ATTEMPTS: 50,
-  DEFAULT_USERNAME_LENGTH: 20,
+  DEFAULT_USERNAME_LENGTH: PROFILE_CONSTRAINTS.USERNAME.MAX_LENGTH,
   CACHE_EXPIRY: 5 * 60 * 1000,           // 5 min general profile cache
   RECOMMENDATION_CACHE_MS: 60 * 1000,    // 60 sec throttle for friend recommendations
   CREATOR_THRESHOLD: 5,
@@ -41,6 +41,8 @@ class ProfessionalUserService {
     this.avatarCache = new Map();
     this.recommendationCache = new Map();
     this.inFlightRequests = new Map();
+    this._dailyFollowerSnapshotDone = new Set();
+    this._recordedActiveDays = new Set();
     this._cacheCleanupInterval = null;
 
     // User service ready
@@ -83,7 +85,7 @@ class ProfessionalUserService {
     // Delete all cache keys that start with profile_${userId} or direct userId key
     const keysToDelete = [];
     for (const key of this.cache.keys()) {
-      if (key === userId || key.startsWith(`profile_${userId}`) || key.startsWith(`profile_${userId}_`)) {
+      if (key === userId || key.startsWith(`profile_${userId}`) || key.startsWith(`profile_${userId}_`) || key.startsWith(`private_${userId}`)) {
         keysToDelete.push(key);
       }
     }
@@ -112,17 +114,55 @@ class ProfessionalUserService {
     }
   }
 
+  _hasRecordedActiveDay(userId, todayStr) {
+    if (!userId || !todayStr) return false;
+    const key = `${userId}_${todayStr}`;
+    if (this._recordedActiveDays.has(key)) return true;
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.getItem(`arvdoul_active_day_${userId}`) === todayStr) {
+        this._recordedActiveDays.add(key);
+        return true;
+      }
+    } catch { /* storage restricted */ }
+    return false;
+  }
+
+  _markRecordedActiveDay(userId, todayStr) {
+    if (!userId || !todayStr) return;
+    this._recordedActiveDays.add(`${userId}_${todayStr}`);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(`arvdoul_active_day_${userId}`, todayStr);
+      }
+    } catch { /* storage restricted */ }
+  }
+
   /**
    * Record today's follower-count snapshot (feeds real growth analytics).
    * One write per user per day - cheap and bounded.
    */
   async _recordFollowerSnapshotIfDue(userId) {
     try {
-      const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
       const today = new Date().toISOString().split('T')[0];
-      const snapRef = doc(this.firestore, 'user_daily_stats', `${userId}_${today}`);
+      const memKey = `${userId}_${today}`;
+      if (this._dailyFollowerSnapshotDone.has(memKey)) return;
+      try {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem(`arvdoul_follower_snap_${userId}`) === today) {
+          this._dailyFollowerSnapshotDone.add(memKey);
+          return;
+        }
+      } catch { /* storage restricted */ }
+
+      const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      const snapRef = doc(this.firestore, 'user_daily_stats', memKey);
       const existing = await getDoc(snapRef);
-      if (existing.exists()) return; // already recorded today
+      if (existing.exists()) {
+        this._dailyFollowerSnapshotDone.add(memKey);
+        try {
+          if (typeof localStorage !== 'undefined') localStorage.setItem(`arvdoul_follower_snap_${userId}`, today);
+        } catch { /* storage restricted */ }
+        return; // already recorded today
+      }
       const followerCount = await countersManager.get({ docPath: `users/${userId}`, field: 'followerCount', fallback: 0 });
       await setDoc(snapRef, {
         userId,
@@ -131,6 +171,10 @@ class ProfessionalUserService {
         value: followerCount,
         recordedAt: serverTimestamp(),
       }, { merge: true });
+      this._dailyFollowerSnapshotDone.add(memKey);
+      try {
+        if (typeof localStorage !== 'undefined') localStorage.setItem(`arvdoul_follower_snap_${userId}`, today);
+      } catch { /* storage restricted */ }
     } catch (e) {
       logger.debug('Follower snapshot skipped', { error: e.message, userId });
     }
@@ -240,7 +284,8 @@ class ProfessionalUserService {
     try {
       if (!username || typeof username !== 'string') return { available: false, error: 'Username required' };
       const normalized = username.toLowerCase().trim();
-      if (normalized.length < 3) return { available: false, error: 'Too short (minimum 3 characters)' };
+      const minLen = PROFILE_CONSTRAINTS.USERNAME.MIN_LENGTH;
+      if (normalized.length < minLen) return { available: false, error: `Too short (minimum ${minLen} characters)` };
       if (normalized.length > USER_CONFIG.DEFAULT_USERNAME_LENGTH) return { available: false, error: `Too long (max ${USER_CONFIG.DEFAULT_USERNAME_LENGTH})` };
       if (!/^[a-z0-9._]+$/.test(normalized)) return { available: false, error: 'Only letters, numbers, dots, underscores allowed' };
 
@@ -275,7 +320,7 @@ class ProfessionalUserService {
       return { available: false, exists: true, username: normalized, existingUserId, checkedAt: Date.now() };
     } catch (error) {
       const normalized = username?.toLowerCase().trim() || '';
-      if (normalized.length < 3) return { available: false, error: 'Too short' };
+      if (normalized.length < PROFILE_CONSTRAINTS.USERNAME.MIN_LENGTH) return { available: false, error: 'Too short' };
       if (normalized.length > USER_CONFIG.DEFAULT_USERNAME_LENGTH) return { available: false, error: 'Too long' };
       if (!/^[a-z0-9._]+$/.test(normalized)) return { available: false, error: 'Invalid characters' };
       // The lookup itself failed (offline / rules / SDK error). Reporting
@@ -357,7 +402,7 @@ class ProfessionalUserService {
       // Filter and sanitize every candidate
       const validCandidates = Array.from(new Set(candidatePool))
         .map(c => c.toLowerCase().replace(/[^a-z0-9._]/g, '').replace(/^[._]+|[._]+$/g, ''))
-        .filter(c => c.length >= 3 && c.length <= USER_CONFIG.DEFAULT_USERNAME_LENGTH && /^[a-z0-9][a-z0-9._]*[a-z0-9]$/.test(c) && !c.includes('..') && !c.includes('__'));
+        .filter(c => c.length >= PROFILE_CONSTRAINTS.USERNAME.MIN_LENGTH && c.length <= USER_CONFIG.DEFAULT_USERNAME_LENGTH && /^[a-z0-9][a-z0-9._]*[a-z0-9]$/.test(c) && !c.includes('..') && !c.includes('__'));
 
       // Check in parallel
       const results = await Promise.all(
@@ -606,15 +651,22 @@ class ProfessionalUserService {
 
     const relationshipFlags = {};
 
-    // Auto-record active day in server-authoritative ledger for owner
+    // Auto-record active day in server-authoritative ledger for owner (at most once per UTC day)
     if (isOwner) {
       const todayStr = new Date().toISOString().slice(0, 10);
-      if (full.lastActiveDay !== todayStr) {
+      if (full.lastActiveDay === todayStr) {
+        this._markRecordedActiveDay(targetUid, todayStr);
+      } else if (!this._hasRecordedActiveDay(targetUid, todayStr)) {
+        this._markRecordedActiveDay(targetUid, todayStr);
         import('./levelSystemService.js').then(({ levelSystemService }) => {
           levelSystemService.recordActiveDay({ userId: targetUid }).catch((err) => {
+            this._recordedActiveDays.delete(`${targetUid}_${todayStr}`);
             logger.warn('recordActiveDay failed; streak/XP day may be missed', { userId: targetUid, error: err?.message });
           });
-        }).catch((err) => logger.warn('levelSystemService import failed', { error: err?.message }));
+        }).catch((err) => {
+          this._recordedActiveDays.delete(`${targetUid}_${todayStr}`);
+          logger.warn('levelSystemService import failed', { error: err?.message });
+        });
       }
     }
 
@@ -653,15 +705,34 @@ class ProfessionalUserService {
    */
   async getPrivateProfile(userId) {
     if (!userId) return null;
-    await this._ensureInitialized();
-    const { doc, getDoc } = await import('firebase/firestore');
-    try {
-      const snap = await getDoc(doc(this.firestore, PRIVATE_PROFILE_COLLECTION, userId));
-      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
-    } catch (e) {
-      logger.warn('getPrivateProfile failed', { userId, error: e?.message });
-      return null;
+    const cacheKey = `private_${userId}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < 60000)) {
+      return cached.data;
     }
+    const existing = this.inFlightRequests.get(cacheKey);
+    if (existing) return existing;
+
+    const req = (async () => {
+      await this._ensureInitialized();
+      const { doc, getDoc } = await import('firebase/firestore');
+      try {
+        const snap = await getDoc(doc(this.firestore, PRIVATE_PROFILE_COLLECTION, userId));
+        const data = snap.exists() ? { id: snap.id, ...snap.data() } : null;
+        if (data) {
+          this.cache.set(cacheKey, { data, timestamp: Date.now() });
+        }
+        return data;
+      } catch (e) {
+        logger.warn('getPrivateProfile failed', { userId, error: e?.message });
+        return null;
+      } finally {
+        this.inFlightRequests.delete(cacheKey);
+      }
+    })();
+
+    this.inFlightRequests.set(cacheKey, req);
+    return req;
   }
 
   /** Merge the private contact document into a public profile object. */
@@ -1298,15 +1369,17 @@ class ProfessionalUserService {
 
     if (targetIsPrivate) {
       const requestRef = doc(this.firestore, 'follow_requests', `${followerId}_${followingId}`);
-      const existing = await getDoc(requestRef);
-      if (existing.exists() && existing.data()?.status === 'pending') {
+      const existing = await getDoc(requestRef).catch(() => null);
+      if (existing?.exists() && existing.data()?.status === 'pending') {
         return { success: true, requested: true, requestStatus: 'pending', alreadyRequested: true };
       }
+      const existingData = existing?.exists() ? existing.data() : null;
       await setDoc(requestRef, {
         fromUserId: followerId,
         toUserId: followingId,
         status: 'pending',
-        createdAt: serverTimestamp(),
+        createdAt: existingData?.createdAt || serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
       auditLogger.log('social.follow.requested', { userId: followerId, meta: { followingId } });
       try {
@@ -1574,7 +1647,10 @@ class ProfessionalUserService {
     if (!snap.exists()) throw new Error('Request not found');
     if (snap.data().toUserId !== ownerId) throw new Error('Not authorized');
     if (snap.data().status !== 'pending') throw new Error('Already processed');
+    const fromUid = snap.data().fromUserId;
     await updateDoc(requestRef, { status: 'declined', updatedAt: serverTimestamp() });
+    this._invalidateUserCache(ownerId);
+    if (fromUid) this._invalidateUserCache(fromUid);
     this._notifyFollowRequestsChanged();
     return { success: true };
   }
@@ -2400,12 +2476,17 @@ class ProfessionalUserService {
         { isOnline: true, lastActive: serverTimestamp(), updatedAt: serverTimestamp() },
         { merge: true }
       );
-      try {
-        const { callFunction, FUNCTIONS } = await import('./callableService.js');
-        await callFunction(FUNCTIONS.RECORD_ACTIVE_DAY, { userId });
-      } catch (callErr) {
-        // Non-blocking: fails gracefully if offline or not signed in
-        logger.debug('recordActiveDay skipped', { userId, error: callErr?.message });
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (!this._hasRecordedActiveDay(userId, todayStr)) {
+        this._markRecordedActiveDay(userId, todayStr);
+        try {
+          const { callFunction, FUNCTIONS } = await import('./callableService.js');
+          await callFunction(FUNCTIONS.RECORD_ACTIVE_DAY, { userId });
+        } catch (callErr) {
+          this._recordedActiveDays.delete(`${userId}_${todayStr}`);
+          // Non-blocking: fails gracefully if offline or not signed in
+          logger.debug('recordActiveDay skipped', { userId, error: callErr?.message });
+        }
       }
     } catch (e) {
       logger.warn('updateLastActive failed; presence may be stale', { userId, error: e?.message });

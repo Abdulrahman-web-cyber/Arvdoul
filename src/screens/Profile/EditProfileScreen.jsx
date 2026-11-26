@@ -187,6 +187,7 @@ export default function EditProfileScreen() {
 
   // Prevent background snapshot pulses from wiping unsaved edits & track dirty state
   const initializedUidRef = useRef(null);
+  const initializedFromProfileRef = useRef(false);
   const initialSnapshotRef = useRef(null);
   const avatarObjectUrlRef = useRef(null);
 
@@ -209,11 +210,20 @@ export default function EditProfileScreen() {
     }
   }, [formData, avatarFile]);
 
-  // Initialize form data once per distinct account
+  // Initialize form data once per distinct account, and upgrade once if initial pass only had sparse Firebase Auth user before Firestore userProfile resolved
   useEffect(() => {
-    if ((userProfile || user) && currentUid && initializedUidRef.current !== currentUid) {
-      initializedUidRef.current = currentUid;
-      const src = userProfile || user;
+    if (!(userProfile || user) || !currentUid) return;
+    const isNewAccount = initializedUidRef.current !== currentUid;
+    const profileJustResolved = Boolean(userProfile) && !initializedFromProfileRef.current && !isDirty;
+    if (!isNewAccount && !profileJustResolved) return;
+
+    initializedUidRef.current = currentUid;
+    if (userProfile) {
+      initializedFromProfileRef.current = true;
+    } else if (isNewAccount) {
+      initializedFromProfileRef.current = false;
+    }
+    const src = userProfile || user;
       const p = src.privacy || {};
       
       let initialUsername = src.username || '';
@@ -268,10 +278,11 @@ export default function EditProfileScreen() {
         initialSnapshotRef.current = null;
       }
 
+    if (!avatarFile) {
       const safePhoto = getSafeAvatarUrl(src.photoURL, src.displayName, currentUid);
       setAvatarPreview(safePhoto);
     }
-  }, [userProfile, user, currentUid]);
+  }, [userProfile, user, currentUid, isDirty, avatarFile]);
 
   // Hydrate persisted interaction settings from canonical settingsService
   useEffect(() => {
@@ -323,7 +334,7 @@ export default function EditProfileScreen() {
     const timer = setTimeout(async () => {
       try {
         if (userService?.checkUsernameAvailability) {
-          const res = await userService.checkUsernameAvailability(raw);
+          const res = await userService.checkUsernameAvailability(raw, currentUid);
           setUsernameAvailability(res?.available ? 'available' : 'taken');
         } else {
           // The check could not run — never claim the handle is available.
@@ -335,7 +346,7 @@ export default function EditProfileScreen() {
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [formData.username, userProfile?.username, user?.username, userService]);
+  }, [formData.username, userProfile?.username, user?.username, currentUid, userService]);
 
   // Unique generated username handler using userService
   const handleGenerateUsername = useCallback(async () => {
@@ -366,7 +377,7 @@ export default function EditProfileScreen() {
     } finally {
       setIsGeneratingUsername(false);
     }
-  }, [formData.displayName, userProfile, user, userService]);
+  }, [formData.displayName, userProfile, user, currentUid, userService]);
 
   // Input Handlers
   const handleInputChange = useCallback((field, value) => {
@@ -547,7 +558,7 @@ export default function EditProfileScreen() {
     try {
       const currentUsername = (userProfile?.username || user?.username || '').trim().toLowerCase();
       if (rawUser !== currentUsername && userService?.checkUsernameAvailability) {
-        const check = await userService.checkUsernameAvailability(rawUser);
+        const check = await userService.checkUsernameAvailability(rawUser, currentUid);
         if (!check.available) {
           setFieldErrors({ username: `@${rawUser} is already taken.` });
           toast.error(`@${rawUser} is already taken. Please choose another.`);
@@ -648,7 +659,11 @@ export default function EditProfileScreen() {
 
         // Force fresh store sync so returning to /profile/me reflects every edit immediately
         if (currentUid && loadStoreProfile) {
-          await loadStoreProfile(currentUid, currentUid, { force: true });
+          try {
+            await loadStoreProfile(currentUid, currentUid, { force: true });
+          } catch (syncErr) {
+            console.warn('Post-save store refresh skipped:', syncErr?.message);
+          }
         }
 
         try {

@@ -908,16 +908,23 @@ class UltimateNotificationsService {
       if (cancelled) return;
       await this.ensureInitialized();
       if (cancelled) return;
-      // Use sharded unread counter (client aggregates)
+      // Use sharded unread counter (aggregate directly from shard snapshots — 0 extra getDocs)
       const shardCount = NOTIFICATIONS_CONFIG.PERFORMANCE.NOTIFICATION_SHARDS;
       const shardRefs = [];
       for (let i = 0; i < shardCount; i++) {
         shardRefs.push(this.fs.doc(this.firestore, 'notification_counters', `${userId}_shard_${i}`));
       }
-      const unsubscribes = shardRefs.map(ref => {
-        return this.fs.onSnapshot(ref, () => {
+      const shardCounts = new Array(shardCount).fill(0);
+      const shardReady = new Array(shardCount).fill(false);
+      const unsubscribes = shardRefs.map((ref, idx) => {
+        return this.fs.onSnapshot(ref, (snap) => {
           if (cancelled) return;
-          this._getTotalUnreadCount(userId).then(count => callback({ count, subscriptionId }));
+          shardCounts[idx] = snap.exists() ? Number(snap.data()?.count || 0) : 0;
+          shardReady[idx] = true;
+          if (shardReady.every(Boolean)) {
+            const count = shardCounts.reduce((acc, val) => acc + val, 0);
+            callback({ count, subscriptionId });
+          }
         }, (err) => logger.warn('[notificationsService] subscription error', err));
       });
       if (cancelled) {

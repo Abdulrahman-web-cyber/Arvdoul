@@ -116,6 +116,7 @@ class SocialGraphService {
     this.initialized = false;
     this.edgeCache = new Map();
     this.listCache = new Map();
+    this.presenceCache = new Map();
     this.inflight = new Map();
   }
 
@@ -149,7 +150,7 @@ class SocialGraphService {
     store.set(key, { data, timestamp: Date.now() });
   }
 
-  /** Drop every cached edge/list that involves the user (call on follow/block/etc.). */
+  /** Drop every cached edge/list/presence entry that involves the user (call on follow/block/etc.). */
   invalidate(userId) {
     if (!userId) return;
     for (const key of [...this.edgeCache.keys()]) {
@@ -158,11 +159,15 @@ class SocialGraphService {
     for (const key of [...this.listCache.keys()]) {
       if (key.includes(userId)) this.listCache.delete(key);
     }
+    for (const key of [...this.presenceCache.keys()]) {
+      if (key === userId || key.includes(userId)) this.presenceCache.delete(key);
+    }
   }
 
   clearCache() {
     this.edgeCache.clear();
     this.listCache.clear();
+    this.presenceCache.clear();
   }
 
   /** Existing document ids for a list of candidate doc ids, batched in chunks of 30. */
@@ -316,44 +321,54 @@ class SocialGraphService {
     const others = targets.filter((t) => t !== viewerId);
     if (others.length === 0) return result;
 
+    // Reuse complete edgeCache hits first so repeat visits / ConnectionsScreen follow-state
+    // lookups avoid duplicate Firestore reads for already-resolved targets.
+    const uncachedOthers = [];
+    for (const t of others) {
+      const cached = this._readCache(this.edgeCache, `edge_${viewerId}_${t}`, EDGE_CACHE_TTL_MS);
+      if (cached) {
+        result.set(t, cached);
+      } else {
+        uncachedOthers.push(t);
+      }
+    }
+    if (uncachedOthers.length === 0) return result;
+
+    const needFollow = include.includes('follow');
+    const needBlock = include.includes('block');
+    const needMute = include.includes('mute');
+    const needRestrict = include.includes('restrict');
+    const isFullEdge = needFollow && needBlock && needMute && needRestrict;
+
     try {
       await this._ensureInitialized();
 
-      // Follow reads use actor equality so Firestore can prove the caller is
-      // one endpoint of each edge; the collection is no longer world-readable.
-      const [followOut, followIn] = include.includes('follow')
-        ? await Promise.all([
-            this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.follow.out),
-            this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.follow.in),
-          ])
-        : [new Set(), new Set()];
+      // Run all enabled actor-scoped reads in a single Promise.all so latency scales
+      // as 1 round-trip instead of sequential waterfalls, and filter follow_requests
+      // to `status == 'pending'` so cancelled/declined rows never appear pending.
+      const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut, pendingOut] = await Promise.all([
+        needFollow ? this._actorScopedIds(viewerId, uncachedOthers, EDGE_ACTOR_SPECS.follow.out) : Promise.resolve(new Set()),
+        needFollow ? this._actorScopedIds(viewerId, uncachedOthers, EDGE_ACTOR_SPECS.follow.in) : Promise.resolve(new Set()),
+        needBlock ? this._actorScopedIds(viewerId, uncachedOthers, EDGE_ACTOR_SPECS.block.out) : Promise.resolve(new Set()),
+        needBlock ? this._actorScopedIds(viewerId, uncachedOthers, EDGE_ACTOR_SPECS.block.in) : Promise.resolve(new Set()),
+        needMute ? this._actorScopedIds(viewerId, uncachedOthers, EDGE_ACTOR_SPECS.mute.out) : Promise.resolve(new Set()),
+        needRestrict ? this._actorScopedIds(viewerId, uncachedOthers, EDGE_ACTOR_SPECS.restrict.out) : Promise.resolve(new Set()),
+        include.includes('follow')
+          ? this._actorScopedIds(viewerId, uncachedOthers, {
+              collection: 'follow_requests',
+              actorField: 'fromUserId',
+              otherField: 'toUserId',
+              equals: { status: 'pending' },
+            })
+          : Promise.resolve(new Set()),
+      ]);
 
-      // Safety edges: actor-equality + other-party `in` (rules-provable).
-      const blockOut = include.includes('block') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.block.out) : new Set();
-      const blockIn = include.includes('block') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.block.in) : new Set();
-      const muteOut = include.includes('mute') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.mute.out) : new Set();
-      const restrictOut = include.includes('restrict') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.restrict.out) : new Set();
-
-      // A follow against a private target creates a `follow_requests/{from}_{to}`
-      // row (status `pending`) and NO follow edge. A surface that only reads the
-      // edge shows "Follow" for a target the viewer already requested, and a
-      // second tap files a duplicate request. Actor-equality + other-party `in`
-      // is the shape the rule proves (`fromUserId == uid()`). Read only when the
-      // caller asked for the follow edge (it is a follow-relationship concept).
-      const pendingOut = include.includes('follow')
-        ? await this._actorScopedIds(viewerId, others, {
-            collection: 'follow_requests',
-            actorField: 'fromUserId',
-            otherField: 'toUserId',
-          })
-        : new Set();
-
-      for (const t of others) {
+      for (const t of uncachedOthers) {
         const isFollowing = followOut.has(`${viewerId}_${t}`);
         const isFollower = followIn.has(`${viewerId}_${t}`);
         const isBlocking = blockOut.has(`${viewerId}_${t}`);
         const isBlockedBy = blockIn.has(`${viewerId}_${t}`);
-        result.set(t, {
+        const edge = {
           uid: t,
           isFollowing,
           isFollower,
@@ -364,12 +379,18 @@ class SocialGraphService {
           isMuted: muteOut.has(`${viewerId}_${t}`),
           isRestricted: restrictOut.has(`${viewerId}_${t}`),
           requestStatus: pendingOut.has(`${viewerId}_${t}`) ? 'pending' : null,
-        });
+        };
+        result.set(t, edge);
+        // Only write complete relationship snapshots to edgeCache so a partial
+        // `{ include: ['follow'] }` lookup never caches false block/mute flags.
+        if (isFullEdge) {
+          this._writeCache(this.edgeCache, `edge_${viewerId}_${t}`, edge);
+        }
       }
     } catch (err) {
       // A partial/empty map would silently erase block and mute state for the
       // entire batch. Never return a successful-looking graph on read failure.
-      logger.warn('[SocialGraph] batch edge read failed', { viewerId, count: others.length, error: err?.message });
+      logger.warn('[SocialGraph] batch edge read failed', { viewerId, count: uncachedOthers.length, error: err?.message });
       throw err;
     }
     return result;
@@ -510,18 +531,46 @@ class SocialGraphService {
   async _fetchPresenceMap(ids) {
     const map = new Map();
     if (!ids.length) return map;
-    const { doc, getDoc } = await import('firebase/firestore');
-    await Promise.all(ids.map(async (id) => {
-      try {
-        const snap = await getDoc(doc(this.firestore, 'user_presence', id));
-        if (!snap.exists()) return;
-        const d = snap.data();
-        const la = d.lastActive?.toDate ? d.lastActive.toDate() : (d.lastActive ? new Date(d.lastActive) : null);
-        const recent = Boolean(la && Date.now() - la.getTime() < 5 * 60 * 1000);
-        map.set(id, { isOnline: Boolean(d.isOnline && recent), lastActive: la });
-      } catch (e) {
-        logger.debug('[SocialGraph] presence read skipped', { id, error: e?.message });
+    const missingIds = [];
+    for (const id of ids) {
+      const cached = this._readCache(this.presenceCache, id, LIST_CACHE_TTL_MS);
+      if (cached) {
+        if (cached.present) map.set(id, cached.value);
+      } else {
+        missingIds.push(id);
       }
+    }
+    if (!missingIds.length) return map;
+
+    const { doc, getDoc } = await import('firebase/firestore');
+    await Promise.all(missingIds.map(async (id) => {
+      const inflightKey = `presence_${id}`;
+      let req = this.inflight.get(inflightKey);
+      if (!req) {
+        req = (async () => {
+          try {
+            const snap = await getDoc(doc(this.firestore, 'user_presence', id));
+            if (!snap.exists()) {
+              this._writeCache(this.presenceCache, id, { present: false });
+              return null;
+            }
+            const d = snap.data();
+            const la = d.lastActive?.toDate ? d.lastActive.toDate() : (d.lastActive ? new Date(d.lastActive) : null);
+            const recent = Boolean(la && Date.now() - la.getTime() < 5 * 60 * 1000);
+            const value = { isOnline: Boolean(d.isOnline && recent), lastActive: la };
+            this._writeCache(this.presenceCache, id, { present: true, value });
+            return value;
+          } catch (e) {
+            logger.debug('[SocialGraph] presence read skipped', { id, error: e?.message });
+            return null;
+          } finally {
+            this.inflight.delete(inflightKey);
+          }
+        })();
+        this.inflight.set(inflightKey, req);
+      }
+      const value = await req;
+      if (value) map.set(id, value);
     }));
     return map;
   }
@@ -628,20 +677,36 @@ class SocialGraphService {
    */
   async getHiddenAuthorIds(userId) {
     if (!userId) return new Set();
-    try {
-      const [blocked, blockedBy, muted] = await Promise.all([
-        this._collectEdgesBounded(userId, 'blocked', 5000),
-        this._collectEdgesBounded(userId, 'blocked_by', 5000),
-        this._collectEdgesBounded(userId, 'muted', 5000),
-      ]);
-      if (!blocked.complete || !blockedBy.complete || !muted.complete) {
-        throw new Error('Safety relationship list exceeded the bounded scan limit; results withheld');
+    const cacheKey = `hidden_${userId}`;
+    const cached = this._readCache(this.listCache, cacheKey, LIST_CACHE_TTL_MS);
+    if (cached) return new Set(cached);
+
+    const existingInflight = this.inflight.get(cacheKey);
+    if (existingInflight) return existingInflight;
+
+    const req = (async () => {
+      try {
+        const [blocked, blockedBy, muted] = await Promise.all([
+          this._collectEdgesBounded(userId, 'blocked', 5000),
+          this._collectEdgesBounded(userId, 'blocked_by', 5000),
+          this._collectEdgesBounded(userId, 'muted', 5000),
+        ]);
+        if (!blocked.complete || !blockedBy.complete || !muted.complete) {
+          throw new Error('Safety relationship list exceeded the bounded scan limit; results withheld');
+        }
+        const hiddenSet = new Set([...blocked.ids, ...blockedBy.ids, ...muted.ids]);
+        this._writeCache(this.listCache, cacheKey, [...hiddenSet]);
+        return hiddenSet;
+      } catch (err) {
+        logger.warn('[SocialGraph] hidden-author read failed; withholding results', { error: err?.message });
+        throw err;
+      } finally {
+        this.inflight.delete(cacheKey);
       }
-      return new Set([...blocked.ids, ...blockedBy.ids, ...muted.ids]);
-    } catch (err) {
-      logger.warn('[SocialGraph] hidden-author read failed; withholding results', { error: err?.message });
-      throw err;
-    }
+    })();
+
+    this.inflight.set(cacheKey, req);
+    return req;
   }
 
   /**
@@ -709,24 +774,39 @@ class SocialGraphService {
    */
   async getFriendCount(userId, { maxEdges = 500 } = {}) {
     if (!userId) return null;
-    try {
-      const cap = Math.max(1, Math.min(Number(maxEdges) || 500, 5000));
-      const [following, followers] = await Promise.all([
-        this._collectEdgesBounded(userId, 'following', cap),
-        this._collectEdgesBounded(userId, 'followers', cap),
-      ]);
-      // Never render a partial intersection as a total.
-      if (!following.complete || !followers.complete) return null;
-      const followerSet = new Set(followers.ids);
-      let count = 0;
-      for (const id of following.ids) {
-        if (followerSet.has(id)) count += 1;
+    const cap = Math.max(1, Math.min(Number(maxEdges) || 500, 5000));
+    const cacheKey = `friendCount_${userId}_${cap}`;
+    const cached = this._readCache(this.listCache, cacheKey, LIST_CACHE_TTL_MS);
+    if (typeof cached === 'number') return cached;
+
+    const existingInflight = this.inflight.get(cacheKey);
+    if (existingInflight) return existingInflight;
+
+    const req = (async () => {
+      try {
+        const [following, followers] = await Promise.all([
+          this._collectEdgesBounded(userId, 'following', cap),
+          this._collectEdgesBounded(userId, 'followers', cap),
+        ]);
+        // Never render a partial intersection as a total.
+        if (!following.complete || !followers.complete) return null;
+        const followerSet = new Set(followers.ids);
+        let count = 0;
+        for (const id of following.ids) {
+          if (followerSet.has(id)) count += 1;
+        }
+        this._writeCache(this.listCache, cacheKey, count);
+        return count;
+      } catch (err) {
+        logger.warn('[SocialGraph] getFriendCount failed', { userId, error: err?.message });
+        return null;
+      } finally {
+        this.inflight.delete(cacheKey);
       }
-      return count;
-    } catch (err) {
-      logger.warn('[SocialGraph] getFriendCount failed', { userId, error: err?.message });
-      return null;
-    }
+    })();
+
+    this.inflight.set(cacheKey, req);
+    return req;
   }
 
   /** Graph summary for a profile header: counts plus the viewer's edge. */

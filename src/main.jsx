@@ -88,36 +88,27 @@ const root = createRoot(rootElement);
 // re-renders once i18n is ready (react-i18next handles the re-render).
 initI18n().catch((err) => console.warn('⚠️ i18n init failed (fallback: English):', err.message));
 
-// Remove the temporary loading spinner immediately when React starts rendering
+// Clean up any legacy pre-boot node synchronously before React mounts
 const removeLoadingSpinner = () => {
   const selectors = ['.app-loading', '.av-boot'];
   selectors.forEach((selector) => {
     const el = document.querySelector(selector);
-    if (el) {
-      el.style.transition = 'opacity 250ms ease-out';
-      el.style.opacity = '0';
-      setTimeout(() => {
-        if (el.parentNode) {
-          el.parentNode.removeChild(el);
-        }
-      }, 250);
+    if (el && el.parentNode) {
+      el.parentNode.removeChild(el);
     }
   });
 };
 
 try {
   console.log('🚀 Arvdoul starting...');
-  
+  removeLoadingSpinner();
+
   // Render app
   root.render(
     <React.StrictMode>
       <AppBootstrap />
     </React.StrictMode>
   );
-  
-  // Remove loading banner immediately when React begins mounting
-  requestAnimationFrame(removeLoadingSpinner);
-  setTimeout(removeLoadingSpinner, 300);
   
   console.log('✅ Application rendered');
   
