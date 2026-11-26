@@ -82,16 +82,28 @@ export default function CreatorDashboardScreen() {
   }, [setTimeframe]);
   
   const handleExport = useCallback(() => {
-    // Export analytics data
-    const dataStr = JSON.stringify(analytics, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    if (!analytics) return;
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      timeframe,
+      userId: currentUserId,
+      analytics,
+      dailyStats,
+      ranking,
+      demographics,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
     const exportName = `arvdoul_analytics_${timeframe}.json`;
-    
+
     const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('href', blobUrl);
     linkElement.setAttribute('download', exportName);
+    document.body.appendChild(linkElement);
     linkElement.click();
-  }, [analytics, timeframe]);
+    document.body.removeChild(linkElement);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  }, [analytics, dailyStats, ranking, demographics, timeframe, currentUserId]);
   
   if (!authInitialized) {
     return <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-label="Restoring session"><div className="h-8 w-8 rounded-full border-2 border-current border-t-transparent animate-spin" /></div>;

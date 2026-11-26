@@ -1743,9 +1743,10 @@ class ProfessionalUserService {
     // A friend is a MUTUAL follow (matching ConnectionsScreen/FriendsScreen),
     // not merely someone the user follows. The spine pages the following edges,
     // keeps follow-backs, and hydrates them in one batch.
+    const targetUid = options?.targetUid || userId;
     const { getSocialGraphService } = await import('./socialGraphService.js');
-    const res = await getSocialGraphService().listMutualConnections(userId, {
-      viewerId: options.viewerId || userId,
+    const res = await getSocialGraphService().listMutualConnections(targetUid, {
+      viewerId: options.viewerId || targetUid,
       limit: options.limit || USER_CONFIG.FRIENDS_PAGE_SIZE,
       cursor: options.startAfter || null,
     });
@@ -1765,9 +1766,10 @@ class ProfessionalUserService {
    * @returns {Object} { success, followers, hasMore, nextCursor, total }
    */
   async getFollowers(userId, options = {}) {
+    const targetUid = options?.targetUid || userId;
     const { getSocialGraphService } = await import('./socialGraphService.js');
-    const res = await getSocialGraphService().listConnections(userId, 'followers', {
-      viewerId: options.viewerId || userId,
+    const res = await getSocialGraphService().listConnections(targetUid, 'followers', {
+      viewerId: options.viewerId || targetUid,
       limit: options.limit || USER_CONFIG.FRIENDS_PAGE_SIZE,
       cursor: options.startAfter || null,
     });
@@ -1787,9 +1789,10 @@ class ProfessionalUserService {
    * @returns {Object} { success, following, hasMore, nextCursor, total }
    */
   async getFollowing(userId, options = {}) {
+    const targetUid = options?.targetUid || userId;
     const { getSocialGraphService } = await import('./socialGraphService.js');
-    const res = await getSocialGraphService().listConnections(userId, 'following', {
-      viewerId: options.viewerId || userId,
+    const res = await getSocialGraphService().listConnections(targetUid, 'following', {
+      viewerId: options.viewerId || targetUid,
       limit: options.limit || USER_CONFIG.FRIENDS_PAGE_SIZE,
       cursor: options.startAfter || null,
     });

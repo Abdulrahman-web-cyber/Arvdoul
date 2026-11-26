@@ -5,9 +5,19 @@
 
 import { memo, useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Stamp, ArrowRight, ChevronRight } from "lucide-react";
+import { ShieldCheck, Stamp, ArrowRight, ChevronRight, Landmark, Swords, Palette, ScrollText, Crown } from "lucide-react";
 import { cn } from '../../lib/utils';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import passportService from '../../services/passportService';
+
+const STAMP_ICONS = {
+  landmark: Landmark,
+  shield: ShieldCheck,
+  sword: Swords,
+  palette: Palette,
+  scroll: ScrollText,
+  crown: Crown,
+};
 
 export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
   userId,
@@ -165,22 +175,27 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {unlockedStamps.map((stamp) => (
-              <div
-                key={stamp.id}
-                title={`${stamp.title} (${stamp.code})`}
-                className={cn(
-                  "flex items-center gap-2 p-2.5 rounded-xl border shrink-0 text-left min-w-[150px]",
-                  isDark ? "bg-slate-950/60 border-amber-500/20" : "bg-white border-amber-600/20"
-                )}
-              >
-                <span className="text-xl shrink-0">{stamp.icon}</span>
-                <div className="min-w-0">
-                  <span className="text-[9px] font-mono uppercase text-slate-400 block truncate">{stamp.code}</span>
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">{stamp.title}</span>
+            {unlockedStamps.map((stamp) => {
+              const StampGlyph = STAMP_ICONS[stamp.iconKey] || Stamp;
+              return (
+                <div
+                  key={stamp.id}
+                  title={`${stamp.title} (${stamp.code})`}
+                  className={cn(
+                    "flex items-center gap-2 p-2.5 rounded-xl border shrink-0 text-left min-w-[150px]",
+                    isDark ? "bg-[#03071B]/60 border-amber-500/20" : "bg-white border-amber-600/20"
+                  )}
+                >
+                  <span className="w-7 h-7 rounded-lg bg-amber-500/12 border border-amber-500/25 flex items-center justify-center text-amber-400 shrink-0">
+                    <StampGlyph className="w-4 h-4" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <span className="text-[9px] font-mono uppercase text-slate-400 block truncate">{stamp.code}</span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">{stamp.title}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -189,7 +204,8 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
           <button
             type="button"
             onClick={() => navigate(isOwner ? '/passport' : `/passport/${userId}`)}
-            className="w-full sm:flex-1 min-h-[44px] py-3 px-4 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            style={{ background: BRAND_GRADIENT }}
+            className="w-full sm:flex-1 min-h-[44px] py-3 px-4 rounded-2xl hover:brightness-110 text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <ShieldCheck className="w-4 h-4" />
             <span>Open Sovereign Passport Booklet</span>

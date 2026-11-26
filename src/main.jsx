@@ -90,16 +90,19 @@ initI18n().catch((err) => console.warn('⚠️ i18n init failed (fallback: Engli
 
 // Remove the temporary loading spinner immediately when React starts rendering
 const removeLoadingSpinner = () => {
-  const loadingSpinner = document.querySelector('.app-loading');
-  if (loadingSpinner) {
-    loadingSpinner.style.transition = 'opacity 300ms ease-out';
-    loadingSpinner.style.opacity = '0';
-    setTimeout(() => {
-      if (loadingSpinner.parentNode) {
-        loadingSpinner.parentNode.removeChild(loadingSpinner);
-      }
-    }, 300);
-  }
+  const selectors = ['.app-loading', '.av-boot'];
+  selectors.forEach((selector) => {
+    const el = document.querySelector(selector);
+    if (el) {
+      el.style.transition = 'opacity 250ms ease-out';
+      el.style.opacity = '0';
+      setTimeout(() => {
+        if (el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+      }, 250);
+    }
+  });
 };
 
 try {

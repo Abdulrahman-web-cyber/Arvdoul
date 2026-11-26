@@ -863,6 +863,61 @@ class UltimateFeedService {
     }
   }
 
+  async _getMediaFeedPaginated(userId, options) {
+    if (this.offlineMode) return [];
+    try {
+      const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
+      const { limit = 20 } = options;
+      const { collection, query, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
+      const postsRef = collection(this.firestore, 'posts');
+
+      let snapshot;
+      try {
+        snapshot = await getDocs(
+          query(
+            postsRef,
+            ...this._publicPostFilters(),
+            orderBy('createdAt', 'desc'),
+            firestoreLimit(limit * 4)
+          )
+        );
+      } catch {
+        snapshot = await getDocs(
+          query(
+            postsRef,
+            ...this._publicPostFilters(),
+            firestoreLimit(limit * 4)
+          )
+        );
+      }
+
+      const posts = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.isDeleted === true || data.status === 'draft' || hiddenAuthors.has(data.authorId)) return;
+        const hasMedia =
+          (Array.isArray(data.media) && data.media.length > 0) ||
+          Boolean(data.imageUrl || data.videoUrl || data.muxPlaybackId || data.audioUrl) ||
+          ['image', 'video', 'media', 'carousel', 'audio'].includes(data.type);
+        if (hasMedia) {
+          posts.push({
+            id: doc.id,
+            ...data,
+            _source: 'media',
+            _score: 0.9,
+            createdAt: data.createdAt?.toDate?.() || (data.createdAt ? new Date(data.createdAt) : new Date()),
+            updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : new Date()),
+          });
+        }
+      });
+
+      return posts.slice(0, limit);
+    } catch (error) {
+      logger.warn('Media feed source failed', { userId, error: error?.message });
+      return [];
+    }
+  }
+
   /**
    * Active paid promotions (`boostPost` writes `boosted_posts/{postId}` after
    * debiting coins). Bounded, index-backed (composite `expiresAt` + `__name__`),
@@ -1057,14 +1112,14 @@ class UltimateFeedService {
     }
 
     if (!forceRefresh && !this._canMakeRequest(userId, 'getSmartFeed')) {
-      const cached = this._getPageFromCache(userId, limit, lastDoc);
+      const cached = this._getPageFromCache(userId, limit, lastDoc, feedType);
       if (cached) return { ...cached, rateLimited: true, cached: true, operationId, duration: Date.now() - startTime };
     }
 
     await this._ensureInitialized();
 
     if (!forceRefresh) {
-      const cached = this._getPageFromCache(userId, limit, lastDoc);
+      const cached = this._getPageFromCache(userId, limit, lastDoc, feedType);
       if (cached) return { ...cached, cached: true, operationId, duration: Date.now() - startTime };
     }
 
@@ -1083,9 +1138,12 @@ class UltimateFeedService {
     let hiddenPosts = new Set(sessionState.hiddenPosts || []);
     let notInterestedPosts = new Set(sessionState.notInterested || []);
     let topicStreaks = sessionState.topicStreaks || {};
-    this._mergeSeenPosts(userId, sessionState.seenPosts);
+    if (feedType === 'for_you' || feedType === 'foryou') {
+      this._mergeSeenPosts(userId, sessionState.seenPosts);
+    }
     this.notInterestedPosts.set(userId, notInterestedPosts);
-    const seenPostIds = this._getSeenSet(userId);
+    const seenKey = `${userId}:${feedType}`;
+    const seenPostIds = this._getSeenSet(seenKey);
     const expGroup = await this._getUserExperimentGroup(userId);
     let dynamicWeights = weightsRes.status === 'fulfilled' && weightsRes.value
       ? { ...weightsRes.value }
@@ -1101,16 +1159,16 @@ class UltimateFeedService {
         const newPosts = mlFeed.feed.filter(p => !seenPostIds.has(p.id));
         const finalFeed = this._finalizeFeedOptimized(newPosts, userId, options);
         const nextCursor = this._encodeCursorFromFeed(finalFeed);
-        this._recordSeenPosts(userId, finalFeed);
+        this._recordSeenPosts(seenKey, finalFeed);
         this._saveSessionState(userId, {
           sessionSeed,
           lastAuthor: this._getLastAuthor(userId),
-          seenPosts: (this.feedHistory.get(userId)?.posts || []).map(p => p.id),
+          seenPosts: (this.feedHistory.get(seenKey)?.posts || []).map(p => p.id),
           hiddenPosts: Array.from(hiddenPosts),
           notInterested: Array.from(notInterestedPosts),
           topicStreaks,
         });
-        this._cachePage(userId, limit, lastDoc, { feed: finalFeed, nextCursor, hasMore: mlFeed.hasMore ?? false });
+        this._cachePage(userId, limit, lastDoc, { feed: finalFeed, nextCursor, hasMore: mlFeed.hasMore ?? false }, feedType);
         setTimeout(() => this._prefetchAds(userId), FEED_CONFIG.MONETISATION.AD_PREFETCH_DELAY);
         return {
           success: true,
@@ -1134,15 +1192,20 @@ class UltimateFeedService {
     const userPreferences = userPrefsRes.status === 'fulfilled' && userPrefsRes.value ? userPrefsRes.value : {};
 
     let decodedCursor = lastDoc ? this._decodeCursor(lastDoc) : null;
+    const sourceCursors = decodedCursor ? (decodedCursor.s || decodedCursor.sources || null) : null;
 
     const feedSources = await this._fetchOptimizedSources(userId, userPreferences, dynamicWeights, {
       ...options,
       limit,
-      lastDoc: decodedCursor ? decodedCursor.sources : null,
+      lastDoc: sourceCursors,
+      isFirstPage: !lastDoc,
       feedType
     });
 
-    let scoredPosts = this._scoreAndRankPostsOptimized(feedSources, userId, dynamicWeights, sessionSeed, hiddenPosts, seenPostIds);
+    let scoredPosts = this._scoreAndRankPostsOptimized(feedSources, userId, dynamicWeights, sessionSeed, hiddenPosts, seenPostIds, {
+      allowSeenFallback: !lastDoc,
+      targetLimit: limit,
+    });
     scoredPosts = this._applySessionBoosts(userId, scoredPosts);
     scoredPosts = scoredPosts.filter(p => !notInterestedPosts.has(p.id));
     const diversified = featureFlagService.isEnabled('feed.diversity_rerank')
@@ -1161,11 +1224,11 @@ class UltimateFeedService {
     const nextCursorString = this._encodeCursor(nextCursorObj);
     const hasMore = explainedFeed.length > 0 && (nextCursorString != null);
 
-    this._recordSeenPosts(userId, explainedFeed);
+    this._recordSeenPosts(seenKey, explainedFeed);
     this._saveSessionState(userId, {
       sessionSeed,
       lastAuthor: this._getLastAuthor(userId),
-      seenPosts: (this.feedHistory.get(userId)?.posts || []).map(p => p.id),
+      seenPosts: (this.feedHistory.get(seenKey)?.posts || []).map(p => p.id),
       hiddenPosts: Array.from(hiddenPosts),
       notInterested: Array.from(notInterestedPosts),
       topicStreaks,
@@ -1183,7 +1246,7 @@ class UltimateFeedService {
         page: lastDoc ? 'next' : 'first',
         sessionSeed,
       }
-    });
+    }, feedType);
 
     setTimeout(() => this._prefetchAds(userId), FEED_CONFIG.MONETISATION.AD_PREFETCH_DELAY);
     return {
@@ -1203,14 +1266,16 @@ class UltimateFeedService {
     if (post._source === 'trending') return 'Trending in your region';
     if (post._source === 'for_you') return 'Based on your interests';
     if (post._source === 'discover') return 'Discover something new';
+    if (post._source === 'media') return 'Media highlight';
     return 'Appears in your feed';
   }
 
   async _fetchOptimizedSources(userId, preferences, weights, options) {
     const sources = {};
-    const { limit, lastDoc, feedType } = options;
+    const { limit, lastDoc, feedType, isFirstPage } = options;
     const pageLimit = Math.min(limit || 20, FEED_CONFIG.ALGORITHM.MAX_POSTS_PER_SOURCE);
     const sourcePromises = [];
+    const cursorFor = (name) => lastDoc?.[name] || lastDoc?.sources?.[name] || null;
 
     const addSource = (sourceName, promise) => {
       sourcePromises.push(
@@ -1220,26 +1285,33 @@ class UltimateFeedService {
     };
 
     if (feedType === 'following') {
-      addSource('following', this._getFollowingFeedEfficient(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.following }));
+      addSource('following', this._getFollowingFeedEfficient(userId, { ...options, limit: pageLimit, lastDoc: cursorFor('following')?.o || cursorFor('following') }));
     } else if (feedType === 'friends') {
-      addSource('friends', this._getFriendsFeedEfficient(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.friends }));
+      addSource('friends', this._getFriendsFeedEfficient(userId, { ...options, limit: pageLimit, lastDoc: cursorFor('friends') }));
+    } else if (feedType === 'trending') {
+      addSource('trending', this._getTrendingFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: cursorFor('trending') }));
+    } else if (feedType === 'discover') {
+      addSource('discover', this._getDiscoverFeedPaginated(userId, preferences, { ...options, limit: pageLimit, lastDoc: cursorFor('discover') }));
+    } else if (feedType === 'media') {
+      addSource('media', this._getMediaFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: cursorFor('media') }));
+      addSource('videos', this._getVideoFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: cursorFor('videos') }));
     } else if (feedType === 'videos' || feedType === 'sparks') {
-      addSource('videos', this._getVideoFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.videos }));
+      addSource('videos', this._getVideoFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: cursorFor('videos') }));
     } else {
       if (weights.following > 0.1) {
-        addSource('following', this._getFollowingFeedEfficient(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.following }));
+        addSource('following', this._getFollowingFeedEfficient(userId, { ...options, limit: pageLimit, lastDoc: cursorFor('following')?.o || cursorFor('following') }));
       }
       if (weights.for_you > 0.1) {
-        addSource('for_you', this._getForYouFeedFromServer(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.for_you }));
+        addSource('for_you', this._getForYouFeedFromServer(userId, { ...options, limit: pageLimit, lastDoc: cursorFor('for_you') }));
       }
       if (weights.trending > 0.05) {
-        addSource('trending', this._getTrendingFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.trending }));
+        addSource('trending', this._getTrendingFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: cursorFor('trending') }));
       }
       if (weights.discover > 0.03) {
-        addSource('discover', this._getDiscoverFeedPaginated(userId, preferences, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.discover }));
+        addSource('discover', this._getDiscoverFeedPaginated(userId, preferences, { ...options, limit: pageLimit, lastDoc: cursorFor('discover') }));
       }
       if (weights.videos > 0.03 && preferences?.postTypes?.video > 0.5) {
-        addSource('videos', this._getVideoFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.videos }));
+        addSource('videos', this._getVideoFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: cursorFor('videos') }));
       }
       if (weights.sponsored > 0.02) {
         addSource('sponsored', this._getSponsoredPosts(userId, { limit: Math.min(2, pageLimit) }));
@@ -1249,12 +1321,26 @@ class UltimateFeedService {
     // Paid promotions must actually reach viewers: read the active boosts and
     // splice those posts into the ranking pool (best-effort; a denied read for
     // a private/blocked author is dropped inside the helper).
-    addSource('boosted', this._getBoostedPosts(userId, { limit: pageLimit }));
+    if (feedType !== 'following' && feedType !== 'friends') {
+      addSource('boosted', this._getBoostedPosts(userId, { limit: pageLimit }));
+    }
 
     const timedPromises = sourcePromises.map(p =>
       Promise.race([p, new Promise(resolve => setTimeout(() => resolve(), FEED_CONFIG.PERFORMANCE.REQUEST_TIMEOUT))])
     );
     await Promise.allSettled(timedPromises);
+
+    const hasPrimaryPosts = Object.entries(sources).some(
+      ([k, list]) => k !== 'sponsored' && Array.isArray(list) && list.length > 0
+    );
+    if (!hasPrimaryPosts && isFirstPage && feedType !== 'following' && feedType !== 'friends' && feedType !== 'media') {
+      try {
+        sources.fallback = await this._getFallbackSimpleFeed(userId, { limit: pageLimit }, feedType || 'for_you');
+      } catch {
+        // fallback best-effort
+      }
+    }
+
     await this._overlayFeedCounters(sources);
     return sources;
   }
@@ -1303,8 +1389,8 @@ class UltimateFeedService {
     }
   }
 
-  _scoreAndRankPostsOptimized(sources, userId, dynamicWeights, sessionSeed, hiddenPosts, seenPostIds) {
-    const rawPosts = [];
+  _scoreAndRankPostsOptimized(sources, userId, dynamicWeights, sessionSeed, hiddenPosts, seenPostIds, { allowSeenFallback = false, targetLimit = 10 } = {}) {
+    const rawPostsMap = new Map();
     const unseenPosts = [];
 
     Object.entries(sources).forEach(([source, posts]) => {
@@ -1312,24 +1398,32 @@ class UltimateFeedService {
         const weight = dynamicWeights[source] || 0.1;
         posts.forEach(p => {
           if (!p || !p.id || hiddenPosts.has(p.id)) return;
-          rawPosts.push({ post: p, source, weight });
-          if (!seenPostIds.has(p.id)) {
-            unseenPosts.push({ post: p, source, weight });
+          if (!rawPostsMap.has(p.id)) {
+            rawPostsMap.set(p.id, { post: p, source, weight, seen: seenPostIds.has(p.id) });
+            if (!seenPostIds.has(p.id)) {
+              unseenPosts.push({ post: p, source, weight, seen: false });
+            }
           }
         });
       }
     });
 
-    const pool = unseenPosts.length > 0 ? unseenPosts : rawPosts;
+    const rawPosts = Array.from(rawPostsMap.values());
+    let pool = unseenPosts.length > 0 ? [...unseenPosts] : [...rawPosts];
+    if (allowSeenFallback && unseenPosts.length > 0 && pool.length < targetLimit && rawPosts.length > pool.length) {
+      const seenFallback = rawPosts.filter(item => item.seen);
+      pool = [...pool, ...seenFallback];
+    }
     const allPosts = [];
 
-    pool.forEach(({ post: p, source, weight }) => {
+    pool.forEach(({ post: p, source, weight, seen }) => {
       let baseScore = p._score || 1.0;
       if (source !== 'sponsored' && p.personalizationScore === undefined) {
         baseScore = this._calculateFallbackScore(p);
       }
 
       let finalScore = baseScore * weight;
+      if (seen) finalScore *= 0.45;
 
       if (p.toxicityScore !== undefined) finalScore *= (1 - (p.toxicityScore || 0));
       // Average watch time is not tracked on posts (or mirrored for videos — the
@@ -1452,6 +1546,17 @@ class UltimateFeedService {
         seenPosts.add(post.id);
         lastAuthor = post.authorId;
         for (const topic of (post.topics || [])) topicStreakCounts[topic] = (topicStreakCounts[topic] || 0) + 1;
+      }
+    }
+
+    if (diversified.length < Math.min(targetLimit, remaining.length)) {
+      for (const post of remaining) {
+        if (diversified.length >= targetLimit) break;
+        if (!seenPosts.has(post.id)) {
+          diversified.push(post);
+          seenPosts.add(post.id);
+          lastAuthor = post.authorId;
+        }
       }
     }
 
@@ -1707,15 +1812,17 @@ class UltimateFeedService {
     } catch { return null; }
   }
 
-  _getPageFromCache(userId, limit, cursor) {
-    const key = `feed_page_${userId}_${limit}_${cursor || 'first'}`;
+  _getPageFromCache(userId, limit, cursor, feedType = 'for_you') {
+    const cursorKey = typeof cursor === 'string' ? cursor : (cursor ? JSON.stringify(cursor) : 'first');
+    const key = `feed_page_${userId}_${feedType}_${limit}_${cursorKey}`;
     const cached = this.cache.get(key);
     if (cached && Date.now() - cached.timestamp < FEED_CONFIG.PERFORMANCE.PAGE_CACHE_TTL) return cached.data;
     return null;
   }
 
-  _cachePage(userId, limit, cursor, data) {
-    const key = `feed_page_${userId}_${limit}_${cursor || 'first'}`;
+  _cachePage(userId, limit, cursor, data, feedType = 'for_you') {
+    const cursorKey = typeof cursor === 'string' ? cursor : (cursor ? JSON.stringify(cursor) : 'first');
+    const key = `feed_page_${userId}_${feedType}_${limit}_${cursorKey}`;
     this.cache.set(key, { data, timestamp: Date.now() });
     if (this.cache.size > FEED_CONFIG.PERFORMANCE.MAX_CACHE_SIZE) cacheManager.purgeExpired();
   }

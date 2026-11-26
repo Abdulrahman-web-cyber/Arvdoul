@@ -9,130 +9,165 @@ import SplashScreen from "../screens/SplashScreen.jsx";
 import logger from "../utils/Logger.js";
 import metricsService from "../services/metricsService.js";
 
-const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
-const SubscriptionScreen = lazy(() => import("../screens/SubscriptionScreen.jsx"));
-const DataUsageScreen = lazy(() => import("../screens/DataUsageScreen.jsx"));
-const BlockedAccountsScreen = lazy(() => import("../screens/BlockedAccountsScreen.jsx"));
-const ProjectDashboardScreen = lazy(() => import("../screens/Collaboration/ProjectDashboardScreen.jsx"));
-const ProjectDetailScreen = lazy(() => import("../screens/Collaboration/ProjectDetailScreen.jsx"));
-const LoginScreen = lazy(() => import("../screens/LoginScreen.jsx"));
-const SignupStep1Personal = lazy(() => import("../screens/SignupStep1Personal.jsx"));
-const SignupStep2VerifyContact = lazy(() => import("../screens/SignupStep2VerifyContact.jsx"));
-const OtpVerification = lazy(() => import("../screens/OtpVerification.jsx"));
-const VerifyEmailScreen = lazy(() => import("../screens/VerifyEmailScreen.jsx"));
-const ForgotPasswordScreen = lazy(() => import("../screens/ForgotPassword.jsx"));
-const ResetPasswordScreen = lazy(() => import("../screens/ResetPassword.jsx"));
-const SetupProfile = lazy(() => import("../screens/SetupProfile.jsx"));
-const HomeScreen = lazy(() => import("../screens/HomeScreen.jsx"));
-const VideosScreen = lazy(() => import("../screens/VideosScreen.jsx"));
-const MessagingScreen = lazy(() => import("../screens/MessagingScreen.jsx"));
-const ChatScreen = lazy(() => import("../screens/ChatScreen.jsx"));
-const NewConversationScreen = lazy(() => import("../screens/NewConversationScreen.jsx"));
-const GroupInfoScreen = lazy(() => import("../screens/GroupInfoScreen.jsx"));
-const JoinGroupScreen = lazy(() => import("../screens/JoinGroupScreen.jsx"));
-const ConversationSettingsScreen = lazy(() => import("../screens/ConversationSettingsScreen.jsx"));
-const CreatePost = lazy(() => import("../screens/CreatePost.jsx"));
-const CoinsScreen = lazy(() => import("../screens/CoinsScreen.jsx"));
-const NotificationsScreen = lazy(() => import("../screens/NotificationsScreen.jsx"));
-const CreateStory = lazy(() => import("../screens/CreateStory.jsx"));
-const StoriesScreen = lazy(() => import("../screens/StoriesScreen.jsx"));
-// Profile screens - using new Profile directory
-const ProfileScreen = lazy(() => import("../screens/Profile/ProfileScreen.jsx"));
-const ProfilePublicScreen = lazy(() => import("../screens/Profile/ProfilePublicScreen.jsx"));
-const ProfileMyScreen = lazy(() => import("../screens/Profile/ProfileMyScreen.jsx"));
-const EditProfile = lazy(() => import("../screens/Profile/EditProfileScreen.jsx"));
-const CreatorDashboardScreen = lazy(() => import("../screens/Profile/CreatorDashboardScreen.jsx"));
-const FollowersScreen = lazy(() => import("../screens/Profile/FollowersScreen.jsx"));
-const FollowingScreen = lazy(() => import("../screens/Profile/FollowingScreen.jsx"));
-const FriendsScreen = lazy(() => import("../screens/Profile/FriendsScreen.jsx"));
-const ConnectionsScreen = lazy(() => import("../screens/Profile/ConnectionsScreen.jsx"));
-const HighlightsScreen = lazy(() => import("../screens/Profile/HighlightsScreen.jsx"));
-const AboutScreen = lazy(() => import("../screens/Profile/AboutScreen.jsx"));
-const ProfilePreviewScreen = lazy(() => import("../screens/Profile/ProfilePreviewScreen.jsx"));
-const LevelRoadmapScreen = lazy(() => import("../screens/Profile/LevelRoadmapScreen.jsx"));
-// Legacy screens
-const PostDetails = lazy(() => import("../screens/PostDetails.jsx"));
-const SettingsScreen = lazy(() => import("../screens/SettingsScreen.jsx"));
-const SearchScreen = lazy(() => import("../screens/SearchScreen.jsx"));
-const SavedScreen = lazy(() => import("../screens/SavedScreen.jsx"));
-const CollectionsScreen = lazy(() => import("../screens/CollectionsScreen.jsx"));
-const LiveScreen = lazy(() => import("../screens/LiveScreen.jsx"));
-// Video Analytics Screen
-const VideoAnalyticsScreen = lazy(() => import("../screens/VideoAnalyticsScreen.jsx"));
-const PostAnalyticsScreen = lazy(() => import("../screens/PostAnalyticsScreen.jsx"));
-const ReelsScreen = lazy(() => import("../screens/ReelsScreen.jsx"));
-const VideoDetailScreen = lazy(() => import("../screens/VideoDetailScreen.jsx"));
-const CallScreen = lazy(() => import("../screens/CallScreen.jsx"));
-const GiftScreen = lazy(() => import("../screens/GiftScreen.jsx"));
+import IntroScreen from "../screens/IntroScreen.jsx";
+import LoginScreen from "../screens/LoginScreen.jsx";
+import HomeScreen from "../screens/HomeScreen.jsx";
+import VideosScreen from "../screens/VideosScreen.jsx";
+import MessagingScreen from "../screens/MessagingScreen.jsx";
+import NotificationsScreen from "../screens/NotificationsScreen.jsx";
+import ProfileScreen from "../screens/Profile/ProfileScreen.jsx";
+import ProfilePublicScreen from "../screens/Profile/ProfilePublicScreen.jsx";
+import ProfileMyScreen from "../screens/Profile/ProfileMyScreen.jsx";
+import EditProfile from "../screens/Profile/EditProfileScreen.jsx";
+import CreatorDashboardScreen from "../screens/Profile/CreatorDashboardScreen.jsx";
+import FollowersScreen from "../screens/Profile/FollowersScreen.jsx";
+import FollowingScreen from "../screens/Profile/FollowingScreen.jsx";
+import FriendsScreen from "../screens/Profile/FriendsScreen.jsx";
+import ConnectionsScreen from "../screens/Profile/ConnectionsScreen.jsx";
+import PassportScreen from "../screens/Citizenship/PassportScreen.jsx";
+
+function isDynamicImportError(err) {
+  const msg = String(err?.message || err || '');
+  return (
+    err?.name === 'ChunkLoadError' ||
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('Importing a module script failed') ||
+    msg.includes('error loading dynamically imported module') ||
+    msg.includes('Loading chunk')
+  );
+}
+
+function lazyWithRetry(loader, chunkKey) {
+  return lazy(async () => {
+    const delays = [150, 450];
+    let lastErr;
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      try {
+        return await loader();
+      } catch (err) {
+        lastErr = err;
+        if (!isDynamicImportError(err) || attempt === delays.length) break;
+        await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+      }
+    }
+
+    if (typeof window !== 'undefined' && isDynamicImportError(lastErr)) {
+      try {
+        const storageKey = `arvdoul_chunk_reload:${chunkKey || 'route'}`;
+        const prev = Number(window.sessionStorage.getItem(storageKey) || '0');
+        if (!prev || Date.now() - prev > 20000) {
+          window.sessionStorage.setItem(storageKey, String(Date.now()));
+          window.location.reload();
+          return new Promise(() => {});
+        }
+      } catch {
+        // sessionStorage may be restricted in hardened webviews
+      }
+    }
+    throw lastErr;
+  });
+}
+
+const SubscriptionScreen = lazyWithRetry(() => import("../screens/SubscriptionScreen.jsx"), "SubscriptionScreen");
+const DataUsageScreen = lazyWithRetry(() => import("../screens/DataUsageScreen.jsx"), "DataUsageScreen");
+const BlockedAccountsScreen = lazyWithRetry(() => import("../screens/BlockedAccountsScreen.jsx"), "BlockedAccountsScreen");
+const ProjectDashboardScreen = lazyWithRetry(() => import("../screens/Collaboration/ProjectDashboardScreen.jsx"), "ProjectDashboardScreen");
+const ProjectDetailScreen = lazyWithRetry(() => import("../screens/Collaboration/ProjectDetailScreen.jsx"), "ProjectDetailScreen");
+const SignupStep1Personal = lazyWithRetry(() => import("../screens/SignupStep1Personal.jsx"), "SignupStep1Personal");
+const SignupStep2VerifyContact = lazyWithRetry(() => import("../screens/SignupStep2VerifyContact.jsx"), "SignupStep2VerifyContact");
+const OtpVerification = lazyWithRetry(() => import("../screens/OtpVerification.jsx"), "OtpVerification");
+const VerifyEmailScreen = lazyWithRetry(() => import("../screens/VerifyEmailScreen.jsx"), "VerifyEmailScreen");
+const ForgotPasswordScreen = lazyWithRetry(() => import("../screens/ForgotPassword.jsx"), "ForgotPasswordScreen");
+const ResetPasswordScreen = lazyWithRetry(() => import("../screens/ResetPassword.jsx"), "ResetPasswordScreen");
+const SetupProfile = lazyWithRetry(() => import("../screens/SetupProfile.jsx"), "SetupProfile");
+const ChatScreen = lazyWithRetry(() => import("../screens/ChatScreen.jsx"), "ChatScreen");
+const NewConversationScreen = lazyWithRetry(() => import("../screens/NewConversationScreen.jsx"), "NewConversationScreen");
+const GroupInfoScreen = lazyWithRetry(() => import("../screens/GroupInfoScreen.jsx"), "GroupInfoScreen");
+const JoinGroupScreen = lazyWithRetry(() => import("../screens/JoinGroupScreen.jsx"), "JoinGroupScreen");
+const ConversationSettingsScreen = lazyWithRetry(() => import("../screens/ConversationSettingsScreen.jsx"), "ConversationSettingsScreen");
+const CreatePost = lazyWithRetry(() => import("../screens/CreatePost.jsx"), "CreatePost");
+const CoinsScreen = lazyWithRetry(() => import("../screens/CoinsScreen.jsx"), "CoinsScreen");
+const CreateStory = lazyWithRetry(() => import("../screens/CreateStory.jsx"), "CreateStory");
+const StoriesScreen = lazyWithRetry(() => import("../screens/StoriesScreen.jsx"), "StoriesScreen");
+// Profile secondary screens
+const HighlightsScreen = lazyWithRetry(() => import("../screens/Profile/HighlightsScreen.jsx"), "HighlightsScreen");
+const AboutScreen = lazyWithRetry(() => import("../screens/Profile/AboutScreen.jsx"), "AboutScreen");
+const ProfilePreviewScreen = lazyWithRetry(() => import("../screens/Profile/ProfilePreviewScreen.jsx"), "ProfilePreviewScreen");
+const LevelRoadmapScreen = lazyWithRetry(() => import("../screens/Profile/LevelRoadmapScreen.jsx"), "LevelRoadmapScreen");
+// Legacy / detail screens
+const PostDetails = lazyWithRetry(() => import("../screens/PostDetails.jsx"), "PostDetails");
+const SettingsScreen = lazyWithRetry(() => import("../screens/SettingsScreen.jsx"), "SettingsScreen");
+const SearchScreen = lazyWithRetry(() => import("../screens/SearchScreen.jsx"), "SearchScreen");
+const SavedScreen = lazyWithRetry(() => import("../screens/SavedScreen.jsx"), "SavedScreen");
+const CollectionsScreen = lazyWithRetry(() => import("../screens/CollectionsScreen.jsx"), "CollectionsScreen");
+const LiveScreen = lazyWithRetry(() => import("../screens/LiveScreen.jsx"), "LiveScreen");
+// Video & Post Analytics
+const VideoAnalyticsScreen = lazyWithRetry(() => import("../screens/VideoAnalyticsScreen.jsx"), "VideoAnalyticsScreen");
+const PostAnalyticsScreen = lazyWithRetry(() => import("../screens/PostAnalyticsScreen.jsx"), "PostAnalyticsScreen");
+const ReelsScreen = lazyWithRetry(() => import("../screens/ReelsScreen.jsx"), "ReelsScreen");
+const VideoDetailScreen = lazyWithRetry(() => import("../screens/VideoDetailScreen.jsx"), "VideoDetailScreen");
+const CallScreen = lazyWithRetry(() => import("../screens/CallScreen.jsx"), "CallScreen");
+const GiftScreen = lazyWithRetry(() => import("../screens/GiftScreen.jsx"), "GiftScreen");
 
 // Community Screens
-const CommunityDirectoryScreen = lazy(() => import("../screens/Community/CommunityDirectoryScreen.jsx"));
-const CreateCommunityScreen = lazy(() => import("../screens/Community/CreateCommunityScreen.jsx"));
-const CommunityDetailScreen = lazy(() => import("../screens/Community/CommunityDetailScreen.jsx"));
-const CommunitySettingsScreen = lazy(() => import("../screens/Community/CommunitySettingsScreen.jsx"));
+const CommunityDirectoryScreen = lazyWithRetry(() => import("../screens/Community/CommunityDirectoryScreen.jsx"), "CommunityDirectoryScreen");
+const CreateCommunityScreen = lazyWithRetry(() => import("../screens/Community/CreateCommunityScreen.jsx"), "CreateCommunityScreen");
+const CommunityDetailScreen = lazyWithRetry(() => import("../screens/Community/CommunityDetailScreen.jsx"), "CommunityDetailScreen");
+const CommunitySettingsScreen = lazyWithRetry(() => import("../screens/Community/CommunitySettingsScreen.jsx"), "CommunitySettingsScreen");
 
 // Event Screens
-const EventDiscoveryScreen = lazy(() => import("../screens/Event/EventDiscoveryScreen.jsx"));
-const CreateEventScreen = lazy(() => import("../screens/Event/CreateEventScreen.jsx"));
-const EventDetailScreen = lazy(() => import("../screens/Event/EventDetailScreen.jsx"));
+const EventDiscoveryScreen = lazyWithRetry(() => import("../screens/Event/EventDiscoveryScreen.jsx"), "EventDiscoveryScreen");
+const CreateEventScreen = lazyWithRetry(() => import("../screens/Event/CreateEventScreen.jsx"), "CreateEventScreen");
+const EventDetailScreen = lazyWithRetry(() => import("../screens/Event/EventDetailScreen.jsx"), "EventDetailScreen");
 
 // Admin Screens
-const AdminDashboardScreen = lazy(() => import("../screens/Admin/AdminDashboardScreen.jsx"));
-const AdminUserManagementScreen = lazy(() => import("../screens/Admin/AdminUserManagementScreen.jsx"));
-const AdminContentManagementScreen = lazy(() => import("../screens/Admin/AdminContentManagementScreen.jsx"));
-const AdminModerationQueueScreen = lazy(() => import("../screens/Admin/AdminModerationQueueScreen.jsx"));
-const AdminEconomyScreen = lazy(() => import("../screens/Admin/AdminEconomyScreen.jsx"));
-const AdminVerificationScreen = lazy(() => import("../screens/Admin/AdminVerificationScreen.jsx"));
-const AdminFeatureFlagsScreen = lazy(() => import("../screens/Admin/AdminFeatureFlagsScreen.jsx"));
-const AdminSystemHealthScreen = lazy(() => import("../screens/Admin/AdminSystemHealthScreen.jsx"));
-const AdminAuditLogsScreen = lazy(() => import("../screens/Admin/AdminAuditLogsScreen.jsx"));
-const AdminSupportTicketsScreen = lazy(() => import("../screens/Admin/AdminSupportTicketsScreen.jsx"));
-const AdminCommunityManagementScreen = lazy(() => import("../screens/Admin/AdminCommunityManagementScreen.jsx"));
-const AdminAccessScreen = lazy(() => import("../screens/Admin/AdminAccessScreen.jsx"));
+const AdminDashboardScreen = lazyWithRetry(() => import("../screens/Admin/AdminDashboardScreen.jsx"), "AdminDashboardScreen");
+const AdminUserManagementScreen = lazyWithRetry(() => import("../screens/Admin/AdminUserManagementScreen.jsx"), "AdminUserManagementScreen");
+const AdminContentManagementScreen = lazyWithRetry(() => import("../screens/Admin/AdminContentManagementScreen.jsx"), "AdminContentManagementScreen");
+const AdminModerationQueueScreen = lazyWithRetry(() => import("../screens/Admin/AdminModerationQueueScreen.jsx"), "AdminModerationQueueScreen");
+const AdminEconomyScreen = lazyWithRetry(() => import("../screens/Admin/AdminEconomyScreen.jsx"), "AdminEconomyScreen");
+const AdminVerificationScreen = lazyWithRetry(() => import("../screens/Admin/AdminVerificationScreen.jsx"), "AdminVerificationScreen");
+const AdminFeatureFlagsScreen = lazyWithRetry(() => import("../screens/Admin/AdminFeatureFlagsScreen.jsx"), "AdminFeatureFlagsScreen");
+const AdminSystemHealthScreen = lazyWithRetry(() => import("../screens/Admin/AdminSystemHealthScreen.jsx"), "AdminSystemHealthScreen");
+const AdminAuditLogsScreen = lazyWithRetry(() => import("../screens/Admin/AdminAuditLogsScreen.jsx"), "AdminAuditLogsScreen");
+const AdminSupportTicketsScreen = lazyWithRetry(() => import("../screens/Admin/AdminSupportTicketsScreen.jsx"), "AdminSupportTicketsScreen");
+const AdminCommunityManagementScreen = lazyWithRetry(() => import("../screens/Admin/AdminCommunityManagementScreen.jsx"), "AdminCommunityManagementScreen");
+const AdminAccessScreen = lazyWithRetry(() => import("../screens/Admin/AdminAccessScreen.jsx"), "AdminAccessScreen");
 
-// Video Editor Screen
-const VideoEditorScreen = lazy(() => import("../screens/VideoEditor/VideoEditorScreen.jsx"));
+// Creative Studio & Rankings
+const VideoEditorScreen = lazyWithRetry(() => import("../screens/VideoEditor/VideoEditorScreen.jsx"), "VideoEditorScreen");
+const AudioEditorScreen = lazyWithRetry(() => import("../screens/AudioEditor/AudioEditorScreen.jsx"), "AudioEditorScreen");
+const ThumbnailDesignerScreen = lazyWithRetry(() => import("../screens/ThumbnailDesigner/ThumbnailDesignerScreen.jsx"), "ThumbnailDesignerScreen");
+const RankingsScreen = lazyWithRetry(() => import("../screens/Rankings/RankingsScreen.jsx"), "RankingsScreen");
+const ReputationScreen = lazyWithRetry(() => import("../screens/Rankings/ReputationScreen.jsx"), "ReputationScreen");
 
-// Audio Editor Screen
-const AudioEditorScreen = lazy(() => import("../screens/AudioEditor/AudioEditorScreen.jsx"));
+// Progression, Achievements, Titles, Creator Onboarding, Wallet
+const ProgressScreen = lazyWithRetry(() => import("../screens/Progression/ProgressScreen.jsx"), "ProgressScreen");
+const PerksRewardsScreen = lazyWithRetry(() => import("../screens/Progression/PerksRewardsScreen.jsx"), "PerksRewardsScreen");
+const AchievementsScreen = lazyWithRetry(() => import("../screens/Achievements/AchievementsScreen.jsx"), "AchievementsScreen");
+const TitlesScreen = lazyWithRetry(() => import("../screens/Titles/TitlesScreen.jsx"), "TitlesScreen");
+const CreatorOnboardingScreen = lazyWithRetry(() => import("../screens/Creator/CreatorOnboardingScreen.jsx"), "CreatorOnboardingScreen");
+const WalletScreen = lazyWithRetry(() => import("../screens/Economy/WalletScreen.jsx"), "WalletScreen");
 
-// Thumbnail Designer Screen
-const ThumbnailDesignerScreen = lazy(() => import("../screens/ThumbnailDesigner/ThumbnailDesignerScreen.jsx"));
-
-// Rankings Screen
-const RankingsScreen = lazy(() => import("../screens/Rankings/RankingsScreen.jsx"));
-const ReputationScreen = lazy(() => import("../screens/Rankings/ReputationScreen.jsx"));
-
-// Part 2: Progression, Achievements, Titles, Citizenship, Creator Onboarding, Wallet
-const ProgressScreen = lazy(() => import("../screens/Progression/ProgressScreen.jsx"));
-const PerksRewardsScreen = lazy(() => import("../screens/Progression/PerksRewardsScreen.jsx"));
-const AchievementsScreen = lazy(() => import("../screens/Achievements/AchievementsScreen.jsx"));
-const TitlesScreen = lazy(() => import("../screens/Titles/TitlesScreen.jsx"));
-const PassportScreen = lazy(() => import("../screens/Citizenship/PassportScreen.jsx"));
-const CreatorOnboardingScreen = lazy(() => import("../screens/Creator/CreatorOnboardingScreen.jsx"));
-const WalletScreen = lazy(() => import("../screens/Economy/WalletScreen.jsx"));
-
-// Collaboration Screen
-
-// Menu Screen
-const MenuScreen = lazy(() => import("../screens/Menu/MenuScreen.jsx"));
-const OfflineStatusScreen = lazy(() => import("../screens/OfflineStatusScreen.jsx"));
-const ConflictResolutionScreen = lazy(() => import("../screens/ConflictResolutionScreen.jsx"));
-const CreatorPayoutScreen = lazy(() => import("../screens/CreatorPayoutScreen.jsx"));
-const AdvertisingDashboardScreen = lazy(() => import("../screens/Advertising/AdvertisingDashboardScreen.jsx"));
-const CampaignBuilderScreen = lazy(() => import("../screens/Advertising/CampaignBuilderScreen.jsx"));
-const AdBillingScreen = lazy(() => import("../screens/Advertising/AdBillingScreen.jsx"));
-const AdAnalyticsScreen = lazy(() => import("../screens/Advertising/AdAnalyticsScreen.jsx"));
-const AdReviewQueueScreen = lazy(() => import("../screens/Advertising/AdReviewQueueScreen.jsx"));
+// Menu, Offline, Ads
+const MenuScreen = lazyWithRetry(() => import("../screens/Menu/MenuScreen.jsx"), "MenuScreen");
+const OfflineStatusScreen = lazyWithRetry(() => import("../screens/OfflineStatusScreen.jsx"), "OfflineStatusScreen");
+const ConflictResolutionScreen = lazyWithRetry(() => import("../screens/ConflictResolutionScreen.jsx"), "ConflictResolutionScreen");
+const CreatorPayoutScreen = lazyWithRetry(() => import("../screens/CreatorPayoutScreen.jsx"), "CreatorPayoutScreen");
+const AdvertisingDashboardScreen = lazyWithRetry(() => import("../screens/Advertising/AdvertisingDashboardScreen.jsx"), "AdvertisingDashboardScreen");
+const CampaignBuilderScreen = lazyWithRetry(() => import("../screens/Advertising/CampaignBuilderScreen.jsx"), "CampaignBuilderScreen");
+const AdBillingScreen = lazyWithRetry(() => import("../screens/Advertising/AdBillingScreen.jsx"), "AdBillingScreen");
+const AdAnalyticsScreen = lazyWithRetry(() => import("../screens/Advertising/AdAnalyticsScreen.jsx"), "AdAnalyticsScreen");
+const AdReviewQueueScreen = lazyWithRetry(() => import("../screens/Advertising/AdReviewQueueScreen.jsx"), "AdReviewQueueScreen");
 
 // ARVDOUL ADVANCED SUITE SCREENS
-const AIStudioScreen = lazy(() => import("../screens/AIStudio/AIStudioScreen.jsx"));
-const SpacesScreen = lazy(() => import("../screens/Spaces/SpacesScreen.jsx"));
-const SoundsScreen = lazy(() => import("../screens/Sounds/SoundsScreen.jsx"));
-const MarketplaceScreen = lazy(() => import("../screens/Marketplace/MarketplaceScreen.jsx"));
-const PollsScreen = lazy(() => import("../screens/Polls/PollsScreen.jsx"));
-const NotFoundScreen = lazy(() => import("../screens/NotFoundScreen.jsx"));
-const HelpCenterScreen = lazy(() => import("../screens/Help/HelpCenterScreen.jsx"));
+const AIStudioScreen = lazyWithRetry(() => import("../screens/AIStudio/AIStudioScreen.jsx"), "AIStudioScreen");
+const SpacesScreen = lazyWithRetry(() => import("../screens/Spaces/SpacesScreen.jsx"), "SpacesScreen");
+const SoundsScreen = lazyWithRetry(() => import("../screens/Sounds/SoundsScreen.jsx"), "SoundsScreen");
+const MarketplaceScreen = lazyWithRetry(() => import("../screens/Marketplace/MarketplaceScreen.jsx"), "MarketplaceScreen");
+const PollsScreen = lazyWithRetry(() => import("../screens/Polls/PollsScreen.jsx"), "PollsScreen");
+const NotFoundScreen = lazyWithRetry(() => import("../screens/NotFoundScreen.jsx"), "NotFoundScreen");
+const HelpCenterScreen = lazyWithRetry(() => import("../screens/Help/HelpCenterScreen.jsx"), "HelpCenterScreen");
 
 import {
   SectionErrorBoundary,

@@ -306,7 +306,40 @@ export const useProfileStore = create(
       return seq;
     },
     _isLoadCurrent: (key, seq) => get().loadSeq?.[key] === seq,
-    
+
+    /**
+     * Synchronously seed the store with the already-hydrated AuthContext owner
+     * profile snapshot so navigating to /profile paints immediately on frame 1
+     * while the authoritative background refresh reconciles counts and slices.
+     */
+    hydrateOwnerSnapshot: (userId, authProfile) => {
+      if (!userId || !authProfile || typeof authProfile !== 'object') return false;
+      const profileUid = authProfile.uid || authProfile.id;
+      if (profileUid && profileUid !== userId) return false;
+      const current = get();
+      if (
+        current.profile &&
+        (current.profile.uid === userId || current.profile.id === userId) &&
+        !current.error
+      ) {
+        return true;
+      }
+      set((state) => {
+        state.profile = { ...authProfile, id: userId, uid: userId };
+        state.viewerUid = userId;
+        state.isOwner = true;
+        state.loading = false;
+        state.error = null;
+        if (typeof authProfile.level === 'number' && Number.isFinite(authProfile.level)) {
+          state.level = authProfile.level;
+        }
+        if (typeof authProfile.friendCount === 'number' && Number.isFinite(authProfile.friendCount)) {
+          state.friendCount = authProfile.friendCount;
+        }
+      });
+      return true;
+    },
+
     /**
      * Load user profile with all related data
      * @param {string} userId - User ID to load

@@ -31,25 +31,25 @@ class PassportService {
     if (!targetUserId) throw new Error('targetUserId is required');
 
     let profile = cachedTargetProfile;
+    let profileFound = Boolean(cachedTargetProfile);
     if (!profile) {
-      try {
-        const { getUserService } = await import('./userService.js');
-        // Read through the canonical service so the passport sees the same
-        // projected document (masked presence, deleted fields, sharded counts)
-        // that every other surface consumes — never the raw `users/{uid}` doc.
-        profile = await getUserService().getUserProfile(targetUserId, viewerUserId);
-      } catch (err) {
-        logger.warn('[PassportService] Failed to load target profile', { targetUserId, error: err?.message });
-      }
+      const { getUserService } = await import('./userService.js');
+      // Read through the canonical service so the passport sees the same
+      // projected document (masked presence, deleted fields, sharded counts)
+      // that every other surface consumes — never the raw `users/{uid}` doc.
+      profile = await getUserService().getUserProfile(targetUserId, viewerUserId);
+      profileFound = Boolean(profile);
       // `getUserProfile` returns null for a missing document; never synthesize an
       // identity, but keep the passport shape renderable with an explicit stub.
       if (!profile) profile = { id: targetUserId, uid: targetUserId };
     }
 
+    const resolvedUserId = profile?.id || profile?.uid || targetUserId;
+
     // Resolve the relationship (owner / follower / connection / blocked)
     // from the follow + block graph instead of assuming an empty relationship.
-    const isOwner = viewerUserId === targetUserId;
-    const relationship = await this._resolveRelationship(viewerUserId, targetUserId);
+    const isOwner = Boolean(viewerUserId && resolvedUserId === viewerUserId);
+    const relationship = await this._resolveRelationship(viewerUserId, resolvedUserId);
 
     // Resolve viewer capabilities using Part 1 canonical engine
     const capabilities = resolveCapabilities({
@@ -96,8 +96,8 @@ class PassportService {
       } else {
         try {
           const { default: achievementService } = await import('./achievementService.js');
-          verifiedAchievements = await achievementService.getUserAchievements(targetUserId);
-        } catch (e) {
+          verifiedAchievements = await achievementService.getUserAchievements(resolvedUserId);
+        } catch {
           verifiedAchievements = [];
         }
       }
@@ -112,8 +112,8 @@ class PassportService {
       } else {
         try {
           const { default: titleService } = await import('./titleService.js');
-          earnedTitles = await titleService.getUserTitles(targetUserId);
-        } catch (e) {
+          earnedTitles = await titleService.getUserTitles(resolvedUserId);
+        } catch {
           earnedTitles = [];
         }
       }
@@ -123,7 +123,7 @@ class PassportService {
     const isVerified = resolveVerifiedFlag(profile);
     const isCreator = resolveCreatorFlag(profile, {}, level);
 
-    const citizenId = `ARV-${targetUserId.slice(0, 8).toUpperCase()}`;
+    const citizenId = `ARV-${resolvedUserId.slice(0, 8).toUpperCase()}`;
     const issueDate = profile.createdAt?.toDate?.()
       ? profile.createdAt.toDate().toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
       : null;
@@ -162,7 +162,8 @@ class PassportService {
     const identityLine2 = citizenId.replace(/[^A-Z0-9]/g, '<').slice(0, 44);
 
     return {
-      userId: targetUserId,
+      userId: resolvedUserId,
+      profileFound,
       citizenId,
       issueDate,
       displayName: pickDisplayName([projected.displayName, projected.name], { fallback: null }),
@@ -180,7 +181,7 @@ class PassportService {
       contribution,
       achievements: verifiedAchievements,
       titles: earnedTitles,
-      passportUrl: getPassportUrl(targetUserId),
+      passportUrl: getPassportUrl(profileFound ? profile : resolvedUserId),
       isOwner,
       capabilities,
       isVerified,
@@ -230,8 +231,8 @@ class PassportService {
         issuedAt: issueDate,
         verified: true,
         sealType: 'gold',
-        icon: '🏛️',
-        description: 'Certified founding citizen registered during the national genesis epoch.',
+        iconKey: 'landmark',
+        description: 'Certified founding citizen recorded in the national state registry.',
       });
     }
 
@@ -251,13 +252,13 @@ class PassportService {
       issuedAt: hasIdentityCredential ? issueDate : null,
       verified: hasIdentityCredential,
       sealType: 'emerald',
-      icon: '🛡️',
+      iconKey: 'shield',
       description: hasIdentityCredential
         ? 'Recognised for a verified account with established standing across Arvdoul.'
         : 'Requires a verified identity or established creator standing.',
     });
 
-    // 3. Civic Vanguard Stamp (Level 10+ or 7+ day streak)
+    // 3. Civic Vanguard Stamp (Level gate or sustained streak gate)
     const hasVanguard = (level !== null && level >= LEVEL_GATES.civicVanguard)
       || (activeStreak !== null && activeStreak >= PASSPORT_STAMP_GATES.civicStreak);
     stamps.push({
@@ -269,7 +270,7 @@ class PassportService {
       issuedAt: hasVanguard ? issueDate : null,
       verified: hasVanguard,
       sealType: 'indigo',
-      icon: '⚔️',
+      iconKey: 'sword',
       description: hasVanguard
         ? 'Commended for civic discipline and persistent participation in the commonwealth.'
         : `Requires Level ${LEVEL_GATES.civicVanguard} or a ${PASSPORT_STAMP_GATES.civicStreak}-day sustained citizenship streak to unlock.`,
@@ -286,13 +287,13 @@ class PassportService {
       issuedAt: hasCreative ? issueDate : null,
       verified: hasCreative,
       sealType: 'amber',
-      icon: '🎨',
+      iconKey: 'palette',
       description: hasCreative
         ? 'Recognized cultural producer contributing artistic media and audio to the nation.'
         : 'Requires publishing sovereign videos, audio tracks, or creator status.',
     });
 
-    // 5. Diplomatic Envoy Stamp (Level 15+ or verified citizen)
+    // 5. Diplomatic Envoy Stamp (Diplomatic Envoy gate or verified citizen)
     const hasDiplomatic = isVerified || (level !== null && level >= LEVEL_GATES.diplomaticEnvoy);
     stamps.push({
       id: 'stamp_diplomatic',
@@ -303,7 +304,7 @@ class PassportService {
       issuedAt: hasDiplomatic ? issueDate : null,
       verified: hasDiplomatic,
       sealType: 'ruby',
-      icon: '📜',
+      iconKey: 'scroll',
       description: hasDiplomatic
         ? 'Granted diplomatic audience and cross-community representation credentials.'
         : `Requires verified identity credentials or Level ${LEVEL_GATES.diplomaticEnvoy} citizenship standing.`,
@@ -321,7 +322,7 @@ class PassportService {
       issuedAt: hasHonors ? issueDate : null,
       verified: hasHonors,
       sealType: 'gold',
-      icon: '👑',
+      iconKey: 'crown',
       description: hasHonors
         ? 'Bestowed for distinguished service and decorated achievements in Arvdoul.'
         : `Requires at least ${PASSPORT_STAMP_GATES.honorsAchievements} verified achievements or an earned national title.`,

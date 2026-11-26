@@ -106,7 +106,7 @@ function getCacheDB() {
           db.createObjectStore('scrollPosition', { keyPath: 'userId' });
         }
       }
-      if (oldVersion < 4 && db.objectStoreNames.contains('feed')) {
+      if (oldVersion < 4 && db.objectStoreNames.contains('feed') && typeof transaction?.objectStore === 'function') {
         const feedStore = transaction.objectStore('feed');
         if (!feedStore.indexNames.contains('version')) {
           feedStore.createIndex('version', 'version');
@@ -979,13 +979,13 @@ export default function HomeScreen() {
   const loadFeed = useCallback(
     async (reset = false, skipCache = false, isPreload = false) => {
       const effectiveUserId = user?.uid || localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || 'guest_user';
-      if (isLoadingRef.current && !isPreload) return;
+      if (isLoadingRef.current && !isPreload && !reset) return;
       if (isPreload && preloadLockRef.current) return;
 
       const currentSession = sessionIdRef.current;
-      const requestKey = `${reset}-${nextCursorRef.current}-${isPreload}`;
-      if (activeRequestKeyRef.current === requestKey) return;
-      const existingPromise = pendingRequestPromisesRef.current.get(requestKey);
+      const requestKey = `${activeFeedTab}-${reset}-${reset ? 'first' : nextCursorRef.current}-${isPreload}`;
+      if (!reset && activeRequestKeyRef.current === requestKey) return;
+      const existingPromise = !reset ? pendingRequestPromisesRef.current.get(requestKey) : null;
       if (existingPromise) return existingPromise;
 
       if (reset) {
@@ -1007,7 +1007,7 @@ export default function HomeScreen() {
       if (!isPreload) {
         if (safetyTimeoutRef.current) clearTimeout(safetyTimeoutRef.current);
         safetyTimeoutRef.current = setTimeout(() => {
-          if (mountedRef.current && statusRef.current === STATUS.LOADING && feedRef.current.length === 0) {
+          if (mountedRef.current && requestId === requestIdRef.current && statusRef.current === STATUS.LOADING && feedRef.current.length === 0) {
             setError('Loading timeout. Please check your connection.');
             setStatus(STATUS.ERROR);
             setFallbackMode(false);
@@ -1048,12 +1048,21 @@ export default function HomeScreen() {
           newPosts = newPosts.map(p => hydratePost(p));
           newPosts = newPosts.filter(p => !blockedIds.has(p.authorId) && p.authorId);
 
-          // Apply diversity & creator caps
+          // Apply diversity & creator caps, topping up sparse feeds so single-creator pools stay populated
           const diverse = [];
+          const overflow = [];
           for (const post of newPosts) {
             if (sessionEngineRef.current.canAddPost(post)) {
               diverse.push(post);
               sessionEngineRef.current.addPost(post);
+            } else {
+              overflow.push(post);
+            }
+          }
+          if (diverse.length < Math.min(newPosts.length, 6)) {
+            for (const post of overflow) {
+              if (diverse.length >= Math.min(newPosts.length, tuning.feedPageSize)) break;
+              diverse.push(post);
             }
           }
           newPosts = diverse;
@@ -1146,15 +1155,19 @@ export default function HomeScreen() {
           }
           return null;
         } finally {
-          activeRequestKeyRef.current = null;
-          pendingRequestPromisesRef.current.delete(requestKey);
-          if (!isPreload) {
-            isLoadingRef.current = false;
-            loadMoreLockRef.current = false;
-            if (safetyTimeoutRef.current) clearTimeout(safetyTimeoutRef.current);
+          if (requestId === requestIdRef.current) {
+            activeRequestKeyRef.current = null;
+            pendingRequestPromisesRef.current.delete(requestKey);
+            if (!isPreload) {
+              isLoadingRef.current = false;
+              loadMoreLockRef.current = false;
+              if (safetyTimeoutRef.current) clearTimeout(safetyTimeoutRef.current);
+            } else {
+              preloadLockRef.current = false;
+              setStatus(STATUS.SUCCESS);
+            }
           } else {
-            preloadLockRef.current = false;
-            setStatus(STATUS.SUCCESS);
+            pendingRequestPromisesRef.current.delete(requestKey);
           }
         }
       })();
@@ -1379,7 +1392,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (prevTabRef.current !== activeFeedTab) {
       prevTabRef.current = activeFeedTab;
-      if (user?.uid && authInitialized) {
+      if (authInitialized) {
         sessionIdRef.current = Date.now();
         loadFeedRef.current?.(true, true);
       }

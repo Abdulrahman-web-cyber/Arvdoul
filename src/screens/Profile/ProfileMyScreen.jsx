@@ -59,6 +59,7 @@ import ProfileTabsBar from '../../components/profile/ProfileTabsBar';
 import ProfilePinnedPosts from '../../components/profile/ProfilePinnedPosts';
 import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
+import ProfileCreatorDashboard from '../../components/profile/ProfileCreatorDashboard';
 
 /**
  * Lazy-loads a component through its default export (or the named export that matches the
@@ -73,8 +74,7 @@ const lazyComponent = (loader, exportName) => lazy(async () => {
   return { default: candidate };
 });
 
-// Heavy below-the-fold panels & modal surfaces (lazy-loaded for fast low-RAM paint)
-const ProfileCreatorDashboard = lazyComponent(() => import('../../components/profile/ProfileCreatorDashboard'), 'ProfileCreatorDashboard');
+// Modal surfaces (lazy-loaded on demand to reduce memory footprint)
 const ProfileQRCodeModal = lazyComponent(() => import('../../components/profile/ProfileQRCodeModal'), 'ProfileQRCodeModal');
 const ProfileLocationModal = lazyComponent(() => import('../../components/profile/ProfileLocationModal'), 'ProfileLocationModal');
 const ProfilePerspectiveModal = lazyComponent(() => import('../../components/profile/ProfilePerspectiveModal'), 'ProfilePerspectiveModal');
@@ -523,6 +523,7 @@ export default function ProfileMyScreen() {
   // existing AuthContext exposes (used by IntroScreen); when it is absent the screen behaves as before.
   const auth = useAuth();
   const authContextUser = auth?.user ?? null;
+  const authUserProfile = auth?.userProfile ?? null;
   const authPending = auth?.authInitialized === false;
   const appStoreUser = useAppStore((state) => state.currentUser);
   const currentUserId = asUid(authContextUser?.uid);
@@ -841,9 +842,27 @@ export default function ProfileMyScreen() {
       loadContext(currentUserId, viewAs, gen, { quiet: true });
       return;
     }
+    const authProfileMatchesOwner = Boolean(
+      viewAs === 'owner' &&
+      authUserProfile &&
+      (!authUserProfile.uid || authUserProfile.uid === currentUserId) &&
+      (!authUserProfile.id || authUserProfile.id === currentUserId) &&
+      snap.hydrateOwnerSnapshot?.(currentUserId, authUserProfile)
+    );
+    if (authProfileMatchesOwner) {
+      setLoadState({
+        key,
+        slices: {
+          profile: 'ok',
+          ...(typeof authUserProfile.level === 'number' ? { level: 'ok' } : {}),
+        },
+      });
+      loadContext(currentUserId, viewAs, gen, { quiet: true });
+      return;
+    }
     setLoadState({ key, slices: EMPTY_SLICES });
     loadContext(currentUserId, viewAs, gen);
-  }, [currentUserId, viewAs, loadContext]);
+  }, [currentUserId, viewAs, authUserProfile, loadContext]);
 
   // Analytics load separately so a timeframe change never re-fetches profile or posts. Owner only.
   useEffect(() => {
@@ -1533,35 +1552,16 @@ export default function ProfileMyScreen() {
             {isOwnerView && (
               <section aria-label="Creator dashboard" className="pms-rise min-w-0" style={{ '--i': 3 }}>
                 <SectionGuard label="Creator dashboard" resetKey={ctxKey}>
-                  <Suspense fallback={(
-                    <div
-                      className="pms-glass p-4 space-y-3 pms-pulse"
-                      data-tier="subtle"
-                      aria-busy="true"
-                      aria-label="Loading creator dashboard"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="h-5 w-36 rounded-lg bg-[var(--sk)]" />
-                        <div className="h-8 w-24 rounded-xl bg-[var(--sk)]" />
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                        {[1, 2, 3, 4].map((n) => (
-                          <div key={n} className="h-14 rounded-xl bg-[var(--sk)]" />
-                        ))}
-                      </div>
-                    </div>
-                  )}>
-                    <ProfileCreatorDashboard
-                      analytics={analytics}
-                      ranking={ranking}
-                      userLevel={effectiveProfile?.level ?? null}
-                      isCreator={effectiveProfile?.isCreator}
-                      isOwner={isOwnerView}
-                      theme={theme}
-                      timeframe={timeframe}
-                      onTimeframeChange={setTimeframe}
-                    />
-                  </Suspense>
+                  <ProfileCreatorDashboard
+                    analytics={analytics}
+                    ranking={ranking}
+                    userLevel={effectiveProfile?.level ?? null}
+                    isCreator={effectiveProfile?.isCreator}
+                    isOwner={isOwnerView}
+                    theme={theme}
+                    timeframe={timeframe}
+                    onTimeframeChange={setTimeframe}
+                  />
                 </SectionGuard>
               </section>
             )}

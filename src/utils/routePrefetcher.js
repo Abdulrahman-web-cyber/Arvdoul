@@ -57,15 +57,12 @@ export const prefetchRoutesIdle = (importFns = []) => {
  */
 export const initAppBackgroundPrefetch = () => {
   prefetchRoutesIdle([
-    () => import('../screens/HomeScreen.jsx'),
     () => prefetchCreatePost(),
-    () => import('../screens/VideosScreen.jsx'),
-    () => import('../screens/Profile/ProfileMyScreen.jsx'),
-    () => import('../screens/NotificationsScreen.jsx'),
-    () => import('../screens/MessagingScreen.jsx'),
     () => import('../screens/ChatScreen.jsx'),
     () => import('../screens/SearchScreen.jsx'),
     () => import('../screens/ReelsScreen.jsx'),
+    () => import('../screens/SettingsScreen.jsx'),
+    () => import('../screens/Profile/HighlightsScreen.jsx'),
     () => import('../screens/Marketplace/MarketplaceScreen.jsx'),
     () => import('../screens/Polls/PollsScreen.jsx'),
     () => import('../screens/Sounds/SoundsScreen.jsx'),

@@ -14,6 +14,7 @@
 
 import { memo, useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
+import jsQR from 'jsqr';
 import { X, Camera, Upload, Search, CheckCircle2, AlertCircle, Loader2, ScanLine, RefreshCw, UserCheck } from "lucide-react";
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
@@ -57,27 +58,30 @@ const ProfileQRScannerModal = memo(({
   const parseQRContent = useCallback((rawText) => {
     if (!rawText) return null;
     const text = String(rawText).trim();
+    const decode = (val) => {
+      try {
+        return decodeURIComponent(val).replace(/^@/, '').trim();
+      } catch {
+        return String(val).replace(/^@/, '').trim();
+      }
+    };
 
-    // 1. Arvdoul web link: https://arvdoul.app/profile/username or /profile/uid
-    const webProfileMatch = text.match(/\/profile\/([^?&#/]+)/);
-    if (webProfileMatch && webProfileMatch[1]) {
-      return webProfileMatch[1];
+    // 1. Arvdoul web links: /profile/:id, /profile/public/:id, /passport/:id, /u/:id
+    const routeMatch = text.match(/\/(?:profile(?:\/public)?|passport|u)\/([^?&#/]+)/i);
+    if (routeMatch && routeMatch[1] && routeMatch[1].toLowerCase() !== 'public') {
+      return decode(routeMatch[1]);
     }
 
     // 2. Query param uid or u: ?uid=... or &u=...
-    const uidMatch = text.match(/[?&]uid=([^&#]+)/);
+    const uidMatch = text.match(/[?&](?:uid|u)=([^&#]+)/i);
     if (uidMatch && uidMatch[1]) {
-      return uidMatch[1];
-    }
-    const uMatch = text.match(/[?&]u=([^&#]+)/);
-    if (uMatch && uMatch[1]) {
-      return uMatch[1];
+      return decode(uidMatch[1]);
     }
 
-    // 3. Deep link: arvdoul://user/:id
-    const deepLinkMatch = text.match(/arvdoul:\/\/user\/([^?&#/]+)/);
+    // 3. Deep link: arvdoul://user/:id or arvdoul://profile/:id or arvdoul://passport/:id
+    const deepLinkMatch = text.match(/arvdoul:\/\/(?:user|profile|passport)\/([^?&#/]+)/i);
     if (deepLinkMatch && deepLinkMatch[1]) {
-      return deepLinkMatch[1];
+      return decode(deepLinkMatch[1]);
     }
 
     // 4. Global ARV identifier: ARV-XYZ123
@@ -88,7 +92,7 @@ const ProfileQRScannerModal = memo(({
 
     // 5. Handle starting with @
     if (text.startsWith('@')) {
-      return text.slice(1);
+      return text.slice(1).trim();
     }
 
     // 6. Direct alphanumeric username/uid
@@ -167,22 +171,38 @@ const ProfileQRScannerModal = memo(({
       }
 
       try {
-        canvas.width = video.videoWidth || 300;
-        canvas.height = video.videoHeight || 300;
+        const vw = video.videoWidth || 300;
+        const vh = video.videoHeight || 300;
+        const maxDim = 640;
+        const scale = Math.min(1, maxDim / Math.max(vw, vh));
+        canvas.width = Math.max(1, Math.round(vw * scale));
+        canvas.height = Math.max(1, Math.round(vh * scale));
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
         if (detector) {
           const barcodes = await detector.detect(canvas);
           if (barcodes && barcodes.length > 0) {
-            const rawValue = barcodes[0].rawValue;
-            const parsed = parseQRContent(rawValue);
+            const parsed = parseQRContent(barcodes[0].rawValue);
             if (parsed) {
               handleDetected(parsed);
               return;
             }
           }
         }
-      } catch (e) {
+
+        // Universal cross-browser fallback via jsQR (Safari, Firefox, WebViews)
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const qrResult = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert',
+        });
+        if (qrResult?.data) {
+          const parsed = parseQRContent(qrResult.data);
+          if (parsed) {
+            handleDetected(parsed);
+            return;
+          }
+        }
+      } catch {
         // Frame scan drop
       }
 
@@ -262,11 +282,15 @@ const ProfileQRScannerModal = memo(({
         img.onerror = reject;
       });
 
+      const natW = img.naturalWidth || img.width;
+      const natH = img.naturalHeight || img.height;
+      const maxDim = 1024;
+      const scale = Math.min(1, maxDim / Math.max(natW, natH));
       const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth || img.width;
-      canvas.height = img.naturalHeight || img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
+      canvas.width = Math.max(1, Math.round(natW * scale));
+      canvas.height = Math.max(1, Math.round(natH * scale));
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       URL.revokeObjectURL(objectUrl);
 
@@ -287,11 +311,25 @@ const ProfileQRScannerModal = memo(({
         }
       }
 
-      // If browser detector failed or not available, prompt manual entry
+      // Cross-browser jsQR decoding for uploaded images/screenshots
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const qrResult = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'attemptBoth',
+      });
+      if (qrResult?.data) {
+        const parsed = parseQRContent(qrResult.data);
+        if (parsed) {
+          toast.dismiss(toastId);
+          handleDetected(parsed);
+          return;
+        }
+      }
+
+      // If no QR code could be decoded, prompt manual entry
       toast.dismiss(toastId);
       toast.info('Could not automatically parse QR code. Please enter the username or ID below.');
       setActiveMode('manual');
-    } catch (e) {
+    } catch {
       toast.error('Failed to process image file', { id: toastId });
     } finally {
       setIsProcessing(false);

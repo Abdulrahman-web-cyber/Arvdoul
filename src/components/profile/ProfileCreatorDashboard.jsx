@@ -509,7 +509,7 @@ const ProfileCreatorDashboard = memo(({
   const openRankings = useCallback(() => navigate('/rankings'), [navigate]);
   const openProgress = useCallback(() => navigate('/progress'), [navigate]);
 
-  const [folded, setFolded] = useState(false);
+  const [folded, setFolded] = useState(true);
 
   const cells = useMemo(() => (isEligibleCreator ? buildCells(analytics) : null), [isEligibleCreator, analytics]);
   const rank = useMemo(() => (isEligibleCreator ? readRanking(ranking) : null), [isEligibleCreator, ranking]);

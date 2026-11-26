@@ -131,7 +131,22 @@ export default function ProfilePublicScreen() {
       return;
     }
 
-    setLocalLoading(true);
+    const normalizedTarget = cleanUserId.toLowerCase();
+    const currentStore = useProfileStore.getState();
+    const cachedProfile = currentStore.profile;
+    const hasMatchedStore = Boolean(
+      cachedProfile &&
+      !currentStore.error &&
+      (
+        String(cachedProfile.id || '').toLowerCase() === normalizedTarget ||
+        String(cachedProfile.uid || '').toLowerCase() === normalizedTarget ||
+        (cachedProfile.username && String(cachedProfile.username).replace(/^@/, '').toLowerCase() === normalizedTarget)
+      )
+    );
+
+    if (!hasMatchedStore) {
+      setLocalLoading(true);
+    }
     setRelationship(null);
     setRelationshipResolved(false);
     setRelationshipError(false);
@@ -149,7 +164,14 @@ export default function ProfilePublicScreen() {
     }, 6000);
 
     try {
-      // 1. Fetch user profile via store
+      const userService = getUserService();
+      const matchedKnownUid = hasMatchedStore ? (cachedProfile.id || cachedProfile.uid || null) : null;
+      const speculativeUid = matchedKnownUid || (/^[A-Za-z0-9]{20,40}$/.test(cleanUserId) ? cleanUserId : null);
+      const speculativeRelPromise = (currentUserId && speculativeUid && speculativeUid !== currentUserId)
+        ? userService.getRelationshipState(currentUserId, speculativeUid).catch(() => null)
+        : null;
+
+      // 1. Fetch user profile via store (returns immediately on SWR hit)
       await useProfileStore.getState().loadProfile(cleanUserId, currentUserId);
       const { profile: currentProfile, error: profileError } = useProfileStore.getState();
       if (profileError && !currentProfile?.username) {
@@ -162,10 +184,14 @@ export default function ProfilePublicScreen() {
       // 2. Verify relationship before rendering content/actions, then paint immediately
       // while posts, highlights, and stories stream into their section skeletons.
       if (currentUserId && resolvedUid !== currentUserId) {
-        const userService = getUserService();
-        const relSettled = await Promise.allSettled([
-          userService.getRelationshipState(currentUserId, resolvedUid),
-        ]);
+        const precomputedRel = speculativeRelPromise && resolvedUid === speculativeUid
+          ? await speculativeRelPromise
+          : null;
+        const relSettled = precomputedRel
+          ? [{ status: 'fulfilled', value: precomputedRel }]
+          : await Promise.allSettled([
+              userService.getRelationshipState(currentUserId, resolvedUid),
+            ]);
 
         // A failed safety-graph read is not equivalent to "no block". Do not
         // issue content/list queries or render relationship actions until the

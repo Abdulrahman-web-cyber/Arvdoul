@@ -13,7 +13,7 @@ import { cn } from '../../lib/utils';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
-import { getProfileUrl, getGlobalIdentityCode, shareProfile } from '../../utils/shareUtils';
+import { getProfileUrl, getGlobalIdentityCode, shareProfile, copyToClipboard } from '../../utils/shareUtils';
 import { pickDisplayName, pickHandle } from '../../services/profileReadModel.js';
 import ProfileQRScannerModal from './ProfileQRScannerModal';
 import { LazyImage } from '../../components/Shared/LazyImage';
@@ -52,7 +52,8 @@ const ProfileQRCodeModal = memo(({
     setQrLoading(true);
     generateQrDataUrl(profileUrl, {
       width: 440,
-      margin: 2,
+      margin: 4,
+      errorCorrectionLevel: 'H',
       color: {
         dark: '#070b14',
         light: '#ffffff'
@@ -87,11 +88,11 @@ const ProfileQRCodeModal = memo(({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(profileUrl);
+      await copyToClipboard(profileUrl);
       setCopied(true);
       toast.success('Profile URL copied to clipboard!');
       setTimeout(() => setCopied(false), 2000);
-    } catch (e) {
+    } catch {
       toast.error('Failed to copy URL');
     }
   };
@@ -101,10 +102,13 @@ const ProfileQRCodeModal = memo(({
       toast.error('Generating QR code, please wait...');
       return;
     }
+    const safeLabel = (username || globalUniqueCode || 'arvdoul-profile').replace(/[^a-zA-Z0-9_-]/g, '_');
     const link = document.createElement('a');
-    link.download = `${username}-arvdoul-qrcode.png`;
+    link.download = `${safeLabel}-arvdoul-qrcode.png`;
     link.href = qrDataUrl;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
     toast.success('QR code saved to your device!');
   };
 
@@ -201,9 +205,9 @@ const ProfileQRCodeModal = memo(({
                     alt={`QR Code for ${displayName}`}
                     className="w-full h-full object-contain rounded-lg"
                   />
-                  {/* Embedded Center Logo Badge */}
+                  {/* Embedded Center Logo Badge (~16% width, well inside 30% Level-H recovery) */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-10 h-10 rounded-full bg-white p-0.5 shadow-md flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full bg-white p-0.5 shadow-md flex items-center justify-center">
                       <div className="w-full h-full rounded-full overflow-hidden p-[1.5px]" style={{ background: BRAND_GRADIENT }}>
                         <LazyImage src={avatarUrl} alt="" className="w-full h-full object-cover rounded-full bg-slate-900" />
                       </div>

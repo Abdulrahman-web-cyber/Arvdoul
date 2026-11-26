@@ -51,7 +51,10 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const currentUser = authUser || null;
   const currentUserId = authUser?.uid || null;
 
-  const targetUserId = userId || currentUserId;
+  const rawRouteParam = userId ? String(userId).trim() : '';
+  const targetUserId = !rawRouteParam || rawRouteParam.toLowerCase() === 'me'
+    ? currentUserId
+    : rawRouteParam.replace(/^@/, '').trim();
   const isOwner = Boolean(currentUserId && targetUserId === currentUserId);
   const targetKeyRef = useRef(targetUserId);
   useEffect(() => {
@@ -82,6 +85,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
 
   const [loading, setLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   // Capability map resolved once from the engine. Each tab has its own scope
   // (`followersList` / `followingList` / `friendsList`), so a viewer denied one
   // list must not reach another through a shared screen-level gate.
@@ -163,6 +167,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       }
       setLoading(true);
       setPermissionDenied(false);
+      setLoadError(null);
       // Route changes must not display the previous target's social graph
       // while the next profile and its permissions are being resolved.
       setTargetProfile(null);
@@ -179,19 +184,21 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       try {
         const userService = getUserService();
 
-        const [profile, rel] = await Promise.all([
-          userService.getUserProfile(targetUserId, currentUserId),
-          currentUserId && currentUserId !== targetUserId
-            ? userService.getRelationshipState(currentUserId, targetUserId)
-            : Promise.resolve({ isOwner: Boolean(currentUserId && targetUserId === currentUserId) }),
-        ]);
-
+        const profile = await userService.getUserProfile(targetUserId, currentUserId);
         if (!isMounted) return;
         if (!profile) {
           setPermissionDenied(true);
           return;
         }
-        if (currentUserId && currentUserId !== targetUserId && !rel) {
+
+        const resolvedUid = profile.id || profile.uid || targetUserId;
+        const resolvedIsOwner = Boolean(currentUserId && resolvedUid === currentUserId);
+        const rel = currentUserId && !resolvedIsOwner
+          ? await userService.getRelationshipState(currentUserId, resolvedUid)
+          : { isOwner: resolvedIsOwner };
+
+        if (!isMounted) return;
+        if (currentUserId && !resolvedIsOwner && !rel) {
           if (isMounted) setPermissionDenied(true);
           return;
         }
@@ -205,35 +212,37 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           target: profile,
           relationship: rel || {},
         });
-        const canViewFollowers = isOwner || Boolean(caps.canViewFollowers);
-        const canViewFollowing = isOwner || Boolean(caps.canViewFollowing);
-        const canViewFriends = isOwner || Boolean(caps.canViewFriends);
+        const canViewFollowers = resolvedIsOwner || Boolean(caps.canViewFollowers);
+        const canViewFollowing = resolvedIsOwner || Boolean(caps.canViewFollowing);
+        const canViewFriends = resolvedIsOwner || Boolean(caps.canViewFriends);
 
         if (isMounted) {
           setCapabilities({ ...caps, canViewFollowers, canViewFollowing, canViewFriends });
         }
 
+        const extraTargetOpt = resolvedUid !== targetUserId ? { targetUid: resolvedUid } : {};
+
         // Fetch only the graphs the viewer is allowed to see.
         const followersPromise = canViewFollowers
-          ? userService.getFollowers(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE })
+          ? userService.getFollowers(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, ...extraTargetOpt })
           : Promise.resolve({ followers: [] });
         const followingPromise = canViewFollowing
-          ? userService.getFollowing(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE })
+          ? userService.getFollowing(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, ...extraTargetOpt })
           : Promise.resolve({ following: [] });
         const friendsPromise = canViewFriends
-          ? userService.getFriends(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE })
+          ? userService.getFriends(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, ...extraTargetOpt })
           : Promise.resolve({ friends: [] });
 
-        const discoverPromise = isOwner && currentUserId && typeof userService.getFriendRecommendations === 'function'
+        const discoverPromise = resolvedIsOwner && currentUserId && typeof userService.getFriendRecommendations === 'function'
           ? userService.getFriendRecommendations(currentUserId, 20).catch(() => ({ recommendations: [] }))
           : Promise.resolve({ recommendations: [] });
-        const sentRequestsPromise = isOwner && currentUserId && typeof userService.getFriendRequests === 'function'
+        const sentRequestsPromise = resolvedIsOwner && currentUserId && typeof userService.getFriendRequests === 'function'
           ? userService.getFriendRequests(currentUserId, 'sent').catch(() => ({ requests: [] }))
           : Promise.resolve({ requests: [] });
-        const receivedRequestsPromise = isOwner && currentUserId && typeof userService.getFriendRequests === 'function'
+        const receivedRequestsPromise = resolvedIsOwner && currentUserId && typeof userService.getFriendRequests === 'function'
           ? userService.getFriendRequests(currentUserId, 'received').catch(() => ({ requests: [] }))
           : Promise.resolve({ requests: [] });
-        const followRequestsPromise = isOwner && currentUserId && typeof userService.getFollowRequests === 'function'
+        const followRequestsPromise = resolvedIsOwner && currentUserId && typeof userService.getFollowRequests === 'function'
           ? userService.getFollowRequests(currentUserId).catch(() => ({ requests: [] }))
           : Promise.resolve({ requests: [] });
 
@@ -256,7 +265,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         ]);
         if (!isMounted) return;
         if ([followersRes, followingRes, friendsRes].some((result) => result.status === 'rejected')) {
-          setPermissionDenied(true);
+          if (resolvedIsOwner) {
+            setLoadError('Could not load your connection lists right now. Please try again.');
+          } else {
+            setPermissionDenied(true);
+          }
           return;
         }
 
@@ -306,7 +319,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
               followStates = await userService.getFollowStates(currentUserId, allIds);
             } catch (e) {
               console.warn('Follow-state hydration failed:', e?.message);
-              setPermissionDenied(true);
+              if (isOwner) {
+                setLoadError('Could not load connection statuses right now. Please try again.');
+              } else {
+                setPermissionDenied(true);
+              }
               return;
             }
           }
@@ -328,7 +345,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           setFriends(withState(friendsList));
           setSuggestions(withState(suggestionsList));
 
-          if (!isOwner && !canViewFollowers && !canViewFollowing && !canViewFriends) {
+          if (!resolvedIsOwner && !canViewFollowers && !canViewFollowing && !canViewFriends) {
             setPermissionDenied(true);
           }
         }
@@ -336,7 +353,13 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         console.error('Failed to load connection graph:', err);
         // Profile or safety-relationship failure must never be interpreted as
         // a public/empty graph and then used to enable social actions.
-        if (isMounted) setPermissionDenied(true);
+        if (isMounted) {
+          if (isOwner) {
+            setLoadError(err?.message || 'Unable to load connections. Please try again.');
+          } else {
+            setPermissionDenied(true);
+          }
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -355,6 +378,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     if (!cursor || !hasMore[activeTab] || !targetUserId) return;
 
     const requestedTargetId = targetUserId;
+    const resolvedUid = targetProfile?.id || targetProfile?.uid || targetUserId;
+    const extraTargetOpt = resolvedUid !== targetUserId ? { targetUid: resolvedUid } : {};
     setLoadingMoreTab(activeTab);
     try {
       const userService = getUserService();
@@ -362,13 +387,13 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       let res = null;
       let rawNext = [];
       if (activeTab === 'followers') {
-        res = await userService.getFollowers(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, startAfter: cursor });
+        res = await userService.getFollowers(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, startAfter: cursor, ...extraTargetOpt });
         rawNext = res?.followers || [];
       } else if (activeTab === 'following') {
-        res = await userService.getFollowing(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, startAfter: cursor });
+        res = await userService.getFollowing(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, startAfter: cursor, ...extraTargetOpt });
         rawNext = res?.following || res?.friends || [];
       } else if (activeTab === 'friends') {
-        res = await userService.getFriends(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, startAfter: cursor });
+        res = await userService.getFriends(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, startAfter: cursor, ...extraTargetOpt });
         rawNext = res?.mutualFriends || res?.friends || [];
       }
 
@@ -392,7 +417,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     } finally {
       setLoadingMoreTab(null);
     }
-  }, [loadingMoreTab, activeTab, cursors, hasMore, targetUserId, currentUserId, hydrateFollowStates]);
+  }, [loadingMoreTab, activeTab, cursors, hasMore, targetUserId, targetProfile, currentUserId, hydrateFollowStates]);
 
   // Handle follow toggle with optimistic update & full state rollback across all lists
   const handleFollowToggle = useCallback(async (targetId, currentFollowState) => {
@@ -816,6 +841,60 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         {/* Loading State */}
         {loading ? (
           <ListRowsSkeleton count={6} />
+        ) : !targetUserId ? (
+          <div className={cn(
+            "rounded-3xl p-8 sm:p-12 text-center border space-y-4 my-6",
+            isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08]" : "bg-white border-slate-200"
+          )}>
+            <div className={cn(
+              "w-14 h-14 mx-auto rounded-2xl flex items-center justify-center border",
+              isDark ? "bg-purple-500/10 text-purple-400 border-purple-500/20" : "bg-purple-50 text-purple-700 border-purple-200"
+            )}>
+              <Lock className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-base sm:text-lg font-bold">Sign in to view connections</h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                Sign in to browse followers, following, mutual friends, and network requests.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => navigate('/login')}
+                className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-xs text-white bg-arvdoul-gradient whitespace-nowrap shrink-0 transition-opacity hover:opacity-90 cursor-pointer"
+              >
+                Sign In
+              </button>
+            </div>
+          </div>
+        ) : loadError ? (
+          <div role="alert" className={cn(
+            "rounded-3xl p-8 sm:p-12 text-center border space-y-4 my-6",
+            isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08]" : "bg-white border-slate-200"
+          )}>
+            <div className={cn(
+              "w-14 h-14 mx-auto rounded-2xl flex items-center justify-center border",
+              isDark ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-rose-50 text-rose-700 border-rose-200"
+            )}>
+              <Users className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-base sm:text-lg font-bold">Could not load connections</h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                {loadError}
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setRefreshNonce((n) => n + 1)}
+                className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-xs text-white bg-arvdoul-gradient whitespace-nowrap shrink-0 transition-opacity hover:opacity-90 cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
         ) : permissionDenied ? (
           /* Privacy Protected State */
           <div className={cn(
