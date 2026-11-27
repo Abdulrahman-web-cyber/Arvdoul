@@ -4,7 +4,6 @@ import { getFirestoreInstance, auth } from '../firebase/firebase.js';
 import { collection, doc, getDoc, getDocs, query, where, orderBy, limit as firestoreLimit, addDoc, serverTimestamp } from "firebase/firestore";
 import { getRemoteConfig, getValue, fetchAndActivate, setLogLevel } from 'firebase/remote-config';
 import { openDB } from 'idb';
-import { loadStripe } from '@stripe/stripe-js';
 import { svcLogger } from './ServiceKit.js';
 import { PRIVATE_PROFILE_COLLECTION } from '../config/profileContracts.js';
 // Canonical level curve (single source of truth). The previous local copy had
@@ -380,7 +379,8 @@ class MonetizationService {
       // Initialize Stripe SDK asynchronously without blocking read-only wallet/profile paths
       const stripePublicKey = import.meta.env?.VITE_STRIPE_PUBLISHABLE_KEY;
       if (stripePublicKey) {
-        this._stripePromise = loadStripe(stripePublicKey)
+        this._stripePromise = import('@stripe/stripe-js/pure')
+          .then(({ loadStripe }) => loadStripe(stripePublicKey))
           .then((stripe) => {
             this.stripe = stripe;
             log.info('Stripe successfully loaded with public key');

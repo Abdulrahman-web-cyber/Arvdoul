@@ -117,14 +117,14 @@ class FeatureFlagService {
 
   async _initRemoteConfig(minimumFetchIntervalMillis) {
     try {
-      const [{ getRemoteConfig, getAll }, { getApp }] = await Promise.all([
+      const [{ getRemoteConfig, getAll, fetchAndActivate }, { getApp }] = await Promise.all([
         import('firebase/remote-config'),
         import('firebase/app'),
       ]);
       const app = getApp(); // throws when Firebase was never initialized
       const remoteConfig = getRemoteConfig(app);
       remoteConfig.settings = { ...remoteConfig.settings, minimumFetchIntervalMillis };
-      await remoteConfig.fetchAndActivate();
+      await fetchAndActivate(remoteConfig);
 
       const all = getAll(remoteConfig);
       for (const [name, def] of Object.entries(DEFAULT_FLAGS)) {

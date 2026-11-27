@@ -4,7 +4,7 @@
 // purchase. No free-coin paths, no mocks.
 
 import { useState, useEffect } from "react";
-import { loadStripe } from '@stripe/stripe-js';
+import { loadStripe } from '@stripe/stripe-js/pure';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';

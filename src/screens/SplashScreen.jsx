@@ -710,7 +710,6 @@ function SplashWordmark({ t, color }) {
       <svg
         viewBox={`0 0 ${WORDMARK.width} ${WORDMARK.height}`}
         width="100%"
-        height="auto"
         aria-hidden="true"
         focusable="false"
         style={{ display: "block", width: "100%", height: "auto", aspectRatio: `${WORDMARK.width} / ${WORDMARK.height}`, overflow: "visible" }}
