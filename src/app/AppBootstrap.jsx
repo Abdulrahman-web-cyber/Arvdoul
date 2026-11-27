@@ -33,108 +33,98 @@ const AppBootFallback = () => {
  */
 const SystemInitializer = ({ onReady = () => {} }) => {
   useEffect(() => {
+    let cancelled = false;
+    let deferredTimer = null;
+    let prefetchTimer = null;
+
     const initialize = async () => {
       try {
         console.info('🚀 Starting Arvdoul system initialization...');
-        
-        // Stage 1: Load essential configurations (non-blocking)
-        
-        // Dynamically import essential services (non-blocking)
+
+        // Stage 1: Load essential auth + crash capture first without saturating network/CPU
         await Promise.allSettled([
           import('../services/authService.js'),
-          import('../services/userService.js'),
-          import('../services/storageService.js'),
-          // Importing this module constructs the singleton, which attaches the
-          // window 'error' / 'unhandledrejection' listeners. Without it, errors
-          // thrown outside React's render path (event handlers, async work)
-          // were never captured anywhere.
-          import('../services/crashReportingService.js')
+          import('../services/crashReportingService.js'),
         ]);
-        
-        // Stage 2: Load Firebase in background (non-critical)
-        
-        // Initialize Firebase in background - don't block app startup
-        const firebaseInit = async () => {
-          try {
-            const { initializeFirebase } = await import('../firebase/firebase.js');
-            await initializeFirebase();
-          } catch (error) {
-            console.warn('⚠️ Background Firebase init:', error.message);
-            // Continue anyway - auth system will handle reconnection
-          }
-        };
-        
-        // Don't await - let it run in background
-        firebaseInit();
 
-        // Feature flags: pull Firebase Remote Config in the background and
-        // subscribe to the server-governed `feature_flags` overrides so a kill
-        // switch applies to every signed-in user. Until either resolves (or
-        // fails), the static defaults are active, so nothing blocks startup.
-        const featureFlagsInit = async () => {
-          try {
-            const { featureFlagService } = await import('../services/featureFlagService.js');
-            await featureFlagService.init();
-            const { getFirestoreInstance } = await import('../firebase/firebase.js');
-            const firestore = await getFirestoreInstance();
-            await featureFlagService.attachFirestoreOverrides(firestore);
-          } catch (error) {
-            console.warn('⚠️ Feature flags init failed (defaults active):', error.message);
-          }
-        };
-        featureFlagsInit();
+        if (cancelled) return;
 
-        // Real User Monitoring: wire Core Web Vitals + route timings into the
-        // metrics pipeline (best-effort; never blocks startup).
-        const rumInit = async () => {
-          try {
-            const { rumService } = await import('../services/rumService.js');
-            rumService.attachToMetrics();
-          } catch (error) {
-            console.warn('⚠️ RUM init failed:', error.message);
-          }
-        };
-        rumInit();
+        // Stage 2: Yield so SplashScreen paints & animates smoothly on slower devices (e.g., Termux)
+        deferredTimer = setTimeout(() => {
+          if (cancelled) return;
 
-        // Wire the global offline-queue drain. The op-type → service map lives
-        // in the canonical sync engine (`src/offline/syncEngine.js`); this call
-        // only starts the startup drain — the engine already drains on
-        // reconnect. A previous inline switch here was a SECOND, divergent copy:
-        // it called methods that do not exist (messagesService.getMessagesService,
-        // feedService.addReaction, videoService.createReel) and competed with the
-        // engine's own drain, so queued ops failed and retried forever.
-        const wireOfflineDrain = async () => {
-          try {
-            const { syncQueue } = await import('../offline/syncEngine.js');
-            const uid =
-              typeof window !== 'undefined'
-                ? window._arvdoul_auth?.currentUser?.uid || null
-                : null;
-            if (uid) syncQueue({ ownerUid: uid }).catch((e) => {
-              console.warn('Startup queue drain failed', e?.message);
+          import('../services/userService.js').catch(() => {});
+          import('../services/storageService.js').catch(() => {});
+
+          import('../firebase/firebase.js')
+            .then(({ initializeFirebase }) => initializeFirebase())
+            .catch((error) => {
+              console.warn('⚠️ Background Firebase init:', error?.message);
             });
-          } catch (err) {
-            console.warn('Offline drain wiring skipped:', err.message);
+
+          (async () => {
+            try {
+              const { featureFlagService } = await import('../services/featureFlagService.js');
+              await featureFlagService.init();
+              const { getFirestoreInstance } = await import('../firebase/firebase.js');
+              const firestore = await getFirestoreInstance();
+              await featureFlagService.attachFirestoreOverrides(firestore);
+            } catch (error) {
+              console.warn('⚠️ Feature flags init failed (defaults active):', error?.message);
+            }
+          })();
+
+          (async () => {
+            try {
+              const { rumService } = await import('../services/rumService.js');
+              rumService.attachToMetrics();
+            } catch (error) {
+              console.warn('⚠️ RUM init failed:', error?.message);
+            }
+          })();
+
+          (async () => {
+            try {
+              const { syncQueue } = await import('../offline/syncEngine.js');
+              const uid =
+                typeof window !== 'undefined'
+                  ? window._arvdoul_auth?.currentUser?.uid || null
+                  : null;
+              if (uid) {
+                syncQueue({ ownerUid: uid }).catch((e) => {
+                  console.warn('Startup queue drain failed', e?.message);
+                });
+              }
+            } catch (err) {
+              console.warn('Offline drain wiring skipped:', err?.message);
+            }
+          })();
+        }, 450);
+
+        // Stage 3: Delay heavy multi-screen prefetching until splash hand-off has settled
+        prefetchTimer = setTimeout(() => {
+          if (!cancelled) {
+            initAppBackgroundPrefetch();
           }
-        };
-        wireOfflineDrain();
-        
-        // Stage 3: Complete
-        
-        console.info('✅ System initialization complete');
-        initAppBackgroundPrefetch();
+        }, 3200);
+
+        console.info('✅ System initialization scheduled');
         onReady();
-        
       } catch (error) {
         console.error('❌ System initialization error:', error);
-        onReady(); // Continue anyway - error boundaries will handle
+        onReady();
       }
     };
-    
-    // Start initialization immediately
+
     initialize();
+
+    return () => {
+      cancelled = true;
+      if (deferredTimer) clearTimeout(deferredTimer);
+      if (prefetchTimer) clearTimeout(prefetchTimer);
+    };
   }, [onReady]);
-  
+
   return null;
 };
 

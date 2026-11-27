@@ -257,6 +257,24 @@ exports.resolveReport = functions.https.onCall(async (data, context) => {
 //  response is explicitly `unknown` and `approved: false` — the composer must
 //  never display a fabricated "passed moderation".
 // ----------------------------------------------------------------------
+const EXPLICIT_SEXUAL_SERVER_PATTERNS = [
+  /\b(?:csam|child\s*porn(?:ography)?|underage\s*(?:sex|nudes?|porn)|loli(?:con)?|shota(?:con)?|jailbait)\b/i,
+  /\b(?:porn(?:ography|hub|ographic)?|xxx|nsfw\s*(?:nudes?|leaks?|video|pics?)|xvideos|xnxx|redtube|youporn|brazzers|onlyfans\s*(?:leaks?|nudes?|promo|free)|fansly\s*(?:leaks?|nudes?)|chaturbate|camgirl|camboy|hentai|rule34|nude\s*(?:leaks?|pics?|videos?|selfies?)|send\s*nudes|leak(?:ed)?\s*nudes|sextape|sex\s*tape)\b/i,
+  /\b(?:blowjob|handjob|rimjob|footjob|titjob|deepthroat|creampie|gangbang|bukkake|cumshot|cunnilingus|fellatio|threesome\s*sex|orgy|bdsm\s*(?:slave|dungeon|porn)|bondage\s*porn|dildo|fleshlight|masturbat(?:e|ing|ion)|jacking\s*off|jerking\s*off|pussy\s*(?:pics?|videos?|licking|eating)|cock\s*(?:sucking|riding|pics?)|dick\s*(?:pics?|rate|sucking)|anal\s*sex|oral\s*sex|vaginal\s*sex|bareback\s*sex|sexting)\b/i,
+  /\b(?:escort\s*(?:service|available|incall|outcall)|full\s*service\s*escort|incall\s*outcall|happy\s*ending\s*massage|erotic\s*massage|sugar\s*(?:daddy|baby)\s*(?:meet|sex|pay)|hookup\s*(?:tonight|nsfw|sex)|cash\s*meet\s*sex)\b/i,
+  /\b(?:slut(?:s|ty)?|whore(?:s)?|milf(?:s)?|dilf(?:s)?|jizz|splooge|clitoris|erotic\s*(?:story|stories|video|videos|photos?)|naked\s*(?:pics?|photos?|videos?|selfies?))\b/i,
+];
+
+function containsExplicitSexualText(rawText) {
+  const clean = String(rawText || '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[_*`~]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean) return false;
+  return EXPLICIT_SEXUAL_SERVER_PATTERNS.some((re) => re.test(clean));
+}
+
 exports.moderatePost = functions.https.onCall(async (data, context) => {
   const uid = validateAuth(context);
   const content = stripHtml(data?.content).slice(0, 5000);
@@ -265,6 +283,16 @@ exports.moderatePost = functions.https.onCall(async (data, context) => {
   }
 
   await checkRateLimit(uid, 'moderatePost', 30, 60000);
+
+  if (containsExplicitSexualText(content)) {
+    return {
+      success: true,
+      approved: false,
+      unknown: false,
+      flags: ['sexually_explicit'],
+      reason: 'explicit_sexual_content',
+    };
+  }
 
   const apiKey = getRuntimeConfig('PERSPECTIVE_API_KEY', 'perspective.api_key');
   if (!apiKey) {

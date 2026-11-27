@@ -11,7 +11,7 @@ import passportService from '../../services/passportService';
 import { shareProfile, copyToClipboard } from '../../utils/shareUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
 import {
-  ShieldCheck, Award, Crown, Share2, QrCode, CheckCircle, Copy, ChevronRight,
+  ArrowLeft, ShieldCheck, Award, Crown, Share2, QrCode, CheckCircle, Copy, ChevronRight,
   Stamp, Lock, UserCheck, Check, RefreshCw, Download, AlertCircle, Landmark,
   Swords, Palette, ScrollText, X,
 } from "lucide-react";
@@ -364,7 +364,18 @@ export default function PassportScreen() {
       <main className="max-w-2xl mx-auto px-4 py-4 sm:py-6 space-y-4">
         {/* Sovereign Credential Header Strip */}
         <div className={cn('p-3.5 sm:p-4 rounded-3xl border flex items-center justify-between gap-3', glassCard)}>
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => (typeof window !== 'undefined' && window.history.length > 1 ? navigate(-1) : navigate('/profile/me'))}
+              aria-label="Go back"
+              className={cn(
+                'min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl border transition-colors cursor-pointer shrink-0',
+                isDark ? 'bg-white/[0.04] border-white/[0.1] hover:bg-white/[0.08] text-slate-200' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+              )}
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
             <div className={cn(
               'w-10 h-10 rounded-2xl border flex items-center justify-center shrink-0',
               isDark ? 'bg-amber-500/10 border-amber-400/25 text-amber-400' : 'bg-amber-50 border-amber-500/25 text-amber-600'
@@ -954,6 +965,7 @@ export default function PassportScreen() {
                   {qrDataUrl ? (
                     <LazyImage
                       src={qrDataUrl}
+                      loading="eager"
                       alt={`Citizen QR Pass for ${passport.displayName || passport.citizenId}`}
                       className="w-56 h-56 rounded-2xl object-contain mx-auto"
                     />
@@ -1039,6 +1051,7 @@ export default function PassportScreen() {
               {qrDataUrl && (
                 <LazyImage
                   src={qrDataUrl}
+                  loading="eager"
                   alt={`Citizen QR for ${passport.displayName || passport.citizenId}`}
                   className="w-48 h-48 rounded-xl object-contain"
                 />

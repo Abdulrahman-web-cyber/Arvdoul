@@ -1,6 +1,6 @@
 // src/app/AppStateGuard.jsx
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
@@ -20,12 +20,11 @@ export default function AppStateGuard({ children }) {
     user,
     loading: authLoading,
     isAuthenticated,
-    isEmailVerified,
     authInitialized,
     profileResolved,
     needsOnboarding,
-    isSignupInProgress,
   } = useAuth();
+  const [stalledWait, setStalledWait] = useState(false);
 
   const needsEmailVerification = useMemo(() => {
     if (!user) return false;
@@ -62,6 +61,15 @@ export default function AppStateGuard({ children }) {
   ]);
 
   useEffect(() => {
+    if (!decision.wait || location.pathname === "/") {
+      setStalledWait(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setStalledWait(true), 5500);
+    return () => clearTimeout(timer);
+  }, [decision.wait, location.pathname]);
+
+  useEffect(() => {
     if (decision.destination && !decision.wait) {
       const target =
         decision.destination === "/home"
@@ -85,6 +93,29 @@ export default function AppStateGuard({ children }) {
     return (
       <BrandBootCanvas isDark={isDark} label="Preparing screen">
         <RouteProgressBar isAnimating={true} />
+        {stalledWait && (
+          <div className="fixed bottom-10 inset-x-0 z-20 flex flex-col items-center gap-3 px-6 text-center">
+            <p className="text-xs font-medium opacity-75">
+              Restoring session is taking longer than expected.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="min-h-[44px] px-5 rounded-full text-xs font-semibold bg-white/15 hover:bg-white/25 dark:bg-white/10 border border-black/10 dark:border-white/15 transition-colors"
+              >
+                Reload
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/intro", { replace: true })}
+                className="min-h-[44px] px-5 rounded-full text-xs font-semibold bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 transition-colors"
+              >
+                Open Intro
+              </button>
+            </div>
+          </div>
+        )}
       </BrandBootCanvas>
     );
   }

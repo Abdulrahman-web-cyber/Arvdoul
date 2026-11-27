@@ -254,7 +254,7 @@ class SocialGraphService {
     const req = (async () => {
       try {
         await this._ensureInitialized();
-        const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut, pendingOut] = await Promise.all([
+        const fetchAllEdges = () => Promise.all([
           this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.follow.out),
           this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.follow.in),
           this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.out),
@@ -271,6 +271,18 @@ class SocialGraphService {
             equals: { status: 'pending' },
           }),
         ]);
+        let results;
+        try {
+          results = await fetchAllEdges();
+        } catch (firstErr) {
+          const msg = String(firstErr?.message || '').toLowerCase();
+          const code = String(firstErr?.code || '').toLowerCase();
+          const isTransient = msg.includes('timeout') || code === 'unavailable' || code === 'deadline-exceeded';
+          if (!isTransient) throw firstErr;
+          await new Promise((r) => setTimeout(r, 300));
+          results = await fetchAllEdges();
+        }
+        const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut, pendingOut] = results;
         const isFollowing = followOut.has(`${viewerId}_${targetId}`);
         const isFollower = followIn.has(`${viewerId}_${targetId}`);
         const isBlocking = blockOut.has(`${viewerId}_${targetId}`);

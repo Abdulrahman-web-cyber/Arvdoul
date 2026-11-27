@@ -494,33 +494,46 @@ export function AuthProvider({ children }) {
     const generation = ++profileListenerGenerationRef.current;
     if (unsubscribeProfileRef.current) unsubscribeProfileRef.current();
 
+    // Start the bounded resolution watchdog BEFORE awaiting Firestore/IndexedDB
+    // initialization so a stalled persistence layer (common in mobile WebViews
+    // or Termux environments) can never trap loading=true / profileResolved=false.
+    let isFirstSnapshot = true;
+    let fallbackTimer = null;
+    const resolveWithAuthFallback = (reason) => {
+      if (!isFirstSnapshot || !isMounted.current || initialProfileLoaded.current) return;
+      if (generation !== profileListenerGenerationRef.current) return;
+      console.warn(reason);
+      const returning = isReturningAuthUser(firebaseUser) && !getOnboardingSession(firebaseUser.uid);
+      setAuthState(returning ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
+      setLoading(false);
+      setProfileResolved(true);
+      initialProfileLoaded.current = true;
+      isFirstSnapshot = false;
+    };
+
+    fallbackTimer = setTimeout(() => {
+      resolveWithAuthFallback('Profile snapshot timeout – resolving with auth-only identity');
+    }, 2500);
+
     try {
-      // Ensure Firestore is initialized
-      await userService.initialize();
+      // Ensure Firestore is initialized (bounded so IndexedDB locks cannot stall boot)
+      await Promise.race([
+        userService.initialize(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('UserService Firestore initialization timeout')), 2500)
+        ),
+      ]);
       const { doc, onSnapshot } = await import('firebase/firestore');
       const firestore = userService.firestore;
       if (!firestore) throw new Error('Firestore not ready');
 
       // A newer setup started while we were awaiting - abandon this one.
-      if (generation !== profileListenerGenerationRef.current) return;
-      
+      if (generation !== profileListenerGenerationRef.current) {
+        clearTimeout(fallbackTimer);
+        return;
+      }
+
       const userDocRef = doc(firestore, 'users', uid);
-      let isFirstSnapshot = true;
-      let fallbackTimer = null;
-      
-      // Fallback timer: never hang the splash/guard. Returning users enter the
-      // app; only an in-progress signup stays on onboarding.
-      fallbackTimer = setTimeout(() => {
-        if (isFirstSnapshot && isMounted.current && !initialProfileLoaded.current) {
-          console.warn('Profile snapshot timeout – resolving with auth-only identity');
-          const returning = isReturningAuthUser(firebaseUser) && !getOnboardingSession(firebaseUser.uid);
-          setAuthState(returning ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
-          setLoading(false);
-          setProfileResolved(true);
-          initialProfileLoaded.current = true;
-          isFirstSnapshot = false;
-        }
-      }, 2500);
       
       const unsubscribe = onSnapshot(userDocRef,
         (snap) => {
@@ -792,14 +805,20 @@ export function AuthProvider({ children }) {
         unsubscribe();
       }
     } catch (err) {
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
       if (generation !== profileListenerGenerationRef.current) return;
       console.error('Failed to setup realtime profile:', err);
       if (!initialProfileLoaded.current) {
+        const returning = isReturningAuthUser(firebaseUser) && !getOnboardingSession(firebaseUser.uid);
         setUserProfile(null);
-        setAuthState(AuthState.PROFILE_INCOMPLETE);
+        setAuthState(returning ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
         setLoading(false);
         setProfileResolved(true);
         initialProfileLoaded.current = true;
+        isFirstSnapshot = false;
       }
     }
   }, [userService, authService]);
@@ -819,7 +838,17 @@ export function AuthProvider({ children }) {
     );
     let pendingGoogleRedirect = false;
     try {
-      pendingGoogleRedirect = sessionStorage.getItem('arvdoul_google_redirect_pending') === '1';
+      const rawRedirect = sessionStorage.getItem('arvdoul_google_redirect_pending');
+      if (rawRedirect === '1') {
+        pendingGoogleRedirect = true;
+      } else if (rawRedirect) {
+        const parsed = JSON.parse(rawRedirect);
+        if (parsed && typeof parsed.at === 'number' && Date.now() - parsed.at <= 120000) {
+          pendingGoogleRedirect = true;
+        } else {
+          sessionStorage.removeItem('arvdoul_google_redirect_pending');
+        }
+      }
     } catch {
       pendingGoogleRedirect = false;
     }
@@ -834,11 +863,16 @@ export function AuthProvider({ children }) {
       setLoading(false);
       setProfileResolved(true);
       setAuthState((prev) => (prev === AuthState.BOOTING ? AuthState.UNAUTHENTICATED : prev));
-    }, pendingGoogleRedirect ? 20000 : (storedSession ? 8000 : 3500));
+    }, pendingGoogleRedirect ? 15000 : (storedSession ? 4500 : 2500));
     
     const setupAuthListener = async () => {
       try {
-        await authService.initialize();
+        await Promise.race([
+          authService.initialize(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Auth initialization timed out')), pendingGoogleRedirect ? 14000 : 3500)
+          ),
+        ]);
         if (!isMounted.current || abortController.signal.aborted) return;
         if (authService.googleRedirectError) {
           const redirectMessage = authService.googleRedirectError.message || 'Google sign-in could not be completed.';

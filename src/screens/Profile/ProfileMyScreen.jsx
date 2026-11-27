@@ -673,6 +673,13 @@ export default function ProfileMyScreen() {
     const resolvedLikes = firstKnown(toCount, [postsReady ? postsLikesCount : null, base.likesReceived, base.likesCount]);
     const resolvedFriends = firstKnown(toCount, [profileReady ? friendCount : null, base.friendCount]);
     const overrideUrl = isOwnerView && avatarOverride.uid === currentUserId ? avatarOverride.url : null;
+    const hasExplicitReset = Boolean(
+      isOwnerView &&
+      ownedProfile &&
+      Object.prototype.hasOwnProperty.call(ownedProfile, 'photoURL') &&
+      ownedProfile.photoURL === '' &&
+      overrideUrl === null
+    );
 
     return {
       ...base,
@@ -681,6 +688,7 @@ export default function ProfileMyScreen() {
       ...(resolvedExperience !== null ? { experience: resolvedExperience } : {}),
       ...(resolvedLikes !== null ? { likesReceived: resolvedLikes } : {}),
       ...(resolvedFriends !== null ? { friendCount: resolvedFriends } : {}),
+      ...(hasExplicitReset ? { photoURL: '' } : {}),
       ...(overrideUrl !== null ? { photoURL: overrideUrl } : {}),
       bio: cleanText(base.bio) || cleanText(ownerFallback.bio),
       location: cleanText(base.location) || cleanText(ownerFallback.location),

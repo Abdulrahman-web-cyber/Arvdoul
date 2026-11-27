@@ -14,6 +14,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { evaluateContentSafety } from '../utils/contentSafety.js';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
@@ -799,6 +800,25 @@ export default function CreateStory() {
     if (!audienceCheck.valid) {
       toast.error(audienceCheck.error);
       setAudienceModalOpen(true);
+      return;
+    }
+
+    const vibeSafety = evaluateContentSafety({
+      text: storyText,
+      extraFields: [
+        ...(Array.isArray(textOverlays) ? textOverlays.map((ov) => ov?.text || '') : []),
+        pollQuestion,
+        pollOption1,
+        pollOption2,
+        questionPrompt,
+        storyLocation,
+        linkUrl,
+        mentionHandle,
+        mediaFile?.name || '',
+      ],
+    });
+    if (!vibeSafety.allowed) {
+      toast.error(vibeSafety.reason);
       return;
     }
 

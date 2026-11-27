@@ -12,6 +12,7 @@ import { pickDisplayName, deriveHandle } from './profileReadModel.js';
 import { featureFlagService } from './featureFlagService.js';
 import { newIdempotencyKey } from '../utils/IdempotencyKey.js';
 import { countersManager } from '../utils/CountersManager.js';
+import { evaluateContentSafety, isSafeFeedItem } from '../utils/contentSafety.js';
 import videoConfig from '../shared/videoConfig.cjs';
 
 const {
@@ -352,6 +353,18 @@ class UltimateVideoService {
     if (metadata.duration !== undefined && metadata.duration !== null) {
       const durCheck = validateSparkDuration(metadata.duration);
       if (!durCheck.valid) throw new VideoError('invalid-video', durCheck.reason);
+    }
+
+    const safety = evaluateContentSafety({
+      title: metadata.title || '',
+      description: metadata.description || metadata.content || '',
+      tags: metadata.tags || [],
+      hashtags: metadata.hashtags || [],
+      mediaNames: file?.name ? [file.name] : [],
+      extraFields: [metadata.safetyAccessibility?.contentWarning || ''],
+    });
+    if (!safety.allowed) {
+      throw new VideoError('content-policy', safety.reason);
     }
 
     const subType = metadata.subType || (metadata.type === 'reel' || metadata.isReel ? 'reel' : 'spark');
@@ -1112,12 +1125,12 @@ class UltimateVideoService {
       }
 
       const visibleItems = hiddenAuthors.size > 0
-        ? rawItems.filter((v) => !hiddenAuthors.has(v.authorId || v.userId || v.creatorId))
-        : rawItems;
+        ? rawItems.filter((v) => !hiddenAuthors.has(v.authorId || v.userId || v.creatorId) && isSafeFeedItem(v))
+        : rawItems.filter((v) => isSafeFeedItem(v));
 
       const formattedList = visibleItems
         .map((item) => this._formatVideoItem(item))
-        .filter((v) => v && (v.videoUrl || v.muxPlaybackId));
+        .filter((v) => v && (v.videoUrl || v.muxPlaybackId) && isSafeFeedItem(v));
 
       // Overlay canonical sharded engagement counters BEFORE personalized ranking
       // so engagement quality and viral velocity rank on real stats.

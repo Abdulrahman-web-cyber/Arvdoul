@@ -103,15 +103,15 @@ const REVEAL_S = Object.freeze({ full: 1.45, quick: 0.72, reduced: 0 });
 const SNAP_S = 0.55;
 // Minimum visible presence once mounted so the orbit + Arvdoul wordmark reveal
 // is always experienced instead of aborting in a single frame.
-const SETTLE_MS = Object.freeze({ full: 1500, quick: 760, reduced: 0 });
-const EXIT_MS = Object.freeze({ full: 320, quick: 220, reduced: 80 });
+const SETTLE_MS = Object.freeze({ full: 1500, quick: 760, reduced: 260 });
+const EXIT_MS = Object.freeze({ full: 320, quick: 220, reduced: 120 });
 // One lap of the "still working" light around the orbit.
 const WAIT_LOOP_S = 2.2;
 
 // Status escalation while startup is genuinely unresolved.
-const STATUS_DELAY_MS = 2500;
-const SLOW_MS = 8000;
-const STUCK_MS = 20000;
+const STATUS_DELAY_MS = 2200;
+const SLOW_MS = 5000;
+const STUCK_MS = 11000;
 
 // Segments of the single reveal timeline (fractions of REVEAL_S).
 const SEG = Object.freeze({
@@ -1041,6 +1041,7 @@ export default function SplashScreen({
   const mountedAtRef = useRef(Date.now());
   const readyAtRef = useRef(null);
   const destinationRef = useRef(destination);
+  const preloadPromiseRef = useRef(null);
   const metricsRef = useRef(onMetrics);
   destinationRef.current = destination;
   metricsRef.current = onMetrics;
@@ -1075,15 +1076,29 @@ export default function SplashScreen({
     return () => controls.stop();
   }, [mode, t]);
 
-  // Prefetch the resolved destination's route chunk while the splash settles/exits
-  // so Suspense has zero blink when navigation replaces '/'.
+  // Prefetch the resolved destination's route chunk (and MainLayout for protected routes)
+  // while the splash settles/exits so React Suspense has zero blink on hand-off.
   useEffect(() => {
     if (!ready || !destination) return undefined;
-    if (destination === "/home") import("../screens/HomeScreen.jsx").catch(() => {});
-    else if (destination === "/intro") import("../screens/IntroScreen.jsx").catch(() => {});
-    else if (destination === "/setup-profile") import("../screens/SetupProfile.jsx").catch(() => {});
-    else if (destination === "/verify-email") import("../screens/VerifyEmailScreen.jsx").catch(() => {});
-    else if (destination === "/login") import("../screens/LoginScreen.jsx").catch(() => {});
+    let task = null;
+    if (destination === "/home") {
+      task = Promise.allSettled([
+        import("../layouts/MainLayout.jsx"),
+        import("../screens/HomeScreen.jsx"),
+      ]);
+    } else if (destination === "/intro") {
+      task = import("../screens/IntroScreen.jsx").catch(() => {});
+    } else if (destination === "/setup-profile") {
+      task = Promise.allSettled([
+        import("../layouts/MainLayout.jsx"),
+        import("../screens/SetupProfile.jsx"),
+      ]);
+    } else if (destination === "/verify-email") {
+      task = import("../screens/VerifyEmailScreen.jsx").catch(() => {});
+    } else if (destination === "/login") {
+      task = import("../screens/LoginScreen.jsx").catch(() => {});
+    }
+    preloadPromiseRef.current = task;
     return undefined;
   }, [ready, destination]);
 
@@ -1182,14 +1197,26 @@ export default function SplashScreen({
 
   useEffect(() => {
     if (phase !== "exiting") return undefined;
-    const timer = setTimeout(handoff, EXIT_MS[mode]);
+    let cancelled = false;
+    const minExit = new Promise((resolve) => setTimeout(resolve, EXIT_MS[mode]));
+    const preloadCap = preloadPromiseRef.current
+      ? Promise.race([
+          preloadPromiseRef.current.catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, 850)),
+        ])
+      : Promise.resolve();
+
+    Promise.all([minExit, preloadCap]).then(() => {
+      if (!cancelled) handoff();
+    });
+
     // Backgrounded pages throttle timers; finish as soon as the page is visible again.
     const onVisible = () => {
-      if (document.visibilityState === "visible") handoff();
+      if (document.visibilityState === "visible" && !cancelled) handoff();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      clearTimeout(timer);
+      cancelled = true;
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [phase, mode, handoff]);

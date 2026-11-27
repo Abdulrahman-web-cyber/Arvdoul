@@ -8,6 +8,7 @@ import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { firestoreService } from './firestoreService.js';
 import { featureFlagService } from './featureFlagService.js';
+import { isSafeFeedItem } from '../utils/contentSafety.js';
 
 const FEED_CONFIG = {
   FEED_TYPES: {
@@ -1622,7 +1623,7 @@ class UltimateFeedService {
       if (posts?.length) {
         const weight = dynamicWeights[source] || 0.1;
         posts.forEach(p => {
-          if (!p || !p.id || hiddenPosts.has(p.id)) return;
+          if (!p || !p.id || hiddenPosts.has(p.id) || !isSafeFeedItem(p)) return;
           if (!rawPostsMap.has(p.id)) {
             rawPostsMap.set(p.id, { post: p, source, weight, seen: seenPostIds.has(p.id) });
             if (!seenPostIds.has(p.id)) {
@@ -2112,7 +2113,8 @@ class UltimateFeedService {
   }
 
   _finalizeFeedOptimized(posts, userId, options) {
-    const limited = posts.slice(0, options.limit || FEED_CONFIG.ALGORITHM.DEFAULT_PAGE_LIMIT);
+    const safePosts = posts.filter((p) => isSafeFeedItem(p));
+    const limited = safePosts.slice(0, options.limit || FEED_CONFIG.ALGORITHM.DEFAULT_PAGE_LIMIT);
     return limited.map((p, i) => ({
       ...p,
       location: p.location?.displayName || (p.location?.lat && p.location?.lon ? `${p.location.lat},${p.location.lon}` : p.location),

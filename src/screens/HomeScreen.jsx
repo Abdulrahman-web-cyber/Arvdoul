@@ -33,6 +33,7 @@ import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { useAuthorStanding } from '../hooks/useAuthorStanding';
 import PullToRefresh from '../components/Shared/PullToRefresh';
 import { scheduleIdleTask, cancelIdleTask } from '../performance/optimizer.js';
+import { isSafeFeedItem } from '../utils/contentSafety.js';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -1104,7 +1105,7 @@ export default function HomeScreen() {
 
           let newPosts = Array.isArray(result.feed) ? result.feed : [];
           newPosts = newPosts.map(p => hydratePost(p));
-          newPosts = newPosts.filter(p => !blockedIds.has(p.authorId) && p.authorId);
+          newPosts = newPosts.filter(p => !blockedIds.has(p.authorId) && p.authorId && isSafeFeedItem(p));
 
           // Apply diversity & creator caps, topping up sparse feeds so single-creator pools stay populated
           const diverse = [];
@@ -1138,7 +1139,7 @@ export default function HomeScreen() {
               if (Array.isArray(localPosts) && localPosts.length > 0) {
                 const existingIds = new Set(newPosts.map(p => p.id));
                 const freshLocal = localPosts
-                  .filter(p => p && p.id && p.visibility !== 'community' && !existingIds.has(p.id) && !blockedIds.has(p.authorId))
+                  .filter(p => p && p.id && p.visibility !== 'community' && !existingIds.has(p.id) && !blockedIds.has(p.authorId) && isSafeFeedItem(p))
                   .map(p => hydratePost(p));
                 newPosts = [...freshLocal, ...newPosts];
               }

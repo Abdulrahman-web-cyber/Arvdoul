@@ -20,27 +20,43 @@ const AUTH_CONFIG = {
 };
 
 const GOOGLE_REDIRECT_PENDING_KEY = 'arvdoul_google_redirect_pending';
+const GOOGLE_REDIRECT_PENDING_TTL_MS = 2 * 60 * 1000;
 
-const markGoogleRedirectPending = () => {
+export const markGoogleRedirectPending = () => {
   try {
     if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem(GOOGLE_REDIRECT_PENDING_KEY, '1');
+      sessionStorage.setItem(
+        GOOGLE_REDIRECT_PENDING_KEY,
+        JSON.stringify({ at: Date.now() }),
+      );
     }
   } catch (error) {
     logger.warn('Google redirect marker could not be persisted', { message: error?.message });
   }
 };
 
-const hasGoogleRedirectPending = () => {
+export const hasGoogleRedirectPending = () => {
   try {
-    return typeof sessionStorage !== 'undefined' &&
-      sessionStorage.getItem(GOOGLE_REDIRECT_PENDING_KEY) === '1';
+    if (typeof sessionStorage === 'undefined') return false;
+    const raw = sessionStorage.getItem(GOOGLE_REDIRECT_PENDING_KEY);
+    if (!raw) return false;
+    if (raw === '1') return true;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.at !== 'number') {
+      sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);
+      return false;
+    }
+    if (Date.now() - parsed.at > GOOGLE_REDIRECT_PENDING_TTL_MS) {
+      sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);
+      return false;
+    }
+    return true;
   } catch {
     return false;
   }
 };
 
-const clearGoogleRedirectPending = () => {
+export const clearGoogleRedirectPending = () => {
   try {
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);

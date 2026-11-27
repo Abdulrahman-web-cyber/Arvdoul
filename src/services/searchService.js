@@ -4,6 +4,7 @@
 
 import { getMonetizationService } from './monetizationService.js';
 import { featureFlagService } from './featureFlagService.js';
+import { isSafeFeedItem } from '../utils/contentSafety.js';
 import { collection, query as firestoreQuery, where, limit as firestoreLimit, getDocs, startAfter } from "firebase/firestore";
 
 function enhanceError(error, defaultMessage) {
@@ -603,12 +604,13 @@ class UltimateSearchService {
             sponsoredItem = null;
           }
         }
-        if (sponsoredItem) {
+        if (sponsoredItem && isSafeFeedItem(sponsoredItem.raw || sponsoredItem)) {
           const pos = Math.min(SEARCH_CONFIG.SPONSORED.DEFAULT_POSITION, finalHits.length);
           finalHits.splice(pos, 0, sponsoredItem);
         }
       }
 
+      finalHits = finalHits.filter((item) => isSafeFeedItem(item.raw || item));
       const start = page * hitsPerPage;
       const paginated = finalHits.slice(start, start + hitsPerPage);
       // The fused window holds up to `windowSize` ranked hits. The provider's

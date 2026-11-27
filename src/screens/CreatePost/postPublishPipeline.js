@@ -7,6 +7,7 @@ import {
   uploadComposerMedia,
   uploadAudioCoverIfNeeded,
 } from './postMediaPipeline.js';
+import { evaluateContentSafety } from '../../utils/contentSafety.js';
 
 function buildControlMetadata(current = {}) {
   const commercial = current.commercialSettings || {};
@@ -243,6 +244,25 @@ export async function executePostPublish({
     !current.commercialSettings?.brandPartnerId
   ) {
     throw new Error('Please tag a brand partner for your paid partnership post.');
+  }
+
+  const safetyCheck = evaluateContentSafety({
+    text: effectiveText,
+    title: current.typeData?.link?.title || current.typeData?.event?.title || current.typeData?.audio?.title || '',
+    description: current.typeData?.event?.description || current.typeData?.link?.description || '',
+    hashtags: current.hashtags || [],
+    mediaNames: (current.mediaItems || []).map((m) => m?.file?.name || m?.name || ''),
+    extraFields: [
+      current.typeData?.poll?.question,
+      current.typeData?.poll?.options,
+      current.typeData?.link?.url,
+      current.commercialSettings?.affiliateLabel,
+      current.commercialSettings?.productTag,
+      current.safetyAccessibility?.contentWarning,
+    ],
+  });
+  if (!safetyCheck.allowed) {
+    throw new Error(safetyCheck.reason);
   }
 
   // Offline handling before attempting network writes

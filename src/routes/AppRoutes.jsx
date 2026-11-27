@@ -4,7 +4,6 @@ import { lazy, Suspense, useState, useEffect } from "react";
 import { Routes, Route, Navigate, Outlet, useParams, useLocation, useMatch } from "react-router-dom";
 import AppStateGuard from "../app/AppStateGuard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import MainLayout from "../layouts/MainLayout.jsx";
 import SplashScreen from "../screens/SplashScreen.jsx";
 import logger from "../utils/Logger.js";
 import metricsService from "../services/metricsService.js";
@@ -12,6 +11,7 @@ import metricsService from "../services/metricsService.js";
 import BrandBootCanvas from "../components/Shared/BrandBootCanvas.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
 
+const MainLayout = lazyWithRetry(() => import("../layouts/MainLayout.jsx"), "MainLayout");
 const IntroScreen = lazyWithRetry(() => import("../screens/IntroScreen.jsx"), "IntroScreen");
 const LoginScreen = lazyWithRetry(() => import("../screens/LoginScreen.jsx"), "LoginScreen");
 const HomeScreen = lazyWithRetry(() => import("../screens/HomeScreen.jsx"), "HomeScreen");
@@ -42,7 +42,7 @@ function isDynamicImportError(err) {
 
 function lazyWithRetry(loader, chunkKey) {
   return lazy(async () => {
-    const delays = [150, 450];
+    const delays = [150, 450, 1000];
     let lastErr;
     for (let attempt = 0; attempt <= delays.length; attempt++) {
       try {
@@ -183,16 +183,32 @@ import {
 import { RouteProgressBar } from "../components/Navigation/RouteProgressBar.jsx";
 import FeatureGate from "../components/Shared/FeatureGate.jsx";
 
-// Seamless, branded route transition fallback (never leaves a blank surface)
+// In-app route fallback inside MainLayout (no duplicate splash wordmark)
 const RouteLoadingFallback = () => {
+  return (
+    <div
+      className="relative w-full min-h-[65dvh] px-4 py-6 max-w-2xl mx-auto animate-pulse"
+      aria-busy="true"
+      aria-label="Loading page"
+    >
+      <RouteProgressBar isAnimating={true} />
+      <div className="h-28 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] mb-4" />
+      <div className="h-44 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] mb-4" />
+      <div className="h-36 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04]" />
+    </div>
+  );
+};
+const RouteFallback = RouteLoadingFallback;
+
+// Shell bootstrap fallback while MainLayout itself is fetched once per session
+const AppShellFallback = () => {
   const { isDark } = useTheme();
   return (
-    <BrandBootCanvas isDark={isDark} embedded label="Loading route" showWordmark={false}>
+    <BrandBootCanvas isDark={isDark} label="Loading workspace">
       <RouteProgressBar isAnimating={true} />
     </BrandBootCanvas>
   );
 };
-const RouteFallback = RouteLoadingFallback;
 
 // Layoutless routes (Intro, Login, Signup, Join Group) need the full themed
 // Arvdoul lockup while lazy chunks resolve so users never see an unstyled flash.
@@ -217,7 +233,9 @@ const PublicRoute = ({ children }) => {
 const ProtectedRoute = ({ children }) => {
   return (
     <AppStateGuard>
-      <MainLayout>{children}</MainLayout>
+      <Suspense fallback={<AppShellFallback />}>
+        <MainLayout>{children}</MainLayout>
+      </Suspense>
     </AppStateGuard>
   );
 };
@@ -253,25 +271,27 @@ const MessagingLayout = ({ children }) => {
 
   return (
     <AppStateGuard>
-      <MainLayout>
-        {isDesktop && !isIndexRoute ? (
-          <div className="flex flex-1 min-h-0 w-full h-full overflow-hidden">
-            <aside
-              aria-label="Conversations sidebar"
-              className="w-[360px] xl:w-[392px] shrink-0 h-full min-h-0 flex flex-col border-r border-slate-200/80 dark:border-white/[0.08]"
-            >
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <MessagingScreen sidebarMode activeConversationId={activeConversationId} />
-              </Suspense>
-            </aside>
-            <div className="flex-1 min-w-0 h-full min-h-0 flex flex-col overflow-hidden">
-              {children}
+      <Suspense fallback={<AppShellFallback />}>
+        <MainLayout>
+          {isDesktop && !isIndexRoute ? (
+            <div className="flex flex-1 min-h-0 w-full h-full overflow-hidden">
+              <aside
+                aria-label="Conversations sidebar"
+                className="w-[360px] xl:w-[392px] shrink-0 h-full min-h-0 flex flex-col border-r border-slate-200/80 dark:border-white/[0.08]"
+              >
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <MessagingScreen sidebarMode activeConversationId={activeConversationId} />
+                </Suspense>
+              </aside>
+              <div className="flex-1 min-w-0 h-full min-h-0 flex flex-col overflow-hidden">
+                {children}
+              </div>
             </div>
-          </div>
-        ) : (
-          children
-        )}
-      </MainLayout>
+          ) : (
+            children
+          )}
+        </MainLayout>
+      </Suspense>
     </AppStateGuard>
   );
 };
@@ -303,7 +323,13 @@ const AdminRoute = ({ children }) => {
     return <div className="min-h-[100dvh] w-full bg-[#F6F8FC] dark:bg-[#03071B] flex items-center justify-center"><div className="w-10 h-10 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>;
   }
   if (!allowed) return <Navigate to="/home" replace />;
-  return <AppStateGuard><MainLayout>{children}</MainLayout></AppStateGuard>;
+  return (
+    <AppStateGuard>
+      <Suspense fallback={<AppShellFallback />}>
+        <MainLayout>{children}</MainLayout>
+      </Suspense>
+    </AppStateGuard>
+  );
 };
 
 function RedirectProfilePosts() {

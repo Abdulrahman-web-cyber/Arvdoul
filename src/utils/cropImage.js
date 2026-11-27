@@ -27,9 +27,14 @@ export async function getCroppedImg(imageSrc, pixelCrop, maxSize = 512) {
     throw new Error('Canvas 2D context unavailable');
   }
 
+  const cropWidth = Math.max(1, Math.round(pixelCrop?.width || image.naturalWidth || 400));
+  const cropHeight = Math.max(1, Math.round(pixelCrop?.height || image.naturalHeight || 400));
+  const cropX = Math.max(0, Math.round(pixelCrop?.x || 0));
+  const cropY = Math.max(0, Math.round(pixelCrop?.y || 0));
+
   // Cap dimensions to maxSize (e.g. 512x512) for lightning-fast uploads & optimal memory
-  const targetWidth = Math.min(pixelCrop.width || 400, maxSize);
-  const targetHeight = Math.min(pixelCrop.height || 400, maxSize);
+  const targetWidth = Math.max(1, Math.min(cropWidth, maxSize));
+  const targetHeight = Math.max(1, Math.min(cropHeight, maxSize));
 
   canvas.width = targetWidth;
   canvas.height = targetHeight;
@@ -39,10 +44,10 @@ export async function getCroppedImg(imageSrc, pixelCrop, maxSize = 512) {
 
   ctx.drawImage(
     image,
-    pixelCrop.x,
-    pixelCrop.y,
-    pixelCrop.width,
-    pixelCrop.height,
+    cropX,
+    cropY,
+    cropWidth,
+    cropHeight,
     0,
     0,
     targetWidth,
