@@ -272,7 +272,7 @@ const MessagingLayout = ({ children }) => {
 
   return (
     <AppStateGuard>
-      <Suspense fallback={<AppShellFallback />}>
+      <Suspense fallback={<RouteLoadingFallback />}>
         <MainLayout>
           {isDesktop && !isIndexRoute ? (
             <div className="flex flex-1 min-h-0 w-full h-full overflow-hidden">
@@ -326,7 +326,7 @@ const AdminRoute = ({ children }) => {
   if (!allowed) return <Navigate to="/home" replace />;
   return (
     <AppStateGuard>
-      <Suspense fallback={<AppShellFallback />}>
+      <Suspense fallback={<RouteLoadingFallback />}>
         <MainLayout>{children}</MainLayout>
       </Suspense>
     </AppStateGuard>
@@ -585,7 +585,14 @@ export default function AppRoutes() {
           </Suspense>
         </ProtectedRoute>
       } />
-      {/* Legacy highlight links resolve to the stories viewer. */}
+      {/* Legacy highlight & story links resolve to the stories viewer. */}
+      <Route path="/story/:storyId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <StoriesScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
       <Route path="/highlight/:highlightId" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>

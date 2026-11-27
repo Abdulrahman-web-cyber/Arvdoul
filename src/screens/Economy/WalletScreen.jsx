@@ -56,17 +56,24 @@ function resolveWithdrawEligibility(wallet) {
   };
 }
 
+function isTransactionCredit(tx, amount) {
+  if (tx?.type === 'credit') return true;
+  if (tx?.type === 'debit' || tx?.type === 'withdrawal_lock' || tx?.type === 'withdrawal') return false;
+  return amount != null && amount >= 0;
+}
+
 export default function WalletScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { theme } = useTheme();
 
-  const isDark = theme === 'dark' || theme === 'midnight';
+  const isDark = theme !== 'light';
 
   const [loading, setLoading] = useState(true);
   const [showLoadingShell, setShowLoadingShell] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [wallet, setWallet] = useState(null);
+  const [payoutSettings, setPayoutSettings] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [activeTab, setActiveTab] = useState('all'); // all | in | out
   const [paymentPkg, setPaymentPkg] = useState(null);
@@ -86,12 +93,15 @@ export default function WalletScreen() {
   const loadWallet = useCallback(async () => {
     if (!user?.uid) return;
     try {
-      const [wData, txData] = await Promise.all([
+      const monetizationService = getMonetizationService();
+      const [wData, txData, payoutRes] = await Promise.all([
         walletService.getWalletOverview(user.uid),
         walletService.getTransactions(user.uid, 50),
+        monetizationService.getPayoutSettings().catch(() => null),
       ]);
       setWallet(wData);
       setTransactions(txData);
+      setPayoutSettings(payoutRes);
       setLoadError(null);
     } catch (err) {
       // A failed read is *unknown*, not an empty wallet: the balance card must
@@ -106,6 +116,17 @@ export default function WalletScreen() {
   useEffect(() => {
     loadWallet();
   }, [loadWallet]);
+
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    const onBalanceUpdated = (evt) => {
+      if (!evt?.detail?.userId || evt.detail.userId === user.uid) {
+        loadWallet();
+      }
+    };
+    window.addEventListener('arvdoul:balance_updated', onBalanceUpdated);
+    return () => window.removeEventListener('arvdoul:balance_updated', onBalanceUpdated);
+  }, [user?.uid, loadWallet]);
 
   // Real Stripe purchase: the modal hands back a PaymentMethod id which is
   // verified server-side by the purchaseCoins callable. No free-coin path.
@@ -153,9 +174,17 @@ export default function WalletScreen() {
       return;
     }
 
+    if (payoutSettings?.status !== 'ready' || !payoutSettings?.stripeAccountId) {
+      toast.error('Connect a Stripe payout account in Creator Payouts first.');
+      navigate('/creator-payout');
+      return;
+    }
+
     setWithdrawing(true);
     try {
-      await walletService.requestPayout(user.uid, amount, 'stripe_connected');
+      await walletService.requestPayout(user.uid, amount, 'stripe_connected', {
+        stripeAccountId: payoutSettings.stripeAccountId,
+      });
       toast.success('Withdrawal request submitted for compliance audit.');
       setWithdrawAmount('');
       await loadWallet();
@@ -170,8 +199,9 @@ export default function WalletScreen() {
     // A transaction with no readable amount belongs to neither tab — it must
     // not be fabricated as 0 and bucketed into "out".
     const amount = unknownNumber(tx.amount);
-    if (activeTab === 'in') return amount != null && amount > 0;
-    if (activeTab === 'out') return amount != null && amount < 0;
+    const isCredit = isTransactionCredit(tx, amount);
+    if (activeTab === 'in') return amount != null && isCredit;
+    if (activeTab === 'out') return amount != null && !isCredit;
     return true;
   });
 
@@ -419,6 +449,27 @@ export default function WalletScreen() {
                   </div>
                 );
               }
+              if (payoutSettings?.status !== 'ready' || !payoutSettings?.stripeAccountId) {
+                return (
+                  <div className={cn(
+                    'mt-4 flex items-center justify-between gap-3 p-3.5 rounded-xl text-xs border flex-wrap',
+                    isDark ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'
+                  )}>
+                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>Connect your Stripe Express payout account before requesting a withdrawal.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/creator-payout')}
+                      className="min-h-[36px] px-3.5 py-1.5 rounded-xl text-white font-semibold cursor-pointer whitespace-nowrap shrink-0"
+                      style={{ background: BRAND_GRADIENT }}
+                    >
+                      Set Up Stripe Payouts
+                    </button>
+                  </div>
+                );
+              }
               return (
                 <form onSubmit={handleWithdrawal} className="mt-4 flex items-center gap-2 flex-wrap sm:flex-nowrap">
                   <input
@@ -485,7 +536,7 @@ export default function WalletScreen() {
               // An unreadable amount renders as an explicit unavailable state
               // ('—'), never a fabricated '+0 Coins' ledger row.
               const amount = unknownNumber(tx.amount);
-              const isCredit = amount != null && amount >= 0;
+              const isCredit = isTransactionCredit(tx, amount);
               return (
               <div key={tx.id} className="p-4 flex items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-3 min-w-0">
@@ -501,7 +552,7 @@ export default function WalletScreen() {
                   </div>
                   <div className="min-w-0">
                     <h4 className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                      {tx.description || tx.type || 'Transaction'}
+                      {tx.description || (tx.reason ? tx.reason.replace(/_/g, ' ') : null) || tx.type || 'Transaction'}
                     </h4>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
                       {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : '—'}
@@ -512,9 +563,9 @@ export default function WalletScreen() {
                 <div className="text-right shrink-0">
                   <span className={cn(
                     'font-mono font-bold block tabular-nums',
-                    isCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300'
+                    isCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'
                   )}>
-                    {amount == null ? '—' : `${isCredit ? '+' : ''}${amount}`} Coins
+                    {amount == null ? '—' : `${isCredit ? '+' : '-'}${Math.abs(amount).toLocaleString()}`} Coins
                   </span>
                   <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400">{tx.status}</span>
                 </div>

@@ -467,9 +467,9 @@ class UltimateStoryService {
     const whoCanReply = pickPolicy(storyData.whoCanReply, pickPolicy(userVibeSettings.whoCanReply, VIBE_POLICY_SCOPES.EVERYONE));
     const whoCanShare = pickPolicy(storyData.whoCanShare, pickPolicy(userVibeSettings.whoCanShare, VIBE_POLICY_SCOPES.EVERYONE));
     const whoCanSendGifts = pickPolicy(storyData.whoCanSendGifts, pickPolicy(userVibeSettings.whoCanSendGifts, VIBE_POLICY_SCOPES.EVERYONE));
-    const allowReactions = storyData.allowReactions !== false && whoCanReact !== VIBE_POLICY_SCOPES.OFF;
-    const allowComments = storyData.allowComments !== false && whoCanReply !== VIBE_POLICY_SCOPES.OFF;
-    const allowGifts = storyData.allowGifts !== false && whoCanSendGifts !== VIBE_POLICY_SCOPES.OFF;
+    const allowReactions = storyData.allowReactions !== false && whoCanReact !== VIBE_POLICY_SCOPES.NOBODY;
+    const allowComments = storyData.allowComments !== false && whoCanReply !== VIBE_POLICY_SCOPES.NOBODY;
+    const allowGifts = storyData.allowGifts !== false && whoCanSendGifts !== VIBE_POLICY_SCOPES.NOBODY;
 
     emitState(VIBE_UPLOAD_STATES.PUBLISHING);
 
@@ -540,7 +540,10 @@ class UltimateStoryService {
       moderationStatus: 'pending',
       stickers,
       collaborators,
-      linkUrl: storyData.linkUrl || null,
+      linkUrl: storyData.linkUrl || storyData.ctaUrl || null,
+      ctaText: storyData.ctaText || storyData.eventData?.ctaText || null,
+      ctaUrl: storyData.ctaUrl || storyData.eventData?.ctaUrl || storyData.linkUrl || null,
+      eventData: storyData.eventData || null,
       templateId: storyData.templateId || null,
       stats: {
         views: 0, uniqueViewers: 0, completions: 0, replays: 0,
@@ -586,6 +589,9 @@ class UltimateStoryService {
         stickers: story.stickers,
         collaborators: story.collaborators,
         linkUrl: story.linkUrl,
+        ctaText: story.ctaText,
+        ctaUrl: story.ctaUrl,
+        eventData: story.eventData,
         templateId: story.templateId,
       });
       if (serverRes?.success && serverRes.storyId) {
@@ -630,6 +636,11 @@ class UltimateStoryService {
 
     this._invalidateFeedCache(currentUser.uid);
     this._notifyCrossTab('clearFeedCache', currentUser.uid);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('arvdoul:vibes_updated', {
+        detail: { action: 'created', storyId: story.id, userId: currentUser.uid },
+      }));
+    }
 
     if (!serverPublished && shouldAutoArchive) {
       try {
@@ -793,7 +804,15 @@ class UltimateStoryService {
     return unsubscribe;
   }
 
-  async getStory(storyId, viewerId = null) {
+  getCachedFeedSnapshot(userId, options = {}) {
+    if (!userId) return null;
+    const { limit: feedLimit = STORY_CONFIG.FEED.LIMIT, lastDocId = null } = options;
+    const cacheKey = `feed_${userId}_${feedLimit}_${lastDocId || 'none'}`;
+    const cached = this.feedCache.get(cacheKey);
+    return cached?.data ? { ...cached.data, cached: true } : null;
+  }
+
+  async getStory(storyId, viewerId = null, options = {}) {
     await this.ensureInitialized();
     const currentUserId = viewerId || this.auth.currentUser?.uid;
     if (!currentUserId) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
@@ -814,7 +833,9 @@ class UltimateStoryService {
       return { success: false, error: 'Access denied' };
     }
 
-    if (story.userId !== currentUserId && STORY_CONFIG.VIEW_TRACKING.ENABLED) {
+    // Only record views when explicitly requested (viewer mount), NEVER during
+    // passive feed / directory hydration reads.
+    if (options.recordView === true && story.userId !== currentUserId && STORY_CONFIG.VIEW_TRACKING.ENABLED) {
       await this._recordStoryViewSharded(storyId, currentUserId);
     }
 
@@ -865,16 +886,57 @@ class UltimateStoryService {
     const currentUser = this.auth.currentUser;
     if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
 
+    // Prefer the authoritative server getVibeInsights callable, which aggregates
+    // stories/{id}/views, filters hidden/blocked accounts, and returns reactions & gifts.
+    try {
+      const insightsRes = await this.getStoryInsights(storyId);
+      if (insightsRes?.success && Array.isArray(insightsRes.viewers)) {
+        const viewers = insightsRes.viewers.map((v) => ({
+          userId: v.userId,
+          viewedAt: v.viewedAtMs ? new Date(v.viewedAtMs) : null,
+          completed: Boolean(v.completed),
+          profile: {
+            id: v.userId,
+            uid: v.userId,
+            displayName: v.displayName || null,
+            username: v.username || null,
+            photoURL: v.photoURL || null,
+          },
+        }));
+        if (viewers.length > 0 || options.skipLegacyFallback) {
+          return {
+            success: true,
+            viewers,
+            insights: insightsRes.insights,
+            reactors: insightsRes.reactors || [],
+            gifts: insightsRes.gifts || [],
+            showReactionDetails: insightsRes.showReactionDetails !== false,
+            hasMore: false,
+          };
+        }
+      }
+    } catch (insightsErr) {
+      const code = String(insightsErr?.code || '');
+      if (code.includes('permission-denied') || code.includes('not-found')) {
+        throw insightsErr;
+      }
+      logger.debug('[StoryService] getStoryInsights fallback to legacy viewers collection', {
+        storyId,
+        error: insightsErr?.message,
+      });
+    }
+
     const storyResult = await this.getStory(storyId, currentUser.uid);
     if (!storyResult.success) throw new Error('Story not found');
     if (storyResult.story.userId !== currentUser.uid) throw enhanceError({ code: 'permission-denied' }, 'Only owner can view viewers');
 
     if (!STORY_CONFIG.VIEW_TRACKING.STORE_VIEWERS) return { success: true, viewers: [], hasMore: false };
 
+    const limitCount = options.limit || STORY_CONFIG.VIEW_TRACKING.VIEWER_LIST_LIMIT;
     const viewersRef = this.fs.collection(this.firestore, 'stories', storyId, 'viewers');
     let q = this.fs.query(viewersRef,
       this.fs.orderBy('viewedAt', 'desc'),
-      this.fs.limit(options.limit || STORY_CONFIG.VIEW_TRACKING.VIEWER_LIST_LIMIT));
+      this.fs.limit(limitCount));
     if (options.startAfter) q = this.fs.query(q, this.fs.startAfter(options.startAfter));
     const snap = await this.fs.getDocs(q);
     const viewerList = snap.docs.map(d => ({
@@ -883,29 +945,22 @@ class UltimateStoryService {
     }));
 
     let enriched = viewerList;
-    try {
-      const userService = await import('./userService.js');
-      const userIds = viewerList.map(v => v.userId).filter((v, i, a) => a.indexOf(v) === i);
-      const batches = [];
-      for (let i = 0; i < userIds.length; i += STORY_CONFIG.BATCH_SIZE.USER_PROFILES) {
-        batches.push(userIds.slice(i, i + STORY_CONFIG.BATCH_SIZE.USER_PROFILES));
+    if (viewerList.length > 0) {
+      try {
+        const { getSocialGraphService } = await import('./socialGraphService.js');
+        const userIds = [...new Set(viewerList.map((v) => v.userId).filter(Boolean))];
+        const profiles = await getSocialGraphService().hydrateProfiles(userIds, { viewerId: currentUser.uid });
+        const profileMap = new Map(profiles.map((p) => [p.id, p]));
+        enriched = viewerList.map((v) => ({ ...v, profile: profileMap.get(v.userId) || null }));
+      } catch (e) {
+        logger.warn('Story viewer profile hydration failed', { storyId, error: e?.message });
       }
-      const profileMap = new Map();
-      for (const batch of batches) {
-        const profiles = await Promise.all(batch.map(uid => userService.getUserProfile(uid).catch(() => null)));
-        profiles.forEach((p, idx) => { if (p) profileMap.set(batch[idx], p); });
-      }
-      enriched = viewerList.map(v => ({ ...v, profile: profileMap.get(v.userId) || null }));
-    } catch (e) {
-      // Viewer rows are still returned un-enriched; log so a profile-hydration
-      // failure does not look like "viewers with no names".
-      logger.warn('Story viewer profile hydration failed', { storyId, error: e?.message });
     }
 
     return {
       success: true,
       viewers: enriched,
-      hasMore: viewerList.length === (options.limit || STORY_CONFIG.VIEW_TRACKING.VIEWER_LIST_LIMIT),
+      hasMore: viewerList.length === limitCount,
     };
   }
 
@@ -946,8 +1001,11 @@ class UltimateStoryService {
     if (!storyResult.success) throw new Error('Story not found');
     if (!storyResult.story.allowComments) throw new Error('Comments disabled');
 
-    const commentService = await import('./commentService.js');
-    const result = await commentService.createComment(storyId, currentUser.uid, content, options);
+    const { getCommentService } = await import('./commentService.js');
+    const result = await getCommentService().createComment(storyId, currentUser.uid, content, {
+      ...options,
+      targetType: 'story',
+    });
     await this._incrementAnalyticsShard(storyId, 'comments', 1);
     return result;
   }
@@ -1016,6 +1074,11 @@ class UltimateStoryService {
     this.storyCache.delete(storyId);
     this._invalidateFeedCache(currentUser.uid);
     this._notifyCrossTab('clearFeedCache', currentUser.uid);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('arvdoul:vibes_updated', {
+        detail: { action: 'deleted', storyId, userId: currentUser.uid },
+      }));
+    }
     this.metrics.storiesDeleted++;
     auditLogger.log('story.deleted', { userId: currentUser.uid, meta: { storyId } });
     return { success: true };
@@ -1495,10 +1558,28 @@ class UltimateStoryService {
     if (!existingSnap.empty) return { success: true, alreadyAdded: true };
 
     await this.fs.setDoc(this.fs.doc(highlightStoriesRef, storyId), {
-      storyId, originalStoryId: storyId, userId: story.userId, type: story.type,
-      content: story.content, media: story.media, music: story.music,
-      backgroundColor: story.backgroundColor, textColor: story.textColor, font: story.font,
-      createdAt: story.createdAt, addedAt: serverTimestamp(),
+      storyId,
+      originalStoryId: storyId,
+      userId: story.userId,
+      type: story.type,
+      content: story.content || '',
+      media: story.media || null,
+      mediaEdits: story.mediaEdits || null,
+      textOverlays: story.textOverlays || null,
+      drawingPaths: story.drawingPaths || null,
+      textStyle: story.textStyle || null,
+      stickers: story.stickers || null,
+      music: story.music || null,
+      location: story.location || null,
+      linkUrl: story.linkUrl || story.ctaUrl || null,
+      ctaText: story.ctaText || null,
+      ctaUrl: story.ctaUrl || null,
+      duration: story.duration || null,
+      backgroundColor: story.backgroundColor || '#000000',
+      textColor: story.textColor || '#FFFFFF',
+      font: story.font || 'display',
+      createdAt: story.createdAt || serverTimestamp(),
+      addedAt: serverTimestamp(),
     });
     await this.fs.updateDoc(highlightRef, {
       storyCount: increment(1),
@@ -1745,14 +1826,20 @@ class UltimateStoryService {
     try {
       const { callFunction, FUNCTIONS } = await import('./callableService.js');
       const res = await callFunction(FUNCTIONS.GET_VIBE_INSIGHTS, { vibeId: storyId });
-      if (res?.success && res.insights) {
+      const rawStats = res?.stats || res?.insights || null;
+      if (res?.success && rawStats) {
         return {
           success: true,
           insights: {
-            ...res.insights,
-            comments: unknownNumber(res.insights.comments),
-            backTaps: unknownNumber(res.insights.backTaps),
+            ...rawStats,
+            reactions: rawStats.reactionBreakdown || rawStats.reactions || {},
+            comments: unknownNumber(rawStats.comments),
+            backTaps: unknownNumber(rawStats.backTaps),
           },
+          viewers: Array.isArray(res.viewers) ? res.viewers : [],
+          reactors: Array.isArray(res.reactors) ? res.reactors : [],
+          gifts: Array.isArray(res.gifts) ? res.gifts : [],
+          showReactionDetails: res.showReactionDetails !== false,
         };
       }
     } catch (err) {
@@ -2283,7 +2370,13 @@ class UltimateStoryService {
                   : type === 'video' ? STORY_CONFIG.MAX_VIDEO_SIZE_MB * 1024 * 1024
                   : STORY_CONFIG.MAX_AUDIO_SIZE_MB * 1024 * 1024;
     if (file.size > maxSize) throw new Error(`File too large.`);
-    const ext = file.name.split('.').pop() || 'bin';
+    const { inferVibeMediaKindAndMime } = await import('../config/vibeContracts.js');
+    const inferred = inferVibeMediaKindAndMime(file, type === 'audio' ? 'audio' : type === 'video' ? 'video' : 'image');
+    const resolvedContentType = inferred.mime || (
+      type === 'audio' ? 'audio/webm' : type === 'video' ? 'video/mp4' : 'image/jpeg'
+    );
+    const ext = (file.name && file.name.includes('.') ? file.name.split('.').pop() : null) ||
+      (resolvedContentType.split('/')[1]?.split(';')[0] || 'bin');
     const stampName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const vis = uploadOptions.visibility || STORY_CONFIG.VISIBILITY.PUBLIC;
     const storyId = uploadOptions.storyId;
@@ -2293,7 +2386,7 @@ class UltimateStoryService {
       : `stories/${userId}/audience/${storyId}/${stampName}`;
     const fileRef = this.st.ref(this.storage, path);
     const uploadTask = this.st.uploadBytesResumable(fileRef, file, {
-      contentType: file.type,
+      contentType: resolvedContentType,
       customMetadata: { userId, storyType: type, visibility: vis },
     });
     const uploadId = uploadOptions.uploadId || stampName;
@@ -2331,7 +2424,7 @@ class UltimateStoryService {
             return;
           }
           const url = await this.st.getDownloadURL(uploadTask.snapshot.ref);
-          resolve({ url, path, size: file.size, type: file.type, name: file.name });
+          resolve({ url, path, size: file.size, type: resolvedContentType, name: file.name });
         }
       );
     });
@@ -2409,10 +2502,10 @@ class UltimateStoryService {
           recipientId: userId,
           senderId: ownerId,
           senderName: ownerName,
-          title: 'You were tagged in a story',
-          message: `${ownerName} tagged you in their story`,
-          actionUrl: `/story/${storyId}`,
-          metadata: { storyId },
+          title: 'You were tagged in a Vibe',
+          message: `${ownerName} tagged you in their Vibe`,
+          actionUrl: buildVibeDeepLink(storyId),
+          metadata: { storyId, vibeId: storyId },
           priority: 'high',
         }).catch((e) => logger.warn('Story tag notification failed', { storyId, error: e?.message }));
       }
@@ -2552,6 +2645,7 @@ const storyService = {
   initialize: () => getStoryService().initialize(),
   ensureInitialized: () => getStoryService().ensureInitialized(),
   createStory: (...args) => getStoryService().createStory(...args),
+  getCachedFeedSnapshot: (...args) => getStoryService().getCachedFeedSnapshot(...args),
   getStoriesFeed: (...args) => getStoryService().getStoriesFeed(...args),
   getStory: (...args) => getStoryService().getStory(...args),
   getStoryByIdForDeepLink: (...args) => getStoryService().getStoryByIdForDeepLink(...args),

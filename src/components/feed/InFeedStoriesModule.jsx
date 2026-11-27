@@ -36,7 +36,7 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const isDark = theme !== 'light';
 
   const [ownGroup, setOwnGroup] = useState(null);
   const [creators, setCreators] = useState([]);
@@ -59,11 +59,14 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
       setIsOffline(false);
       setReloadNonce((n) => n + 1);
     };
+    const onVibesUpdated = () => setReloadNonce((n) => n + 1);
     window.addEventListener('offline', goOffline);
     window.addEventListener('online', goOnline);
+    window.addEventListener('arvdoul:vibes_updated', onVibesUpdated);
     return () => {
       window.removeEventListener('offline', goOffline);
       window.removeEventListener('online', goOnline);
+      window.removeEventListener('arvdoul:vibes_updated', onVibesUpdated);
     };
   }, []);
 

@@ -154,6 +154,17 @@ export default function CoinsScreen() {
 
   useEffect(() => { loadBalance(); }, [loadBalance]);
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    const onBalanceUpdated = (evt) => {
+      if (!evt?.detail?.userId || evt.detail.userId === user.uid) {
+        loadBalance();
+        loadTransactions();
+      }
+    };
+    window.addEventListener('arvdoul:balance_updated', onBalanceUpdated);
+    return () => window.removeEventListener('arvdoul:balance_updated', onBalanceUpdated);
+  }, [user?.uid, loadBalance, loadTransactions]);
 
   // Cleanup ad timer on unmount
   useEffect(() => () => { if (adIntervalRef.current) clearInterval(adIntervalRef.current); }, []);
@@ -192,6 +203,21 @@ export default function CoinsScreen() {
     setSubTier(tier);
   };
 
+  const loadSubscriptionStatus = useCallback(async () => {
+    if (!user?.uid) return;
+    try {
+      const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
+      const status = await svc.getSubscriptionStatus();
+      if (status?.success && status.active) {
+        setCurrentSub(status.subscription || (status.tier ? { tier: status.tier, status: 'active' } : null));
+      } else {
+        setCurrentSub(null);
+      }
+    } catch (err) {
+      console.warn('[Coins] subscription status unavailable', err);
+    }
+  }, [user?.uid, monetization]);
+
   const confirmSubscription = async (paymentMethodId) => {
     if (!subTier || purchasing) return;
     setPurchasing(subTier.id);
@@ -199,9 +225,11 @@ export default function CoinsScreen() {
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
       const res = await svc.createSubscription(subTier.id, paymentMethodId);
       if (res?.success) {
+        setCurrentSub({ tier: subTier.id, status: 'active' });
         toast.success(`Subscribed to ${subTier.name}! Coins granted.`);
-        await loadBalance();
-        await loadTransactions();
+        await Promise.all([loadBalance(), loadTransactions(), loadSubscriptionStatus()]);
+      } else {
+        toast.error(res?.message || 'Subscription failed.');
       }
     } catch (err) {
       toast.error(err?.message || 'Subscription failed.');
@@ -213,17 +241,8 @@ export default function CoinsScreen() {
 
   // Load current subscription status once.
   useEffect(() => {
-    if (!user?.uid) return;
-    (async () => {
-      try {
-        const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
-        const status = await svc.getSubscriptionStatus();
-        if (status?.success && status.active) setCurrentSub(status.subscription);
-      } catch (err) {
-        console.warn('[Coins] subscription status unavailable', err);
-      }
-    })();
-  }, [user?.uid, monetization]);
+    loadSubscriptionStatus();
+  }, [loadSubscriptionStatus]);
 
   const fetchAd = async () => {
     if (!user?.uid) return;
@@ -265,10 +284,10 @@ export default function CoinsScreen() {
       const res = await svc.watchAd('feed', ad.id, 30, {});
       if (res?.success) {
         toast.success(`+${res.coinsAdded ?? AD_REWARD_COINS} coins earned!`);
-        await loadBalance();
+        await Promise.all([loadBalance(), loadTransactions()]);
       }
     } catch (err) {
-      toast.error('Ad reward could not be granted.');
+      toast.error(err?.message || 'Ad reward could not be granted.');
     } finally {
       setAdWatching(false);
       setAd(null);

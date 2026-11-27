@@ -1065,6 +1065,34 @@ exports.publishVibe = functions.https.onCall(async (data, context) => {
       ...(m.coverUrl ? { coverUrl: String(m.coverUrl), coverPath: String(m.coverPath || '') } : {}),
       ...(Number.isFinite(Number(m.duration)) ? { duration: Math.min(60, Math.max(1, Number(m.duration))) } : {}),
     };
+  } else if (type === 'event' && payload.media && typeof payload.media.url === 'string' && typeof payload.media.path === 'string') {
+    if (!payload.media.path.startsWith(`stories/${uid}/`)) {
+      throw new functions.https.HttpsError('permission-denied', 'Media path does not belong to creator.');
+    }
+    media = {
+      url: payload.media.url,
+      path: payload.media.path,
+      size: Number(payload.media.size) || 0,
+      type: String(payload.media.type || 'image/jpeg'),
+      name: String(payload.media.name || '').slice(0, 180),
+    };
+  }
+
+  let eventData = null;
+  if (type === 'event') {
+    const rawEv = payload.eventData && typeof payload.eventData === 'object' ? payload.eventData : {};
+    const title = String(rawEv.title || content || '').trim().slice(0, 120);
+    if (!title) {
+      throw new functions.https.HttpsError('invalid-argument', 'Event Vibe requires a title.');
+    }
+    eventData = {
+      title,
+      startsAt: typeof rawEv.startsAt === 'string' ? rawEv.startsAt.trim().slice(0, 64) : null,
+      location: typeof rawEv.location === 'string' ? rawEv.location.trim().slice(0, 140) : null,
+      ctaText: typeof rawEv.ctaText === 'string' && rawEv.ctaText.trim() ? rawEv.ctaText.trim().slice(0, 40) : 'RSVP / Details',
+      ctaUrl: typeof rawEv.ctaUrl === 'string' ? rawEv.ctaUrl.trim().slice(0, 500) : null,
+      description: typeof rawEv.description === 'string' ? rawEv.description.trim().slice(0, 300) : null,
+    };
   }
 
   const requestedStoryId = typeof payload.storyId === 'string' && /^[a-zA-Z0-9_-]{8,64}$/.test(payload.storyId)
@@ -1127,7 +1155,7 @@ exports.publishVibe = functions.https.onCall(async (data, context) => {
   const durationNum = Number(payload.duration);
   const duration = Number.isFinite(durationNum) && durationNum > 0
     ? Math.min(60, Math.max(1, durationNum))
-    : (type === 'video' ? 15 : 5);
+    : (type === 'video' || type === 'audio' ? 15 : type === 'event' ? 7 : 5);
 
   const storyDoc = {
     id: requestedStoryId,
@@ -1154,7 +1182,7 @@ exports.publishVibe = functions.https.onCall(async (data, context) => {
     allowGifts: whoCanSendGifts !== 'nobody',
     allowComments: payload.allowComments !== false,
     music: payload.music || null,
-    location: payload.location || null,
+    location: payload.location || eventData?.location || null,
     taggedUsers: Array.isArray(payload.taggedUsers) ? payload.taggedUsers.slice(0, 20) : [],
     backgroundColor: typeof payload.backgroundColor === 'string' ? payload.backgroundColor : '#000000',
     textColor: typeof payload.textColor === 'string' ? payload.textColor : '#FFFFFF',
@@ -1163,7 +1191,10 @@ exports.publishVibe = functions.https.onCall(async (data, context) => {
     moderationStatus: 'pending',
     stickers: Array.isArray(payload.stickers) ? payload.stickers.slice(0, 10) : null,
     collaborators: Array.isArray(payload.collaborators) ? payload.collaborators.slice(0, 10) : [],
-    linkUrl: typeof payload.linkUrl === 'string' ? payload.linkUrl.slice(0, 500) : null,
+    linkUrl: typeof payload.linkUrl === 'string' ? payload.linkUrl.slice(0, 500) : (eventData?.ctaUrl || null),
+    ctaText: typeof payload.ctaText === 'string' ? payload.ctaText.slice(0, 40) : (eventData?.ctaText || null),
+    ctaUrl: typeof payload.ctaUrl === 'string' ? payload.ctaUrl.slice(0, 500) : (eventData?.ctaUrl || null),
+    eventData,
     templateId: typeof payload.templateId === 'string' ? payload.templateId : null,
     stats: {
       views: 0,

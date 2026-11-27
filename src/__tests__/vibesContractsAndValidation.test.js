@@ -21,6 +21,8 @@ import {
   isVibeExpired,
   createVibeIdempotencyKey,
   computeVibeNavigationTarget,
+  inferVibeMediaKindAndMime,
+  validateVibeEvent,
 } from '../config/vibeContracts.js';
 
 describe('Vibes Part 1 contracts & validation', () => {
@@ -36,7 +38,7 @@ describe('Vibes Part 1 contracts & validation', () => {
     ]);
   });
 
-  test('validateVibeMedia enforces image/video types and byte limits', () => {
+  test('validateVibeMedia enforces image/video/audio types and byte limits including empty-MIME extension fallback', () => {
     expect(validateVibeMedia(null).valid).toBe(false);
     expect(validateVibeMedia({ type: 'application/pdf', size: 1024 }).valid).toBe(false);
     expect(validateVibeMedia({ type: 'image/gif', size: 1024 }).valid).toBe(false);
@@ -59,6 +61,35 @@ describe('Vibes Part 1 contracts & validation', () => {
     expect(
       validateVibeMedia({ type: 'video/mp4', size: 2048 }, { durationSec: 0 }).valid
     ).toBe(false);
+
+    // Audio validation & empty-MIME inference
+    expect(validateVibeMedia({ type: 'audio/mpeg', size: 2_000_000 }, { durationSec: 25 })).toEqual({
+      valid: true,
+      kind: 'audio',
+      error: null,
+    });
+    expect(
+      validateVibeMedia({ type: 'audio/webm', size: VIBE_LIMITS.AUDIO_MAX_BYTES + 1 }).valid
+    ).toBe(false);
+    expect(
+      validateVibeMedia({ name: 'voice-note.m4a', type: '', size: 120_000 })
+    ).toEqual({
+      valid: true,
+      kind: 'audio',
+      error: null,
+    });
+    expect(
+      inferVibeMediaKindAndMime({ name: 'clip.MOV', type: '' })
+    ).toEqual({
+      kind: 'video',
+      mime: 'video/quicktime',
+    });
+    expect(
+      inferVibeMediaKindAndMime({ name: 'photo.heic', type: '' })
+    ).toEqual({
+      kind: 'image',
+      mime: 'image/heic',
+    });
   });
 
   test('validateVibeText enforces non-empty and max character bounds', () => {
@@ -68,6 +99,32 @@ describe('Vibes Part 1 contracts & validation', () => {
     const res = validateVibeText(tooLong);
     expect(res.valid).toBe(false);
     expect(res.trimmed).toHaveLength(VIBE_LIMITS.TEXT_MAX_LENGTH);
+  });
+
+  test('validateVibeEvent validates title, metadata bounds, and optional CTA URL', () => {
+    expect(validateVibeEvent(null).valid).toBe(false);
+    expect(validateVibeEvent({ title: '   ' }).valid).toBe(false);
+    expect(validateVibeEvent({ title: 'a'.repeat(121) }).valid).toBe(false);
+    expect(validateVibeEvent({ title: 'Launch Meetup', ctaUrl: 'javascript:alert(1)' }).valid).toBe(false);
+    expect(validateVibeEvent({ title: 'Launch Meetup', ctaUrl: 'ftp://example.com' }).valid).toBe(false);
+
+    const ok = validateVibeEvent({
+      title: '  Arvdoul Summit  ',
+      startsAt: '  Fri 8 PM ',
+      location: ' Lagos ',
+      description: ' Community meetup ',
+      ctaText: ' RSVP Now ',
+      ctaUrl: 'https://arvdoul.com/events/1',
+    });
+    expect(ok.valid).toBe(true);
+    expect(ok.eventData).toEqual({
+      title: 'Arvdoul Summit',
+      startsAt: 'Fri 8 PM',
+      location: 'Lagos',
+      description: 'Community meetup',
+      ctaText: 'RSVP Now',
+      ctaUrl: 'https://arvdoul.com/events/1',
+    });
   });
 
   test('validateAudienceSelection requires >= 1 recipient for Selected Users', () => {
@@ -107,8 +164,13 @@ describe('Vibes Part 1 contracts & validation', () => {
     expect(paths[0].points[0]).toEqual({ x: 0, y: 1 });
   });
 
-  test('calculateVibeDuration uses trim window for video and readable span for text', () => {
+  test('calculateVibeDuration handles image, video, audio, event, and text spans', () => {
     expect(calculateVibeDuration({ type: 'image' })).toBe(VIBE_LIMITS.IMAGE_DEFAULT_DURATION_SEC);
+    expect(calculateVibeDuration({ type: 'event' })).toBe(VIBE_LIMITS.EVENT_DEFAULT_DURATION_SEC);
+    expect(calculateVibeDuration({ type: 'audio' })).toBe(15);
+    expect(calculateVibeDuration({ type: 'audio', media: { duration: 120 } })).toBe(
+      VIBE_LIMITS.AUDIO_MAX_DURATION_SEC
+    );
     expect(
       calculateVibeDuration({
         type: 'video',

@@ -1432,11 +1432,11 @@ describe('Chat pagination (spec §15)', () => {
 });
 
 describe('Vibes interactions are REAL (no toast-only fakes)', () => {
-  test('StoriesScreen gift calls transferCoins (was toast-only free coins)', () => {
+  test('StoriesScreen gift calls server-authoritative sendVibeGift (was toast-only free coins)', () => {
     const src = fs.readFileSync(path.join(root, 'src/screens/StoriesScreen.jsx'), 'utf8');
     expect(src).not.toContain("const monetization = getMonetizationService();\n    toast.success(`Sent 250");
-    expect(src).toContain('transferCoins(');
-    expect(src).toContain("'vibe_gift'");
+    expect(src).toContain('sendVibeGift(');
+    expect(src).toContain('VIRTUAL_GIFTS');
     expect(src).toContain("You cannot gift yourself");
   });
 

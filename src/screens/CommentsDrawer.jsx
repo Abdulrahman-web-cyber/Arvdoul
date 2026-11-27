@@ -19,7 +19,6 @@ import userService from '../services/userService.js';
 import storageService from '../services/storageService.js';
 import { triggerHaptic } from '../utils/haptics';
 import { openDB } from 'idb';
-import { callFunction, FUNCTIONS } from '../services/callableService.js';
 import LoadingSpinner from '../components/Shared/LoadingSpinner.jsx';
 import { ErrorBoundary } from '../components/ErrorBoundary.jsx';
 import { create } from 'zustand';
@@ -963,10 +962,43 @@ const CommentItem = memo(({
           )}
           <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
             <div className="flex gap-1">
-              {['👍', '❤️', '😂', '😮', '😢', '😡', '🔥', '🎉'].map(emoji => (
-                <button type="button" key={emoji} onClick={() => onReact(commentId, emoji)} className="hover:scale-125 transition-transform" aria-label={`React ${emoji}`}>{emoji}</button>
-              ))}
+              {['👍', '❤️', '😂', '😮', '😢', '😡', '🔥', '🎉'].map((emoji) => {
+                const isSelectedReaction = comment.userReaction === emoji;
+                return (
+                  <button
+                    type="button"
+                    key={emoji}
+                    onClick={() => onReact(commentId, emoji)}
+                    aria-pressed={isSelectedReaction}
+                    className={`rounded-full px-1 transition-transform hover:scale-125 ${isSelectedReaction ? 'bg-purple-500/20 ring-1 ring-purple-400/60 scale-110' : ''}`}
+                    aria-label={`React ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                );
+              })}
             </div>
+            {Object.entries(comment.reactionCounts || {})
+              .filter(([, count]) => Number(count) > 0)
+              .map(([emoji, count]) => {
+                const active = comment.userReaction === emoji;
+                return (
+                  <button
+                    key={`count-${emoji}`}
+                    type="button"
+                    onClick={() => onReact(commentId, emoji)}
+                    aria-label={`Toggle ${emoji} reaction (${count})`}
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-semibold border transition-colors ${
+                      active
+                        ? 'bg-purple-500/20 border-purple-400/60 text-purple-300'
+                        : 'bg-gray-100 dark:bg-white/10 border-gray-200 dark:border-white/15 text-gray-700 dark:text-gray-200 hover:border-purple-400/40'
+                    }`}
+                  >
+                    <span>{emoji}</span>
+                    <span className="tabular-nums">{formatCount(Number(count))}</span>
+                  </button>
+                );
+              })}
             <button type="button" onClick={() => onLike(commentId)} className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors" aria-label="Like comment">
               <Heart className={`w-3.5 h-3.5 ${likedByArray.includes(currentUser?.uid) ? 'fill-red-500 text-red-500' : ''}`} />
               <span>{formatCount(comment.likes)}</span>
@@ -1096,6 +1128,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
   const flushAbortController = useRef(null);
   const pendingLikes = useRef(new Set());
   const pendingReactions = useRef(new Set());
+  const replyCursorRef = useRef({});
   const reportLastTime = useRef(0);
   const lastHapticTime = useRef(0);
   const draftKey = postId ? `post_${postId}` : null;
@@ -1106,6 +1139,9 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
   const deepLinkScrolledRef = useRef(false);
 
   useEffect(() => { drawerHeightRef.current = drawerHeight; }, [drawerHeight]);
+  useEffect(() => {
+    replyCursorRef.current = {};
+  }, [postId]);
   useEffect(() => {
     if (isOpen) {
       initialLoadLockRef.current = false;
@@ -1175,7 +1211,9 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         // their comments rendered to the viewer (reading only the outgoing
         // direction leaked the blocker's comments — N226).
         const res = await userService.getBlockedUserIds(currentUser.uid);
-        const ids = new Set(res?.ids || []);
+        const ids = res instanceof Set
+          ? res
+          : new Set(Array.isArray(res) ? res : (res?.ids || []));
         setBlockedUserIds(ids);
       } catch (err) {
         // Without the block list, blocked users' comments would render; log so
@@ -1220,23 +1258,25 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     } catch (err) {
       if (!mountedRef.current) return;
       console.warn('Comment load fallback to local store:', err);
+      let recoveredLocal = false;
       try {
         const localStored = JSON.parse(localStorage.getItem(`arvdoul_local_comments_${postId}`) || '[]');
         if (Array.isArray(localStored) && localStored.length > 0) {
+          recoveredLocal = true;
           if (reset) setComments(postId, localStored, ranking, null, false, null);
           else appendComments(postId, localStored, false, null);
         }
       } catch (e) {
         console.warn('Local comment cache read failed', e?.message);
       }
-      if (reset) setInitialLoadError(false);
-      else setLoadMoreError(false);
+      if (reset) setInitialLoadError(!recoveredLocal);
+      else setLoadMoreError(!recoveredLocal);
     } finally {
       if (reset) setLoadingInitial(postId, false);
       if (fetchLockTimeoutRef.current) clearTimeout(fetchLockTimeoutRef.current);
       fetchLockRef.current = false;
     }
-  }, [postId, ranking, postState.nextCursor, isOpen, setLoadingInitial, setComments, appendComments]);
+  }, [postId, ranking, postState.nextCursor, currentUser?.uid, isOpen, setLoadingInitial, setComments, appendComments]);
 
   useEffect(() => {
     if (isOpen && postId && !postState.loadingInitial && postState.ids.length === 0 && !initialLoadLockRef.current) {
@@ -1426,9 +1466,9 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         likes: 0,
       };
       replaceTempComment(postId, tempId, real);
-      if (post?.authorId && post.authorId !== currentUser.uid && real.id) {
+      if (parentId && post?.authorId && post.authorId !== currentUser.uid && real.id) {
         notificationsService.createCommentNotification?.(
-          postId, currentUser.uid, post.authorId, real.id, parentId ? 'reply' : 'comment'
+          postId, currentUser.uid, post.authorId, real.id, 'reply'
         ).catch((e) => console.warn('[Comments] comment notification failed', e?.message));
       }
       setReplyTarget(null);
@@ -1457,8 +1497,16 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       const currentState = useCommentsStore.getState().getPostState(postId);
       const parent = currentState.byId[commentId];
       let startAfter = null;
-      if (more && parent?.childrenIds?.length) {
-        startAfter = parent.childrenIds[parent.childrenIds.length - 1];
+      if (more) {
+        const storedCursor = replyCursorRef.current[commentId];
+        if (storedCursor) {
+          startAfter = storedCursor;
+        } else if (parent?.childrenIds?.length) {
+          const serverIds = parent.childrenIds.filter((id) => id && !String(id).startsWith('temp_'));
+          startAfter = serverIds.length ? serverIds[serverIds.length - 1] : null;
+        }
+      } else {
+        delete replyCursorRef.current[commentId];
       }
       const result = await commentService.getReplies(commentId, {
         limit: REPLIES_PAGE_SIZE,
@@ -1468,6 +1516,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       if (!mountedRef.current) return;
       if (result.success) {
         const newReplies = result.replies;
+        replyCursorRef.current[commentId] = result.hasMore ? result.nextCursor : null;
         useCommentsStore.setState(state => {
           const post = state.commentsByPost[postId];
           if (!post) return state;
@@ -1500,7 +1549,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     } finally {
       setReplyLoadingMap(prev => ({ ...prev, [commentId]: false }));
     }
-  }, [postId]);
+  }, [postId, currentUser?.uid]);
 
   // ── Like / React / Delete / Edit / Report / Pin ────
   const handleLike = useCallback(async (commentId) => {
@@ -1514,7 +1563,8 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     const comment = useCommentsStore.getState().getPostState(postId).byId[commentId];
     if (!comment) { pendingLikes.current.delete(commentId); return; }
     const wasLiked = (comment.likesBy ?? []).includes(currentUser.uid);
-    const newLikes = wasLiked ? comment.likes - 1 : comment.likes + 1;
+    const currentLikes = typeof comment.likes === 'number' ? comment.likes : 0;
+    const newLikes = wasLiked ? Math.max(0, currentLikes - 1) : currentLikes + 1;
     const newLikedBy = wasLiked
       ? (comment.likesBy ?? []).filter(id => id !== currentUser.uid)
       : [...(comment.likesBy ?? []), currentUser.uid];
@@ -1523,8 +1573,19 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       if (!wasLiked) await commentService.likeComment(commentId, currentUser.uid);
       else await commentService.removeLikeDislike(commentId, currentUser.uid);
     } catch (err) {
-      toast.error('Like failed');
-      updateComment(postId, commentId, comment);
+      const msg = String(err?.message || '').toLowerCase();
+      if (!wasLiked && msg.includes('already liked')) {
+        updateComment(postId, commentId, {
+          likes: currentLikes,
+          likesBy: [...new Set([...(comment.likesBy ?? []), currentUser.uid])],
+        });
+      } else {
+        toast.error('Like failed');
+        updateComment(postId, commentId, {
+          likes: comment.likes,
+          likesBy: comment.likesBy,
+        });
+      }
     } finally {
       pendingLikes.current.delete(commentId);
     }
@@ -1538,13 +1599,44 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     triggerHaptic('light');
     const comment = useCommentsStore.getState().getPostState(postId).byId[commentId];
     if (!comment) { pendingReactions.current.delete(key); return; }
-    const newCounts = { ...comment.reactionCounts, [emoji]: (comment.reactionCounts?.[emoji] || 0) + 1 };
-    updateComment(postId, commentId, { reactionCounts: newCounts });
+    const baseCounts = { ...(comment.reactionCounts || {}) };
+    const prevReaction = comment.userReaction || null;
+    const optimisticCounts = { ...baseCounts };
+    if (prevReaction) {
+      optimisticCounts[prevReaction] = Math.max(0, (optimisticCounts[prevReaction] || 0) - 1);
+    }
+    const nextReaction = prevReaction === emoji ? null : emoji;
+    if (nextReaction) {
+      optimisticCounts[nextReaction] = (optimisticCounts[nextReaction] || 0) + 1;
+    }
+    updateComment(postId, commentId, {
+      reactionCounts: optimisticCounts,
+      userReaction: nextReaction,
+    });
     try {
-      await commentService.addReaction(commentId, currentUser.uid, emoji);
+      const res = await commentService.addReaction(commentId, currentUser.uid, emoji);
+      if (res?.success) {
+        const serverPrev = res.previousReaction ?? null;
+        if (serverPrev !== prevReaction) {
+          const reconciledCounts = { ...baseCounts };
+          if (serverPrev) {
+            reconciledCounts[serverPrev] = Math.max(0, (reconciledCounts[serverPrev] || 0) - 1);
+          }
+          if (res.action !== 'removed') {
+            reconciledCounts[emoji] = (reconciledCounts[emoji] || 0) + 1;
+          }
+          updateComment(postId, commentId, {
+            reactionCounts: reconciledCounts,
+            userReaction: res.action === 'removed' ? null : emoji,
+          });
+        }
+      }
     } catch (err) {
       toast.error('Reaction failed');
-      updateComment(postId, commentId, comment);
+      updateComment(postId, commentId, {
+        reactionCounts: comment.reactionCounts,
+        userReaction: comment.userReaction ?? null,
+      });
     } finally {
       pendingReactions.current.delete(key);
     }
@@ -1570,7 +1662,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       initialLoadLockRef.current = false;
       loadComments(true);
     }
-  }, [currentUser, postId, deleteCommentStore, loadComments, onCommentDeleted]);
+  }, [currentUser, postId, confirm, deleteCommentStore, loadComments, onCommentDeleted]);
 
   const handleEdit = useCallback(async (commentId, newContent) => {
     if (!currentUser) return;
@@ -1592,14 +1684,15 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
   }, [currentUser, postId, updateComment]);
 
   const handleReport = useCallback(async (comment) => {
+    if (!currentUser?.uid) { toast.error('Please sign in to report comments'); return; }
     if (Date.now() - reportLastTime.current < 1000) { toast.info('Please wait'); return; }
     if (!reportReason) return;
     reportLastTime.current = Date.now();
     try {
-      await callFunction(FUNCTIONS.REPORT_COMMENT, { commentId: comment.id, reporterId: currentUser.uid, reason: reportReason });
+      await commentService.reportComment(comment.id, currentUser.uid, reportReason);
       toast.success('Report submitted');
     } catch (err) {
-      toast.error('Report failed');
+      toast.error(err?.message || 'Report failed');
     }
     setReportingComment(null);
     setReportReason('');

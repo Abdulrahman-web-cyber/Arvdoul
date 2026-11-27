@@ -19,7 +19,8 @@ import {
   Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X,
   Sparkles, Music, Users, Loader2, Trash2, Share2, Bookmark, RefreshCw,
   MapPin, Link2, AtSign, Timer, HelpCircle, ChevronLeft, ChevronRight,
-  ExternalLink, Type, Video, Pause, Play, WifiOff, Shield, Check
+  ExternalLink, Type, Video, Pause, Play, WifiOff, Shield, Check,
+  Gift, Copy, Eye, Heart, Coins
 } from 'lucide-react';
 import { getStoryService } from '../services/storyService';
 import { getSocialGraphService } from '../services/socialGraphService.js';
@@ -28,7 +29,14 @@ import { pickHandle, deriveHandle, resolveActorName } from '../services/profileR
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { copyToClipboard } from '../utils/shareUtils.js';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
-import { calculateVibeDuration, getAudienceMeta, isVibeExpired } from '../config/vibeContracts.js';
+import {
+  calculateVibeDuration,
+  getAudienceMeta,
+  isVibeExpired,
+  buildVibeDeepLink,
+  normalizeVibeReactionKey,
+} from '../config/vibeContracts.js';
+import { VIRTUAL_GIFTS } from '../data/videoData.js';
 import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 import ErrorState from '../design-system/ErrorState.jsx';
@@ -80,7 +88,7 @@ function formatCountdown(secondsRemaining) {
 export default function StoriesScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { highlightId: routeHighlightId } = useParams();
+  const { highlightId: routeHighlightId, storyId: routeStoryId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { theme } = useTheme();
@@ -118,11 +126,21 @@ export default function StoriesScreen() {
   const [storiesError, setStoriesError] = useState(null);
   const [storiesNonce, setStoriesNonce] = useState(0);
   const [highlightGroup, setHighlightGroup] = useState(null);
+  const [deepLinkGroup, setDeepLinkGroup] = useState(null);
   const [archivedPreviewGroup, setArchivedPreviewGroup] = useState(null);
 
-  // Viewers & Delete & Highlights Sheets
+  // Insights / Viewers, Delete, Highlights, Gift Picker & Share Sheets
   const [viewersOpen, setViewersOpen] = useState(false);
-  const [viewers, setViewers] = useState({ loading: false, error: null, items: [] });
+  const [viewers, setViewers] = useState({
+    loading: false,
+    error: null,
+    items: [],
+    insights: null,
+    reactors: [],
+    gifts: [],
+    showReactionDetails: true,
+    activeTab: 'viewers',
+  });
   const [deletingStory, setDeletingStory] = useState(false);
   const [confirmDeleteStory, setConfirmDeleteStory] = useState(false);
   const [poll, setPoll] = useState({ loading: false, data: null, voted: null, error: null });
@@ -132,6 +150,20 @@ export default function StoriesScreen() {
   const [highlightsLoading, setHighlightsLoading] = useState(false);
   const [newHighlightTitle, setNewHighlightTitle] = useState('');
   const [savingHighlight, setSavingHighlight] = useState(false);
+
+  const [giftSheetOpen, setGiftSheetOpen] = useState(false);
+  const [giftBalance, setGiftBalance] = useState(null);
+  const [loadingGiftBalance, setLoadingGiftBalance] = useState(false);
+  const [selectedGiftType, setSelectedGiftType] = useState(VIRTUAL_GIFTS[0]?.type || 'rose');
+
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [shareContacts, setShareContacts] = useState([]);
+  const [shareContactsError, setShareContactsError] = useState(null);
+  const [loadingShareContacts, setLoadingShareContacts] = useState(false);
+  const [shareSearch, setShareSearch] = useState('');
+  const [selectedShareTargets, setSelectedShareTargets] = useState([]);
+  const [sharingVibe, setSharingVibe] = useState(false);
+
   const [countdownNow, setCountdownNow] = useState(() => Date.now());
 
   const progressRafRef = useRef(null);
@@ -247,6 +279,15 @@ export default function StoriesScreen() {
             textOverlays: st.textOverlays || null,
             drawingPaths: st.drawingPaths || null,
             visibility: st.visibility || 'public',
+            allowReactions: st.allowReactions !== false,
+            allowComments: st.allowComments !== false,
+            allowGifts: st.allowGifts !== false,
+            whoCanReact: st.whoCanReact || 'everyone',
+            whoCanReply: st.whoCanReply || 'everyone',
+            whoCanShare: st.whoCanShare || 'everyone',
+            whoCanSendGifts: st.whoCanSendGifts || 'everyone',
+            stats: st.stats || null,
+            userReaction: normalizeVibeReactionKey(st.userReaction || st.viewerReaction),
             location: st.location || null,
             linkUrl: st.linkUrl || st.ctaUrl || null,
             taggedUsers: st.taggedUsers || [],
@@ -254,6 +295,7 @@ export default function StoriesScreen() {
             views: typeof st.stats?.views === 'number' ? String(st.stats.views) : null,
             ctaText: st.ctaText || '',
             ctaUrl: st.ctaUrl || '',
+            eventData: st.eventData || null,
             music: st.music || null,
             stickers: st.stickers || null,
           })),
@@ -270,14 +312,29 @@ export default function StoriesScreen() {
       });
   }, [user?.uid]);
 
-  // Load Vibes from storyService (Firestore-backed feed)
+  // Load Vibes from storyService (instant cached SWR snapshot + live refresh)
   useEffect(() => {
     let cancelled = false;
+    const svc = getStoryService();
+    let hasInstantSnapshot = false;
+    const cachedSnapshot = svc.getCachedFeedSnapshot?.(user?.uid || '', { limit: 24 });
+    if (cachedSnapshot?.groups?.length) {
+      hasInstantSnapshot = true;
+      hydrateCreatorGroups(cachedSnapshot.groups).then((mapped) => {
+        if (cancelled) return;
+        setStories(mapped);
+        setFeedCached(true);
+        setFeedHasMore(Boolean(cachedSnapshot.hasMore));
+        setFeedLastDocId(cachedSnapshot.lastDocId || null);
+        setStoriesLoading(false);
+      });
+    }
+
     const load = async () => {
       try {
-        setStoriesLoading(true);
+        if (!hasInstantSnapshot) setStoriesLoading(true);
         setStoriesError(null);
-        const feed = await getStoryService().getStoriesFeed(user?.uid || '', { cacheFirst: false, limit: 24 });
+        const feed = await svc.getStoriesFeed(user?.uid || '', { cacheFirst: false, limit: 24 });
         if (cancelled) return;
         const groups = feed?.groups || [];
         const mapped = await hydrateCreatorGroups(groups);
@@ -288,8 +345,10 @@ export default function StoriesScreen() {
         setFeedHasMore(Boolean(feed?.hasMore));
         setFeedLastDocId(feed?.lastDocId || null);
       } catch (err) {
-        if (!cancelled) setStoriesError(err?.message || 'Could not load Vibes.');
-        if (!cancelled) setStories([]);
+        if (!cancelled && !hasInstantSnapshot) {
+          setStoriesError(err?.message || 'Could not load Vibes.');
+          setStories([]);
+        }
       } finally {
         if (!cancelled) setStoriesLoading(false);
       }
@@ -346,9 +405,10 @@ export default function StoriesScreen() {
           visibility: st.visibility || 'public',
           ctaText: st.ctaText || '',
           ctaUrl: st.ctaUrl || '',
+          eventData: st.eventData || null,
           music: st.music || null,
           stickers: st.stickers || null,
-        })).filter((st) => st.url || st.type === 'text');
+        })).filter((st) => st.url || st.type === 'text' || st.type === 'event');
         if (!items.length) return;
         const first = res.stories[0];
         setHighlightGroup({
@@ -417,19 +477,25 @@ export default function StoriesScreen() {
     const onOpenArchive = () => {
       handleOpenArchive();
     };
+    const onVibesUpdated = () => setStoriesNonce((n) => n + 1);
     window.addEventListener('arvdoul:vibes_search_query', onSearchQuery);
     window.addEventListener('arvdoul:vibes_refresh', onRefresh);
     window.addEventListener('arvdoul:vibes_open_archive', onOpenArchive);
+    window.addEventListener('arvdoul:vibes_updated', onVibesUpdated);
     return () => {
       window.removeEventListener('arvdoul:vibes_search_query', onSearchQuery);
       window.removeEventListener('arvdoul:vibes_refresh', onRefresh);
       window.removeEventListener('arvdoul:vibes_open_archive', onOpenArchive);
+      window.removeEventListener('arvdoul:vibes_updated', onVibesUpdated);
     };
   }, [handleOpenArchive]);
 
   const filteredStories = useMemo(() => {
-    const base = highlightGroup ? [highlightGroup, ...stories] : stories;
-    const source = archivedPreviewGroup ? [archivedPreviewGroup, ...base] : base;
+    const withHighlight = highlightGroup ? [highlightGroup, ...stories] : stories;
+    const withDeepLink = deepLinkGroup && !withHighlight.some((g) => g.id === deepLinkGroup.id)
+      ? [deepLinkGroup, ...withHighlight]
+      : withHighlight;
+    const source = archivedPreviewGroup ? [archivedPreviewGroup, ...withDeepLink] : withDeepLink;
     return source.filter((story) => {
       if (activeCategory === 'sponsored' && !story.isSponsored) return false;
       if (activeCategory === 'friends' && story.user.category !== 'Friends') return false;
@@ -445,7 +511,62 @@ export default function StoriesScreen() {
       }
       return true;
     });
-  }, [stories, highlightGroup, archivedPreviewGroup, activeCategory, searchQuery]);
+  }, [stories, highlightGroup, deepLinkGroup, archivedPreviewGroup, activeCategory, searchQuery]);
+
+  // Deep link by ?vibeId=<id> or /story/:storyId
+  const deepLinkVibeId = routeStoryId || searchParams.get('vibeId');
+  const resolvedDeepLinkRef = useRef(null);
+  useEffect(() => {
+    if (!deepLinkVibeId) {
+      resolvedDeepLinkRef.current = null;
+      return undefined;
+    }
+    if (storiesLoading) return undefined;
+    if (resolvedDeepLinkRef.current === deepLinkVibeId) return undefined;
+
+    for (let gIdx = 0; gIdx < filteredStories.length; gIdx++) {
+      const iIdx = (filteredStories[gIdx].items || []).findIndex((it) => it.id === deepLinkVibeId);
+      if (iIdx >= 0) {
+        resolvedDeepLinkRef.current = deepLinkVibeId;
+        setActiveStoryIndex(gIdx);
+        setActiveItemIndex(iIdx);
+        setStoryProgress(0);
+        setIsPaused(false);
+        return undefined;
+      }
+    }
+
+    let cancelled = false;
+    resolvedDeepLinkRef.current = deepLinkVibeId;
+    (async () => {
+      const svc = getStoryService();
+      const res = await svc.getStoryByIdForDeepLink?.(deepLinkVibeId, user?.uid);
+      if (cancelled) return;
+      if (res?.success && res.story) {
+        const mapped = await hydrateCreatorGroups([{ userId: res.story.userId, stories: [res.story] }]);
+        if (cancelled || !mapped.length) return;
+        setDeepLinkGroup(mapped[0]);
+        setActiveStoryIndex(0);
+        setActiveItemIndex(0);
+        setStoryProgress(0);
+        setIsPaused(false);
+        return;
+      }
+      const reasonMessages = {
+        expired: 'This Vibe has expired after 24 hours.',
+        deleted: 'This Vibe was removed by its creator.',
+        restricted: 'You do not have permission to view this Vibe.',
+        unauthenticated: 'Please sign in to view this Vibe.',
+      };
+      toast.info(reasonMessages[res?.unavailableReason] || 'This Vibe is no longer available.');
+      if (searchParams.has('vibeId')) {
+        const next = new URLSearchParams(searchParams);
+        next.delete('vibeId');
+        setSearchParams(next, { replace: true });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [deepLinkVibeId, storiesLoading, filteredStories, user?.uid, hydrateCreatorGroups, searchParams, setSearchParams]);
 
   // Deep link from Home Vibes strip or Notifications: jump directly to a creator's Vibe sequence
   useEffect(() => {
@@ -472,24 +593,41 @@ export default function StoriesScreen() {
   const handleCloseStory = useCallback(() => {
     if (location.state?.vibeUserId) {
       navigate(location.pathname, { replace: true, state: null });
+    } else if (routeStoryId || routeHighlightId) {
+      navigate('/stories', { replace: true });
+    } else if (searchParams.has('vibeId') || searchParams.has('highlight')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('vibeId');
+      next.delete('highlight');
+      setSearchParams(next, { replace: true });
     }
+    setDeepLinkGroup(null);
+    setHighlightGroup(null);
     setArchivedPreviewGroup(null);
     setActiveStoryIndex(null);
     setActiveItemIndex(0);
     setStoryProgress(0);
     setViewersOpen(false);
     setHighlightSheetOpen(false);
+    setGiftSheetOpen(false);
+    setShareSheetOpen(false);
+    setConfirmDeleteStory(false);
     setIsPaused(false);
     setIsVideoBuffering(false);
     setIsHoldingChromeHidden(false);
     if (progressRafRef.current) {
       cancelAnimationFrame(progressRafRef.current);
     }
-  }, [location.pathname, location.state?.vibeUserId, navigate]);
+  }, [location.pathname, location.state?.vibeUserId, navigate, routeHighlightId, routeStoryId, searchParams, setSearchParams]);
 
   const currentStory = activeStoryIndex !== null ? filteredStories[activeStoryIndex] : null;
   const currentItem = currentStory?.items?.[activeItemIndex] || currentStory?.items?.[0];
   const isOwnStory = Boolean(user?.uid && currentStory?.user?.id === user.uid);
+  const canReactToCurrent = !archivedPreviewGroup && currentItem?.allowReactions !== false && currentItem?.whoCanReact !== 'nobody' && currentItem?.whoCanReact !== 'off';
+  const canReplyToCurrent = !archivedPreviewGroup && currentItem?.allowComments !== false && currentItem?.whoCanReply !== 'nobody' && currentItem?.whoCanReply !== 'off';
+  const canShareCurrent = !archivedPreviewGroup && currentItem?.whoCanShare !== 'nobody' && currentItem?.whoCanShare !== 'off' && currentItem?.visibility !== 'private';
+  const canGiftCurrent = !isOwnStory && !archivedPreviewGroup && currentItem?.allowGifts !== false && currentItem?.whoCanSendGifts !== 'nobody' && currentItem?.whoCanSendGifts !== 'off';
+  const effectivePaused = isPaused || viewersOpen || highlightSheetOpen || giftSheetOpen || shareSheetOpen || confirmDeleteStory;
   const pollSticker = (currentItem?.stickers || []).find((s) => s.type === 'poll' && s.data?.pollId) || null;
   const questionSticker = (currentItem?.stickers || []).find((s) => s.type === 'question' && s.data?.prompt) || null;
   const countdownSticker = (currentItem?.stickers || []).find((s) => s.type === 'countdown' && s.data?.seconds) || null;
@@ -666,6 +804,9 @@ export default function StoriesScreen() {
           textOverlays: st.textOverlays || null,
           drawingPaths: st.drawingPaths || null,
           visibility: st.visibility || 'private',
+          ctaText: st.ctaText || '',
+          ctaUrl: st.ctaUrl || '',
+          eventData: st.eventData || null,
           seen: true,
         },
       ],
@@ -681,22 +822,67 @@ export default function StoriesScreen() {
     if (!storyId) return;
     setIsPaused(true);
     setViewersOpen(true);
-    setViewers({ loading: true, error: null, items: [] });
+    setViewers({
+      loading: true,
+      error: null,
+      items: [],
+      insights: currentItem?.stats || null,
+      reactors: [],
+      gifts: [],
+      showReactionDetails: true,
+      activeTab: 'viewers',
+    });
     try {
       const res = await getStoryService().getStoryViewers(storyId, { limit: 100 });
       const items = (res?.viewers || []).map((v) => {
         const p = v.profile || {};
-        const name = resolveActorName([p.displayName, p.name], p.id || p.uid);
+        const name = resolveActorName([p.displayName, p.name], p.id || p.uid || v.userId);
         return {
           userId: v.userId,
           name,
           handle: pickHandle([p.username]) || deriveHandle(name),
           avatar: getSafeAvatarUrl(p.photoURL, name, v.userId),
+          completed: Boolean(v.completed),
         };
       });
-      setViewers({ loading: false, error: null, items });
+      const reactors = (res?.reactors || []).map((r) => {
+        const name = resolveActorName([r.displayName], r.userId);
+        return {
+          userId: r.userId,
+          name,
+          handle: pickHandle([r.username]) || deriveHandle(name),
+          avatar: getSafeAvatarUrl(r.photoURL, name, r.userId),
+          reaction: normalizeVibeReactionKey(r.reaction) || '❤️',
+        };
+      });
+      const gifts = (res?.gifts || []).map((g) => {
+        const name = resolveActorName([g.displayName], g.senderId);
+        return {
+          id: g.id,
+          senderId: g.senderId,
+          name,
+          avatar: getSafeAvatarUrl(g.photoURL, name, g.senderId),
+          giftType: g.giftType,
+          coins: Number(g.coins) || 0,
+        };
+      });
+      setViewers({
+        loading: false,
+        error: null,
+        items,
+        insights: res?.insights || currentItem?.stats || null,
+        reactors,
+        gifts,
+        showReactionDetails: res?.showReactionDetails !== false,
+        activeTab: 'viewers',
+      });
     } catch (err) {
-      setViewers({ loading: false, error: err?.message || 'Could not load viewers.', items: [] });
+      setViewers((prev) => ({
+        ...prev,
+        loading: false,
+        error: err?.message || 'Could not load viewers.',
+        items: [],
+      }));
     }
   };
 
@@ -748,11 +934,47 @@ export default function StoriesScreen() {
     }
   };
 
-  const handleShareStory = async () => {
+  const handleOpenShareSheet = async () => {
     if (!currentItem?.id) return;
-    const shareUrl = `${window.location.origin}/stories`;
+    if (!canShareCurrent) {
+      toast.info('Sharing is turned off for this Vibe.');
+      return;
+    }
+    setIsPaused(true);
+    setShareSheetOpen(true);
+    setSelectedShareTargets([]);
+    setShareSearch('');
+    setShareContactsError(null);
+    if (!user?.uid) return;
+    setLoadingShareContacts(true);
     try {
-      if (navigator.share) {
+      const { messagesService } = await import('../services/messagesService');
+      const convs = await messagesService.getUserConversations?.(user.uid);
+      const list = Array.isArray(convs) ? convs : (convs?.conversations || []);
+      setShareContacts(
+        list
+          .filter((c) => c?.id)
+          .slice(0, 25)
+          .map((c) => ({
+            id: c.id,
+            title: c.name || c.title || c.otherUser?.displayName || c.otherUser?.username || 'Chat',
+            avatar: c.avatar || c.otherUser?.photoURL || null,
+          }))
+      );
+    } catch (err) {
+      console.warn('[Vibes] Failed to load share contacts:', err?.message);
+      setShareContactsError(err?.message || 'Could not load your direct chats.');
+      setShareContacts([]);
+    } finally {
+      setLoadingShareContacts(false);
+    }
+  };
+
+  const handleShareViaLink = async (useNative = false) => {
+    if (!currentItem?.id) return;
+    const shareUrl = `${window.location.origin}${buildVibeDeepLink(currentItem.id)}`;
+    try {
+      if (useNative && navigator.share) {
         await navigator.share({
           title: `${currentStory?.user?.name || 'Creator'} on Arvdoul Vibes`,
           text: currentItem?.caption || 'Check out this Vibe on Arvdoul',
@@ -762,13 +984,33 @@ export default function StoriesScreen() {
         await copyToClipboard(shareUrl);
         toast.success('Vibe link copied');
       }
-      getStoryService()
-        .trackShare(currentItem.id)
-        .catch((err) => console.warn('[Vibes] share metric failed:', err?.message || err));
+      await getStoryService()
+        .shareVibe(currentItem.id, { mode: 'link' })
+        .catch(() => null);
+      setShareSheetOpen(false);
+      setIsPaused(false);
     } catch (err) {
       if (err?.name !== 'AbortError') {
         toast.error('Could not share Vibe.');
       }
+    }
+  };
+
+  const handleSendDirectShare = async () => {
+    if (!currentItem?.id || !selectedShareTargets.length || sharingVibe) return;
+    setSharingVibe(true);
+    try {
+      await getStoryService().shareVibe(currentItem.id, {
+        mode: 'direct',
+        conversationIds: selectedShareTargets,
+      });
+      toast.success(`Shared to ${selectedShareTargets.length} chat${selectedShareTargets.length > 1 ? 's' : ''}`);
+      setShareSheetOpen(false);
+      setIsPaused(false);
+    } catch (err) {
+      toast.error(err?.message || 'Could not send Vibe to chat.');
+    } finally {
+      setSharingVibe(false);
     }
   };
 
@@ -813,12 +1055,12 @@ export default function StoriesScreen() {
 
   // Smooth RAF playback clock for non-video slides (videos drive progress via VibeRenderer onVideoProgress)
   useEffect(() => {
-    if (activeStoryIndex === null || !currentStory || isPaused || isVideoBuffering) {
+    if (activeStoryIndex === null || !currentStory || effectivePaused || isVideoBuffering) {
       if (progressRafRef.current) cancelAnimationFrame(progressRafRef.current);
       return undefined;
     }
-    if (currentItem?.type === 'video') {
-      // Video duration and progress are driven directly by real <video> element telemetry
+    if (currentItem?.type === 'video' || currentItem?.type === 'audio') {
+      // Video and standalone audio Vibes drive duration and progress via VibeRenderer telemetry
       return undefined;
     }
 
@@ -850,11 +1092,11 @@ export default function StoriesScreen() {
     };
     // Intentionally depend on slide change / pause / buffering, not storyProgress itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStoryIndex, activeItemIndex, isPaused, isVideoBuffering, currentStory?.id, currentItem?.id, currentItem?.type, advanceItemOrGroup]);
+  }, [activeStoryIndex, activeItemIndex, effectivePaused, isVideoBuffering, currentStory?.id, currentItem?.id, currentItem?.type, advanceItemOrGroup]);
 
-  // Background music or standalone audio Vibe playback
+  // Background music playback for non-audio Vibes (standalone audio Vibes play inside VibeRenderer)
   useEffect(() => {
-    const audioSource = currentItem?.type === 'audio' ? currentItem?.url : (currentItem?.music?.audioUrl || null);
+    const audioSource = currentItem?.type === 'audio' ? null : (currentItem?.music?.audioUrl || null);
     if (!audioSource || activeStoryIndex === null) {
       if (storyAudioRef.current) {
         storyAudioRef.current.pause();
@@ -868,9 +1110,9 @@ export default function StoriesScreen() {
       storyAudioRef.current.loop = true;
     }
     storyAudioRef.current.muted = isMuted;
-    if (isPaused) storyAudioRef.current.pause();
+    if (effectivePaused) storyAudioRef.current.pause();
     else storyAudioRef.current.play().catch((err) => console.warn('[Vibes] audio play deferred:', err?.message));
-  }, [currentItem, activeStoryIndex, isPaused, isMuted]);
+  }, [currentItem, activeStoryIndex, effectivePaused, isMuted]);
 
   useEffect(() => () => {
     storyAudioRef.current?.pause();
@@ -965,12 +1207,24 @@ export default function StoriesScreen() {
   const [reactingId, setReactingId] = useState(null);
   const handleSendReaction = async (emoji) => {
     if (!currentItem?.id || reactingId) return;
+    if (!canReactToCurrent) {
+      toast.info('Reactions are disabled on this Vibe.');
+      return;
+    }
     setReactingId(currentItem.id);
     const id = Date.now() + Math.random();
+    const normKey = normalizeVibeReactionKey(emoji);
     setFlyingParticles((prev) => [...prev, { id, emoji, x: Math.random() * 60 + 20 }]);
     setTimeout(() => {
       setFlyingParticles((prev) => prev.filter((p) => p.id !== id));
     }, 1500);
+    setStories((prev) => prev.map((g) => {
+      if (g.id !== currentStory?.id) return g;
+      return {
+        ...g,
+        items: (g.items || []).map((it) => (it.id === currentItem.id ? { ...it, userReaction: normKey } : it)),
+      };
+    }));
     try {
       await getStoryService().reactToStory(currentItem.id, emoji);
     } catch (err) {
@@ -981,20 +1235,45 @@ export default function StoriesScreen() {
   };
 
   const [gifting, setGifting] = useState(false);
-  const handleGiftCoin = async () => {
-    if (!user?.uid || gifting) return;
+  const handleOpenGiftPicker = async () => {
+    if (!user?.uid || !currentItem?.id) return;
+    if (!canGiftCurrent) {
+      toast.info('Gifts are turned off for this Vibe.');
+      return;
+    }
+    setIsPaused(true);
+    setGiftSheetOpen(true);
+    setLoadingGiftBalance(true);
+    try {
+      const bal = await getMonetizationService().getBalance(user.uid, { forceRefresh: true });
+      setGiftBalance(typeof bal === 'number' ? bal : null);
+    } catch {
+      setGiftBalance(null);
+    } finally {
+      setLoadingGiftBalance(false);
+    }
+  };
+
+  const handleGiftCoin = async (giftOverride = null) => {
+    if (!user?.uid || gifting || !currentItem?.id) return;
     const storyUserId = currentStory?.user?.id || currentStory?.userId;
     if (!storyUserId) { toast.error('Recipient unknown'); return; }
     if (storyUserId === user.uid) { toast.error('You cannot gift yourself'); return; }
+    const gift = giftOverride || VIRTUAL_GIFTS.find((g) => g.type === selectedGiftType) || VIRTUAL_GIFTS[0];
+    if (!gift) return;
     setGifting(true);
     try {
-      const res = await getMonetizationService().transferCoins(
-        user.uid, storyUserId, 250, 'vibe_gift',
-        { storyId: currentItem?.id || null }
-      );
+      const res = await getMonetizationService().sendVibeGift(currentItem.id, gift.type);
       if (res?.success) {
-        handleSendReaction('💎');
-        toast.success(`Sent 250 Coins to ${currentStory?.user?.name}!`);
+        if (typeof res.newBalance === 'number') setGiftBalance(res.newBalance);
+        const burstId = Date.now() + Math.random();
+        setFlyingParticles((prev) => [...prev, { id: burstId, emoji: gift.emoji || gift.icon || '💎', x: 50 }]);
+        setTimeout(() => {
+          setFlyingParticles((prev) => prev.filter((p) => p.id !== burstId));
+        }, 1500);
+        toast.success(`Sent ${gift.name} (${gift.coins} Coins) to ${currentStory?.user?.name}!`);
+        setGiftSheetOpen(false);
+        setIsPaused(false);
       } else {
         toast.error(res?.message || 'Gift could not be sent');
       }
@@ -1612,14 +1891,16 @@ export default function StoriesScreen() {
                   >
                     {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleShareStory}
-                    aria-label="Share this Vibe"
-                    className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
+                  {canShareCurrent && (
+                    <button
+                      type="button"
+                      onClick={handleOpenShareSheet}
+                      aria-label="Share this Vibe"
+                      className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setIsMuted((m) => !m)}
@@ -1655,7 +1936,7 @@ export default function StoriesScreen() {
                   <VibeRenderer
                     vibe={currentItem}
                     interactiveMode="viewer"
-                    isPaused={isPaused}
+                    isPaused={effectivePaused}
                     isMuted={isMuted}
                     videoRef={stageVideoRef}
                     hideChrome={isHoldingChromeHidden}
@@ -1888,57 +2169,80 @@ export default function StoriesScreen() {
                 {/* Quick Reactions & Gift */}
                 {!archivedPreviewGroup && (
                   <>
-                    <div className="flex items-center justify-between px-1">
-                      {QUICK_EMOJIS.map((emoji) => (
-                        <button
-                          type="button"
-                          key={emoji}
-                          aria-label={`React with ${emoji}`}
-                          onClick={() => handleSendReaction(emoji)}
-                          className="min-w-[36px] min-h-[36px] text-2xl hover:scale-125 active:scale-95 transition-transform cursor-pointer"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                      {!isOwnStory && (
-                        <button
-                          type="button"
-                          onClick={handleGiftCoin}
-                          disabled={gifting}
-                          className="min-h-[36px] px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-xs font-bold text-slate-950 flex items-center gap-1 shadow-lg disabled:opacity-60 cursor-pointer"
-                        >
-                          <span>{gifting ? 'Sending…' : 'Gift 250'}</span>
-                        </button>
-                      )}
-                    </div>
+                    {(canReactToCurrent || canGiftCurrent) && (
+                      <div className="flex items-center justify-between px-1 gap-2">
+                        {canReactToCurrent ? (
+                          <div className="flex items-center justify-between flex-1">
+                            {QUICK_EMOJIS.map((emoji) => {
+                              const isSelected = currentItem?.userReaction && currentItem.userReaction === normalizeVibeReactionKey(emoji);
+                              return (
+                                <button
+                                  type="button"
+                                  key={emoji}
+                                  aria-label={`React with ${emoji}`}
+                                  aria-pressed={Boolean(isSelected)}
+                                  onClick={() => handleSendReaction(emoji)}
+                                  className={cn(
+                                    'min-w-[36px] min-h-[36px] rounded-full text-2xl hover:scale-125 active:scale-95 transition-transform cursor-pointer flex items-center justify-center',
+                                    isSelected && 'bg-white/25 ring-1 ring-white/50 scale-110'
+                                  )}
+                                >
+                                  {emoji}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="flex-1" />
+                        )}
+                        {canGiftCurrent && (
+                          <button
+                            type="button"
+                            onClick={handleOpenGiftPicker}
+                            disabled={gifting}
+                            aria-label="Send Gift on this Vibe"
+                            className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-xs font-bold text-slate-950 flex items-center gap-1.5 shadow-lg disabled:opacity-60 cursor-pointer shrink-0"
+                          >
+                            <Gift className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>{gifting ? 'Sending…' : 'Gift'}</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     {/* Reply Bar */}
-                    <form onSubmit={handleSendReply} className="flex items-center gap-2">
-                      <input
-                        aria-label="Send a reply"
-                        type="text"
-                        placeholder={`Reply to ${currentStory.user.name}...`}
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        onFocus={() => setIsPaused(true)}
-                        onBlur={() => setIsPaused(false)}
-                        className="flex-1 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/60 focus:outline-none focus:border-white/50"
-                      />
-                      <button
-                        type="submit"
-                        disabled={!replyText.trim() || replying}
-                        aria-label="Send reply"
-                        className="w-11 h-11 rounded-full flex items-center justify-center text-white disabled:opacity-40 transition-opacity shadow-lg cursor-pointer"
-                        style={{ background: BRAND_GRADIENT }}
-                      >
-                        <Send className="w-4 h-4" />
-                      </button>
-                    </form>
+                    {canReplyToCurrent ? (
+                      <form onSubmit={handleSendReply} className="flex items-center gap-2">
+                        <input
+                          aria-label="Send a reply"
+                          type="text"
+                          placeholder={`Reply to ${currentStory.user.name}...`}
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          onFocus={() => setIsPaused(true)}
+                          onBlur={() => setIsPaused(false)}
+                          className="flex-1 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/60 focus:outline-none focus:border-white/50"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!replyText.trim() || replying}
+                          aria-label="Send reply"
+                          className="w-11 h-11 rounded-full flex items-center justify-center text-white disabled:opacity-40 transition-opacity shadow-lg cursor-pointer"
+                          style={{ background: BRAND_GRADIENT }}
+                        >
+                          <Send className="w-4 h-4" />
+                        </button>
+                      </form>
+                    ) : (
+                      <p className="text-[11px] text-white/55 text-center py-1">
+                        Replies are restricted on this Vibe
+                      </p>
+                    )}
                   </>
                 )}
               </div>
 
-              {/* Owner-only Viewers Sheet */}
+              {/* Owner-only Insights & Viewers Sheet */}
               <AnimatePresence>
                 {viewersOpen && (
                   <motion.div
@@ -1946,7 +2250,7 @@ export default function StoriesScreen() {
                     animate={{ y: 0 }}
                     exit={{ y: '100%' }}
                     transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-                    className="absolute inset-x-0 bottom-0 z-50 max-h-[70vh] rounded-t-3xl bg-[#0A102D]/98 backdrop-blur-xl border-t border-white/10 flex flex-col"
+                    className="absolute inset-x-0 bottom-0 z-50 max-h-[76vh] rounded-t-3xl bg-[#0A102D]/98 backdrop-blur-xl border-t border-white/10 flex flex-col"
                     role="dialog"
                     aria-label="Vibe viewers"
                   >
@@ -1954,7 +2258,7 @@ export default function StoriesScreen() {
                       <div className="flex items-center gap-2 text-white">
                         <Users className="w-4 h-4 text-white/80" />
                         <span className="font-bold text-sm">
-                          {viewers.loading ? 'Viewers' : `${viewers.items.length} ${viewers.items.length === 1 ? 'viewer' : 'viewers'}`}
+                          {viewers.loading ? 'Vibe Insights' : `${viewers.items.length} ${viewers.items.length === 1 ? 'viewer' : 'viewers'}`}
                         </span>
                       </div>
                       <button
@@ -1967,10 +2271,54 @@ export default function StoriesScreen() {
                       </button>
                     </div>
 
-                    <div className="overflow-y-auto p-2">
+                    {/* Owner Metrics Summary Bar */}
+                    {!viewers.loading && viewers.insights && (
+                      <div className="grid grid-cols-4 gap-2 px-4 py-3 border-b border-white/10 bg-white/[0.03]">
+                        <div className="text-center">
+                          <p className="text-xs text-white/50 flex items-center justify-center gap-1"><Eye className="w-3 h-3" /> Views</p>
+                          <p className="text-sm font-black text-white tabular-nums">{viewers.insights.views ?? viewers.items.length}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-white/50 flex items-center justify-center gap-1"><Heart className="w-3 h-3" /> Reacts</p>
+                          <p className="text-sm font-black text-white tabular-nums">{viewers.insights.totalReactions ?? viewers.reactors.length}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-white/50 flex items-center justify-center gap-1"><Share2 className="w-3 h-3" /> Shares</p>
+                          <p className="text-sm font-black text-white tabular-nums">{viewers.insights.shares ?? '—'}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-white/50 flex items-center justify-center gap-1"><Coins className="w-3 h-3 text-amber-400" /> Coins</p>
+                          <p className="text-sm font-black text-amber-300 tabular-nums">{viewers.insights.giftCoins ?? 0}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tabs */}
+                    <div className="flex gap-1.5 px-4 pt-2.5">
+                      {[
+                        { id: 'viewers', label: `Viewers (${viewers.items.length})` },
+                        { id: 'reactions', label: `Reactions (${viewers.reactors.length})` },
+                        { id: 'gifts', label: `Gifts (${viewers.gifts.length})` },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setViewers((prev) => ({ ...prev, activeTab: tab.id }))}
+                          className={cn(
+                            'px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer',
+                            viewers.activeTab === tab.id ? 'text-white' : 'bg-white/5 text-white/60 hover:text-white'
+                          )}
+                          style={viewers.activeTab === tab.id ? { background: BRAND_GRADIENT } : undefined}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="overflow-y-auto p-2 flex-1">
                       {viewers.loading ? (
                         <div className="flex items-center justify-center py-10 text-white/60 gap-2">
-                          <Loader2 className="w-5 h-5 animate-spin" /> Loading viewers…
+                          <Loader2 className="w-5 h-5 animate-spin" /> Loading insights…
                         </div>
                       ) : viewers.error ? (
                         <div className="text-center py-10 px-6">
@@ -1984,6 +2332,62 @@ export default function StoriesScreen() {
                             Retry
                           </button>
                         </div>
+                      ) : viewers.activeTab === 'reactions' ? (
+                        viewers.reactors.length === 0 ? (
+                          <div className="text-center py-10 px-6">
+                            <p className="text-white font-semibold">No reactions yet</p>
+                            <p className="text-white/50 text-sm mt-1">
+                              {viewers.showReactionDetails ? 'Reactions on this Vibe will show up here.' : 'Detailed reaction breakdown is turned off in Vibe Settings.'}
+                            </p>
+                          </div>
+                        ) : (
+                          <ul className="space-y-1">
+                            {viewers.reactors.map((r) => (
+                              <li key={r.userId}>
+                                <button
+                                  type="button"
+                                  onClick={() => { setViewersOpen(false); navigate(`/profile/${r.userId}`); }}
+                                  className="w-full flex items-center justify-between gap-3 p-2.5 rounded-2xl hover:bg-white/5 text-left cursor-pointer"
+                                >
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <LazyImage
+                                      src={r.avatar}
+                                      alt={r.name}
+                                      className="w-10 h-10 rounded-full object-cover border border-white/10"
+                                    />
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-bold text-white truncate">{r.name}</p>
+                                      {r.handle && <p className="text-xs font-mono text-white/50 truncate">@{r.handle}</p>}
+                                    </div>
+                                  </div>
+                                  <span className="text-xl shrink-0">{r.reaction}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )
+                      ) : viewers.activeTab === 'gifts' ? (
+                        viewers.gifts.length === 0 ? (
+                          <div className="text-center py-10 px-6">
+                            <p className="text-white font-semibold">No gifts received yet</p>
+                            <p className="text-white/50 text-sm mt-1">Gifts sent by viewers on this Vibe appear here.</p>
+                          </div>
+                        ) : (
+                          <ul className="space-y-1">
+                            {viewers.gifts.map((g) => (
+                              <li key={g.id} className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-white/[0.03]">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <LazyImage src={g.avatar} alt={g.name} className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-bold text-white truncate">{g.name}</p>
+                                    <p className="text-xs text-white/60 capitalize">{g.giftType}</p>
+                                  </div>
+                                </div>
+                                <span className="text-xs font-bold text-amber-300 tabular-nums shrink-0">+{g.coins} Coins</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )
                       ) : viewers.items.length === 0 ? (
                         <div className="text-center py-10 px-6">
                           <p className="text-white font-semibold">No views yet</p>
@@ -2004,15 +2408,226 @@ export default function StoriesScreen() {
                                   className="w-11 h-11 rounded-full object-cover border border-white/10"
                                   onError={(e) => { e.target.src = getSafeAvatarUrl(null, v.name, v.userId); }}
                                 />
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <p className="text-sm font-bold text-white truncate">{v.name}</p>
                                   {v.handle && <p className="text-xs font-mono text-white/50 truncate">@{v.handle}</p>}
                                 </div>
+                                {v.completed && (
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">Watched</span>
+                                )}
                               </button>
                             </li>
                           ))}
                         </ul>
                       )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Vibe Gift Picker Sheet (Single-Source VIRTUAL_GIFTS -> sendVibeGift) */}
+              <AnimatePresence>
+                {giftSheetOpen && (
+                  <motion.div
+                    initial={{ y: '100%' }}
+                    animate={{ y: 0 }}
+                    exit={{ y: '100%' }}
+                    transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                    className="absolute inset-x-0 bottom-0 z-50 max-h-[70vh] rounded-t-3xl bg-[#0A102D]/98 backdrop-blur-xl border-t border-white/10 flex flex-col"
+                    role="dialog"
+                    aria-label="Send Vibe Gift"
+                  >
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                      <div className="flex items-center gap-2 text-white">
+                        <Gift className="w-4 h-4 text-amber-400" />
+                        <span className="font-bold text-sm">Send a Gift to {currentStory?.user?.name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setGiftSheetOpen(false); setIsPaused(false); }}
+                        aria-label="Close gift picker"
+                        className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4 overflow-y-auto">
+                      <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs">
+                        <span className="text-white/70">Your Balance</span>
+                        <span className="font-bold text-amber-300 flex items-center gap-1 tabular-nums">
+                          <Coins className="w-3.5 h-3.5" />
+                          {loadingGiftBalance ? '…' : (typeof giftBalance === 'number' ? `${giftBalance.toLocaleString()} Coins` : '—')}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2.5">
+                        {VIRTUAL_GIFTS.map((gift) => {
+                          const active = selectedGiftType === gift.type;
+                          const canAfford = typeof giftBalance === 'number' ? giftBalance >= gift.coins : true;
+                          return (
+                            <button
+                              key={gift.type}
+                              type="button"
+                              onClick={() => setSelectedGiftType(gift.type)}
+                              className={cn(
+                                'p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1',
+                                active ? 'border-amber-400 bg-amber-400/15' : 'border-white/10 bg-white/5 hover:bg-white/10',
+                                !canAfford && 'opacity-50'
+                              )}
+                            >
+                              <span className="text-2xl">{gift.emoji || gift.icon || '🎁'}</span>
+                              <span className="text-xs font-bold text-white">{gift.name}</span>
+                              <span className="text-[11px] font-semibold text-amber-300 tabular-nums">{gift.coins} Coins</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex gap-2">
+                        {typeof giftBalance === 'number' && giftBalance < ((VIRTUAL_GIFTS.find((g) => g.type === selectedGiftType)?.coins) || 0) ? (
+                          <button
+                            type="button"
+                            onClick={() => { setGiftSheetOpen(false); handleCloseStory(); navigate('/coins'); }}
+                            className="flex-1 min-h-[44px] py-2.5 rounded-xl text-white text-xs font-bold cursor-pointer"
+                            style={{ background: BRAND_GRADIENT }}
+                          >
+                            Top Up Coins
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={gifting}
+                            onClick={() => handleGiftCoin()}
+                            className="flex-1 min-h-[44px] py-2.5 rounded-xl text-white text-xs font-bold disabled:opacity-50 cursor-pointer"
+                            style={{ background: BRAND_GRADIENT }}
+                          >
+                            {gifting ? 'Sending Gift…' : `Send ${VIRTUAL_GIFTS.find((g) => g.type === selectedGiftType)?.name || 'Gift'}`}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Share Vibe Sheet */}
+              <AnimatePresence>
+                {shareSheetOpen && (
+                  <motion.div
+                    initial={{ y: '100%' }}
+                    animate={{ y: 0 }}
+                    exit={{ y: '100%' }}
+                    transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                    className="absolute inset-x-0 bottom-0 z-50 max-h-[72vh] rounded-t-3xl bg-[#0A102D]/98 backdrop-blur-xl border-t border-white/10 flex flex-col"
+                    role="dialog"
+                    aria-label="Share Vibe"
+                  >
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                      <div className="flex items-center gap-2 text-white">
+                        <Share2 className="w-4 h-4 text-white/80" />
+                        <span className="font-bold text-sm">Share Vibe</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setShareSheetOpen(false); setIsPaused(false); }}
+                        aria-label="Close share sheet"
+                        className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-3 overflow-y-auto flex-1">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleShareViaLink(false)}
+                          className="flex-1 min-h-[44px] px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5" /> Copy Deep Link
+                        </button>
+                        {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                          <button
+                            type="button"
+                            onClick={() => handleShareViaLink(true)}
+                            className="flex-1 min-h-[44px] px-3 py-2 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                            style={{ background: BRAND_GRADIENT }}
+                          >
+                            <Share2 className="w-3.5 h-3.5" /> Share Externally
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-white/10 space-y-2">
+                        <input
+                          type="text"
+                          value={shareSearch}
+                          onChange={(e) => setShareSearch(e.target.value)}
+                          placeholder="Search direct chats..."
+                          aria-label="Search chats to share Vibe"
+                          className="w-full bg-white/10 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/50 focus:outline-none focus:border-white/50"
+                        />
+                        {loadingShareContacts ? (
+                          <div className="flex items-center justify-center py-6 text-white/60 gap-2 text-xs">
+                            <Loader2 className="w-4 h-4 animate-spin" /> Loading chats…
+                          </div>
+                        ) : shareContactsError ? (
+                          <div role="alert" className="py-4 px-3 rounded-xl bg-red-500/10 border border-red-500/25 text-center space-y-2">
+                            <p className="text-xs text-red-300">{shareContactsError}</p>
+                            <button
+                              type="button"
+                              onClick={handleOpenShareSheet}
+                              className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-xs font-semibold text-white cursor-pointer"
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-1 max-h-44 overflow-y-auto">
+                            {shareContacts
+                              .filter((c) => !shareSearch.trim() || c.title.toLowerCase().includes(shareSearch.trim().toLowerCase()))
+                              .map((c) => {
+                                const selected = selectedShareTargets.includes(c.id);
+                                return (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => setSelectedShareTargets((prev) => (
+                                      prev.includes(c.id) ? prev.filter((id) => id !== c.id) : [...prev, c.id]
+                                    ))}
+                                    className={cn(
+                                      'w-full min-h-[44px] flex items-center justify-between p-2.5 rounded-xl transition-colors cursor-pointer',
+                                      selected ? 'bg-white/15 border border-white/30' : 'bg-white/5 hover:bg-white/10'
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <LazyImage
+                                        src={getSafeAvatarUrl(c.avatar, c.title, c.id)}
+                                        alt={c.title}
+                                        className="w-9 h-9 rounded-full object-cover"
+                                      />
+                                      <span className="text-xs font-bold text-white truncate">{c.title}</span>
+                                    </div>
+                                    <span className={cn(
+                                      'w-5 h-5 rounded-full border flex items-center justify-center',
+                                      selected ? 'bg-emerald-500 border-emerald-400 text-white' : 'border-white/30'
+                                    )}>
+                                      {selected && <Check className="w-3 h-3" />}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                          </div>
+                        )}
+                        {selectedShareTargets.length > 0 && (
+                          <button
+                            type="button"
+                            disabled={sharingVibe}
+                            onClick={handleSendDirectShare}
+                            className="w-full min-h-[44px] py-2.5 rounded-xl text-white text-xs font-bold disabled:opacity-50 cursor-pointer"
+                            style={{ background: BRAND_GRADIENT }}
+                          >
+                            {sharingVibe ? 'Sending…' : `Send to ${selectedShareTargets.length} Chat${selectedShareTargets.length > 1 ? 's' : ''}`}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 )}

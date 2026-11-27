@@ -152,4 +152,67 @@ describe('CreateStory Vibes Studio UI & Flows', () => {
     expect(mockCreateStory.mock.calls[0][0].visibility).toBe('connections');
     expect(mockCreateStory.mock.calls[0][0].type).toBe('text');
   });
+
+  test('supports Event Vibe composition & publish with structured eventData', async () => {
+    render(
+      <MemoryRouter>
+        <CreateStory />
+      </MemoryRouter>
+    );
+
+    const eventButtons = screen.getAllByRole('button', { name: 'EVENT' });
+    fireEvent.click(eventButtons[0]);
+
+    expect(screen.getByText('Event Vibe')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Event title'), {
+      target: { value: 'Arvdoul Creator Live' },
+    });
+    fireEvent.change(screen.getByLabelText('Event date and time'), {
+      target: { value: 'Sat 7 PM UTC' },
+    });
+    fireEvent.change(screen.getByLabelText('Event location'), {
+      target: { value: 'Main Stage' },
+    });
+    fireEvent.change(screen.getByLabelText('Event details'), {
+      target: { value: 'Live Q&A and product showcase' },
+    });
+    fireEvent.change(screen.getByLabelText('Event button label'), {
+      target: { value: 'Join Live' },
+    });
+    fireEvent.change(screen.getByLabelText('Event link URL'), {
+      target: { value: 'https://arvdoul.com/live' },
+    });
+
+    const publishBtns = screen.getAllByRole('button', { name: /Publish Vibe/i });
+    fireEvent.click(publishBtns[0]);
+
+    await waitFor(() => expect(mockCreateStory).toHaveBeenCalledTimes(1));
+    const payload = mockCreateStory.mock.calls[0][0];
+    expect(payload.type).toBe('event');
+    expect(payload.eventData).toEqual({
+      title: 'Arvdoul Creator Live',
+      startsAt: 'Sat 7 PM UTC',
+      location: 'Main Stage',
+      description: 'Live Q&A and product showcase',
+      ctaText: 'Join Live',
+      ctaUrl: 'https://arvdoul.com/live',
+    });
+    expect(payload.ctaText).toBe('Join Live');
+    expect(payload.ctaUrl).toBe('https://arvdoul.com/live');
+  });
+
+  test('renders Audio Vibe capture & upload controls in AUDIO mode', async () => {
+    render(
+      <MemoryRouter>
+        <CreateStory />
+      </MemoryRouter>
+    );
+
+    const audioButtons = screen.getAllByRole('button', { name: 'AUDIO' });
+    fireEvent.click(audioButtons[0]);
+
+    expect(screen.getByText('Record or Upload Audio')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Record Audio/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Upload Audio/i })).toBeInTheDocument();
+  });
 });

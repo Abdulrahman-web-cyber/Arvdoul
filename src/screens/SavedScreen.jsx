@@ -70,7 +70,7 @@ export default function SavedScreen() {
             avatar: resolveAvatarUrl(p.authorPhoto, p.authorName, p.authorId),
           },
           type: p.type || 'text',
-          thumbnail: (p.media && p.media[0]?.url) || p.mediaUrl || '/assets/default-profile.png',
+          thumbnail: p.media?.[0]?.thumbnailUrl || p.media?.[0]?.url || p.mediaUrl || p.imageUrl || null,
           savedAt: formatSavedDate(p.savedAt),
           tags: p.hashtags || [],
         }));
@@ -88,7 +88,7 @@ export default function SavedScreen() {
             avatar: resolveAvatarUrl(v.creator?.avatar, v.creator?.name, v.creator?.id),
           },
           type: 'video',
-          thumbnail: v.thumbnail || v.thumbnailUrl || '/assets/default-profile.png',
+          thumbnail: v.thumbnail || v.thumbnailUrl || null,
           videoUrl: v.videoUrl || '',
           savedAt: formatSavedDate(v.savedAt),
           tags: [],
@@ -134,7 +134,12 @@ export default function SavedScreen() {
   // Remove single item. Optimistic, but persisted — a local-only removal
   // reappears on reload, so the "Removed" toast would be a lie.
   const handleRemoveItem = async (id, title) => {
-    const item = items.find((i) => i.id === id);
+    if (!user?.uid) {
+      toast.error('Please sign in to manage saved items');
+      return;
+    }
+    const prevItems = items;
+    const item = prevItems.find((i) => i.id === id);
     setItems((prev) => prev.filter((i) => i.id !== id));
     try {
       if (item?.source === 'video') {
@@ -146,6 +151,7 @@ export default function SavedScreen() {
       }
       toast.success(`Removed "${title}" from saved`);
     } catch {
+      setItems(prevItems);
       toast.error('Could not remove from saved');
     }
   };
@@ -160,7 +166,12 @@ export default function SavedScreen() {
   // Delete all selected (optimistic + persisted, same reason as above).
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
+    if (!user?.uid) {
+      toast.error('Please sign in to manage saved items');
+      return;
+    }
     const ids = [...selectedIds];
+    const prevItems = items;
     setItems((prev) => prev.filter((i) => !ids.includes(i.id)));
     setSelectedIds([]);
     setIsSelectMode(false);
@@ -170,11 +181,13 @@ export default function SavedScreen() {
       const svc = getFirestoreService();
       const videoSvc = getVideoService();
       await Promise.all(ids.map((id) => {
-        const item = items.find((i) => i.id === id);
+        const item = prevItems.find((i) => i.id === id);
         return item?.source === 'video' ? videoSvc.unsaveVideo(id, user.uid) : svc.unsavePost(id, user.uid);
       }));
       toast.success(`Removed ${ids.length} items from saved`);
     } catch {
+      setItems(prevItems);
+      setSelectedIds(ids);
       toast.error('Could not remove all selected items');
     }
   };
@@ -377,11 +390,30 @@ export default function SavedScreen() {
                     isSelected ? "ring-4 ring-purple-500 border-purple-500" : isDark ? "bg-gray-900 border-white/10" : "bg-white border-gray-200"
                   )}
                 >
-                  <LazyImage
-                    src={item.thumbnail}
-                    alt={item.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
+                  {item.thumbnail ? (
+                    <LazyImage
+                      src={item.thumbnail}
+                      alt={item.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className={cn(
+                      "w-full h-full p-4 flex flex-col justify-between",
+                      isDark
+                        ? "bg-gradient-to-br from-purple-950/70 via-[#0d1433] to-blue-950/70 text-white"
+                        : "bg-gradient-to-br from-purple-50 via-white to-blue-50 text-slate-900"
+                    )}>
+                      <div className="w-8 h-8 rounded-xl bg-purple-500/15 border border-purple-500/25 flex items-center justify-center text-purple-400">
+                        {item.type === 'video' ? <Film className="w-4 h-4" /> :
+                          item.type === 'audio' ? <Music className="w-4 h-4" /> :
+                          item.type === 'image' ? <ImageIcon className="w-4 h-4" /> :
+                          <FileText className="w-4 h-4" />}
+                      </div>
+                      <p className="text-xs font-semibold line-clamp-4 leading-relaxed opacity-90">
+                        {item.title}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Type Badge */}
                   <div className="absolute top-2.5 left-2.5 p-1 rounded-lg bg-black/60 backdrop-blur-md text-white text-[10px] font-bold flex items-center gap-1">
@@ -464,13 +496,26 @@ export default function SavedScreen() {
                     </div>
                   )}
 
-                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-900 shrink-0 relative">
-                    <LazyImage
-                      src={item.thumbnail}
-                      alt={item.title}
-                      className="w-full h-full object-cover"
-                    />
-                    {item.type === 'video' && (
+                  <div className={cn(
+                    "w-16 h-16 rounded-xl overflow-hidden shrink-0 relative flex items-center justify-center",
+                    isDark ? "bg-gray-900" : "bg-slate-100"
+                  )}>
+                    {item.thumbnail ? (
+                      <LazyImage
+                        src={item.thumbnail}
+                        alt={item.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : item.type === 'video' ? (
+                      <Film className="w-5 h-5 text-purple-400" />
+                    ) : item.type === 'audio' ? (
+                      <Music className="w-5 h-5 text-purple-400" />
+                    ) : item.type === 'image' ? (
+                      <ImageIcon className="w-5 h-5 text-purple-400" />
+                    ) : (
+                      <FileText className="w-5 h-5 text-purple-400" />
+                    )}
+                    {item.type === 'video' && item.thumbnail && (
                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                         <Play className="w-4 h-4 fill-white text-white" />
                       </div>

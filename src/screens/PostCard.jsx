@@ -477,7 +477,11 @@ const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible
     const uid = currentUser?.uid;
     if (!uid) { setBlockedUserIds(new Set()); return; }
     userService.getBlockedUserIds(uid)
-      .then((ids) => { if (!cancelled) setBlockedUserIds(ids instanceof Set ? ids : new Set(ids || [])); })
+      .then((res) => {
+        if (cancelled) return;
+        const list = res instanceof Set ? res : (Array.isArray(res) ? res : (res?.ids || []));
+        setBlockedUserIds(list instanceof Set ? list : new Set(list));
+      })
       .catch(() => { if (!cancelled) setBlockedUserIds(new Set()); });
     return () => { cancelled = true; };
   }, [currentUser?.uid]);
@@ -1058,13 +1062,6 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           toast.error('Could not update like');
           return;
         }
-        if (newLiked && post.authorId && post.authorId !== userId) {
-          notificationService.sendNotification?.({
-            type: 'like', recipientId: post.authorId, senderId: userId, targetId: post.id
-          }).catch((e) => {
-            console.warn('Like notification not delivered', e?.message);
-          });
-        }
       } catch (err) {
         // A thrown write (network/offline) rolls the optimistic state back.
         rollbackTo(snapshot);
@@ -1072,7 +1069,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         toast.error('Could not update like');
       }
     }, 250);
-  }, [canReact, currentUser, post.id, post.authorId, takeSnapshot, rollbackTo]);
+  }, [canReact, currentUser, post.id, takeSnapshot, rollbackTo]);
 
   const handleReaction = useCallback((reaction) => {
     if (!canReact) return;

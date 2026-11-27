@@ -22,10 +22,13 @@ export default function GiftScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const isDark = theme !== 'light';
+  const isSelfGift = Boolean(user?.uid && userId === user.uid);
 
   const [recipient, setRecipient] = useState(null);
   const [balance, setBalance] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(Boolean(user?.uid));
+  const [balanceError, setBalanceError] = useState(false);
   const [selected, setSelected] = useState(GIFTS[0]);
   const [sending, setSending] = useState(false);
 
@@ -39,32 +42,57 @@ export default function GiftScreen() {
   };
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const { getUserService } = await import('../services/userService.js');
         const profile = await getUserService().getUserProfile(userId);
-        if (profile) {
+        if (!cancelled && profile) {
           setRecipient({
             id: userId,
             name: profile.displayName || profile.username,
             avatar: profile.photoURL,
           });
         }
-        if (user?.uid) {
+      } catch (err) {
+        if (!cancelled) toast.error('Could not load recipient.');
+      }
+      if (user?.uid) {
+        setBalanceLoading(true);
+        try {
           const { getMonetizationService } = await import('../services/monetizationService.js');
           const bal = await getMonetizationService().getBalance(user.uid);
-          setBalance(typeof bal === 'number' ? bal : null);
+          if (!cancelled) {
+            setBalance(typeof bal === 'number' ? bal : null);
+            setBalanceError(typeof bal !== 'number');
+          }
+        } catch (err) {
+          if (!cancelled) {
+            setBalance(null);
+            setBalanceError(true);
+          }
+        } finally {
+          if (!cancelled) setBalanceLoading(false);
         }
-      } catch (err) {
-        toast.error('Could not load recipient.');
+      } else if (!cancelled) {
+        setBalanceLoading(false);
       }
     })();
+    return () => { cancelled = true; };
   }, [userId, user?.uid]);
 
   const handleSend = async () => {
     if (!user?.uid || sending) return;
+    if (isSelfGift) {
+      toast.info('You cannot send a gift to yourself.');
+      return;
+    }
     if (!recipient) { toast.error('Recipient not found.'); return; }
-    if (balance === null || balance < selected.coins) {
+    if (balance === null) {
+      toast.error('Could not verify your coin balance. Please refresh.');
+      return;
+    }
+    if (balance < selected.coins) {
       toast.error('Not enough coins. Buy coins or watch ads to earn more.');
       navigate('/coins');
       return;
@@ -74,11 +102,11 @@ export default function GiftScreen() {
       const { getMonetizationService } = await import('../services/monetizationService.js');
       const res = await getMonetizationService().transferCoins(
         user.uid, userId, selected.coins, 'gift',
-        { giftType: selected.id, giftName: selected.name }
+        { giftType: selected.type || selected.id, giftName: selected.name }
       );
       if (res?.success) {
         toast.success(`${selected.emoji} ${selected.name} sent to ${recipient.name}!`);
-        setBalance((b) => Math.max(0, (b ?? 0) - selected.coins));
+        setBalance((b) => (b == null ? null : Math.max(0, b - selected.coins)));
       } else {
         toast.error(res?.message || 'Gift could not be sent.');
       }
@@ -107,7 +135,13 @@ export default function GiftScreen() {
           <h1 className={cn('font-bold text-base', colors.text)}>Send Gift</h1>
           <div className={cn('ml-auto flex items-center gap-1.5 text-sm font-semibold tabular-nums px-3 py-1.5 rounded-xl border', colors.card, colors.text)}>
             <Coins className="w-4 h-4 text-amber-500" aria-hidden="true" />
-            <span>{balance ?? '…'}</span>
+            <span>
+              {balanceLoading
+                ? '…'
+                : balanceError || typeof balance !== 'number'
+                  ? '—'
+                  : balance.toLocaleString()}
+            </span>
           </div>
         </div>
       </div>
@@ -127,7 +161,9 @@ export default function GiftScreen() {
           )}
           <div className="min-w-0">
             <p className={cn('font-semibold truncate', colors.text)}>{pickDisplayName([recipient?.name], { fallback: '—' })}</p>
-            <p className={cn('text-sm', colors.secondary)}>Sending a gift of coins</p>
+            <p className={cn('text-sm', colors.secondary)}>
+              {isSelfGift ? 'You cannot send a gift to your own account' : 'Sending a gift of coins'}
+            </p>
           </div>
         </div>
 
@@ -135,14 +171,14 @@ export default function GiftScreen() {
         <div className="grid grid-cols-3 gap-3 mb-6">
           {GIFTS.map((g) => (
             <motion.button
-              key={g.id}
+              key={g.id || g.type}
               type="button"
               whileTap={{ scale: 0.95 }}
               onClick={() => setSelected(g)}
               className={cn(
                 'min-h-[104px] rounded-2xl p-4 border transition-all cursor-pointer flex flex-col items-center justify-center',
                 selected.id === g.id
-                  ? 'border-indigo-500 bg-indigo-500/15 shadow-lg'
+                  ? 'border-purple-500 bg-purple-500/15 shadow-lg'
                   : colors.card
               )}
             >
@@ -157,7 +193,7 @@ export default function GiftScreen() {
         <button
           type="button"
           onClick={handleSend}
-          disabled={sending || !recipient}
+          disabled={sending || !recipient || isSelfGift}
           style={{ background: BRAND_GRADIENT }}
           className="min-h-[48px] w-full py-3.5 rounded-2xl font-bold text-white shadow-lg flex items-center justify-center gap-2 transition hover:brightness-110 disabled:opacity-50 cursor-pointer"
         >
@@ -168,3 +204,4 @@ export default function GiftScreen() {
     </div>
   );
 }
+

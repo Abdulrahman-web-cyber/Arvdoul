@@ -87,6 +87,15 @@ const ProfileFeedGrid = memo(({
   // mocked/local write may not change it), so it must never clobber a like the
   // viewer just made.
   const touchedLikesRef = useRef(new Set());
+  const touchedSavesRef = useRef(new Set());
+
+  useEffect(() => {
+    touchedLikesRef.current = new Set();
+    touchedSavesRef.current = new Set();
+    setLikedPosts({});
+    setSavedMap({});
+    setLikeBaseline({});
+  }, [currentUserId]);
 
   // Seed like/save state from the real posts (and the viewer's own liked/saved
   // snapshots) instead of assuming nothing is liked. `likedPosts` is only an
@@ -105,13 +114,26 @@ const ProfileFeedGrid = memo(({
   // viewer's own `users/{uid}/liked_posts` subcollection — resolved in one
   // bounded `documentId() in` read for the whole grid.
   const [serverLikedIds, setServerLikedIds] = useState(() => new Set());
+  const [serverSavedIds, setServerSavedIds] = useState(() => new Set());
   useEffect(() => {
     const ids = [...new Set([...(posts || []), ...(savedPosts || [])].map((p) => p?.id).filter(Boolean))];
-    if (!currentUserId || ids.length === 0) { setServerLikedIds(new Set()); return undefined; }
+    if (!currentUserId || ids.length === 0) {
+      setServerLikedIds(new Set());
+      setServerSavedIds(new Set());
+      return undefined;
+    }
     let cancelled = false;
     import('../../services/firestoreService.js')
-      .then(({ firestoreService }) => firestoreService.getLikedPostIds?.(currentUserId, ids))
-      .then((set) => { if (!cancelled && set) setServerLikedIds(set); })
+      .then(async ({ firestoreService }) => {
+        const [likedSet, savedSet] = await Promise.all([
+          firestoreService.getLikedPostIds?.(currentUserId, ids) ?? Promise.resolve(new Set()),
+          firestoreService.getSavedPostIds?.(currentUserId, ids) ?? Promise.resolve(new Set()),
+        ]);
+        if (!cancelled) {
+          if (likedSet) setServerLikedIds(likedSet);
+          if (savedSet) setServerSavedIds(savedSet);
+        }
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [currentUserId, seedSignature]);
@@ -141,10 +163,15 @@ const ProfileFeedGrid = memo(({
       }
       return changed ? next : prev;
     });
-    // Every entry in `savedPosts` is, by definition, saved by the viewer.
+    // Every entry in `savedPosts` or returned by `getSavedPostIds` is saved by the viewer.
     const saved = {};
     for (const post of savedPosts || []) {
-      if (post?.id) saved[post.id] = true;
+      if (post?.id && !touchedSavesRef.current.has(post.id)) saved[post.id] = true;
+    }
+    for (const post of posts || []) {
+      if (post?.id && serverSavedIds.has(post.id) && !touchedSavesRef.current.has(post.id)) {
+        saved[post.id] = true;
+      }
     }
     setSavedMap((prev) => {
       let changed = false;
@@ -154,7 +181,7 @@ const ProfileFeedGrid = memo(({
       }
       return changed ? next : prev;
     });
-  }, [seedSignature, serverLikedIds]);
+  }, [seedSignature, serverLikedIds, serverSavedIds]);
 
 
   const handleQuickLike = useCallback(async (e, post) => {
@@ -202,6 +229,7 @@ const ProfileFeedGrid = memo(({
     }
     const currentlySaved = Boolean(savedMap[postId]);
     const nextSaved = !currentlySaved;
+    touchedSavesRef.current.add(postId);
     setSavedMap((prev) => ({ ...prev, [postId]: nextSaved }));
     try {
       const { firestoreService } = await import('../../services/firestoreService.js');

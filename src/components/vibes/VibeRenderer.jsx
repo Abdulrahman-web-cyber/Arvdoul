@@ -5,7 +5,7 @@
 //   - Vibes Studio Preview (zero-upload, zero-publish 1:1 visual parity)
 
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
-import { Loader2, Music, AlertCircle, RotateCcw } from 'lucide-react';
+import { Loader2, Music, AlertCircle, RotateCcw, Calendar, MapPin, ExternalLink } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import {
@@ -129,6 +129,7 @@ export const VibeRenderer = memo(function VibeRenderer({
   children = null,
 }) {
   const internalVideoRef = useRef(null);
+  const internalAudioRef = useRef(null);
   const resolvedVideoRef = externalVideoRef || internalVideoRef;
   const rafRef = useRef(null);
   const endedFiredRef = useRef(false);
@@ -151,13 +152,14 @@ export const VibeRenderer = memo(function VibeRenderer({
   const effectiveMuted = Boolean(isMuted || edits.muted);
   const textOverlays = sanitizeTextOverlays(vibe?.textOverlays || []);
   const drawingPaths = sanitizeDrawingPaths(vibe?.drawingPaths || []);
+  const eventData = vibe?.eventData && typeof vibe.eventData === 'object' ? vibe.eventData : null;
 
   // Reset per-slide load states whenever active media URL changes
   useEffect(() => {
     setMediaLoadError(false);
     setIsBuffering(false);
     endedFiredRef.current = false;
-    setMediaLoading(Boolean((type === 'image' || type === 'video') && mediaUrl));
+    setMediaLoading(Boolean((type === 'image' || type === 'video' || type === 'audio') && mediaUrl));
   }, [vibe?.id, mediaUrl, type, retryNonce]);
 
   const handleVideoFrameSync = useCallback(() => {
@@ -194,6 +196,40 @@ export const VibeRenderer = memo(function VibeRenderer({
     }
   }, [resolvedVideoRef, vibe?.duration, trimStart, rawTrimEnd, onVideoProgress, interactiveMode, isPaused, onVideoEnded]);
 
+  const handleAudioFrameSync = useCallback(() => {
+    const aud = internalAudioRef.current;
+    if (!aud) return;
+    const nativeDur = Number.isFinite(aud.duration) && aud.duration > 0
+      ? aud.duration
+      : (Number(vibe?.duration) || 15);
+    const span = Math.min(VIBE_LIMITS.AUDIO_MAX_DURATION_SEC, Math.max(1, nativeDur));
+    const current = Math.max(0, Number(aud.currentTime) || 0);
+    const pct = Math.min(100, Math.max(0, (current / span) * 100));
+
+    onVideoProgress?.({
+      currentTime: current,
+      duration: span,
+      progressPercent: pct,
+    });
+
+    if (!endedFiredRef.current && current >= span - 0.06) {
+      endedFiredRef.current = true;
+      aud.pause();
+      if (interactiveMode === 'preview') {
+        aud.currentTime = 0;
+        endedFiredRef.current = false;
+        if (!isPaused) aud.play().catch(() => {});
+      } else {
+        onVideoEnded?.();
+        return;
+      }
+    }
+
+    if (!isPaused && !aud.paused && !aud.ended) {
+      rafRef.current = requestAnimationFrame(handleAudioFrameSync);
+    }
+  }, [vibe?.duration, onVideoProgress, interactiveMode, isPaused, onVideoEnded]);
+
   // Video play/pause/mute & trimStart enforcement
   useEffect(() => {
     const vid = resolvedVideoRef.current;
@@ -225,6 +261,29 @@ export const VibeRenderer = memo(function VibeRenderer({
     };
   }, [resolvedVideoRef, type, mediaUrl, isPaused, effectiveMuted, trimStart, handleVideoFrameSync, retryNonce]);
 
+  // Audio Vibe play/pause/mute & progress telemetry sync
+  useEffect(() => {
+    const aud = internalAudioRef.current;
+    if (!aud || type !== 'audio' || !mediaUrl) return undefined;
+
+    aud.muted = effectiveMuted;
+
+    if (isPaused) {
+      aud.pause();
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      return undefined;
+    }
+
+    aud.play().catch(() => {
+      // Autoplay blocked until gesture; user can tap speaker control.
+    });
+    rafRef.current = requestAnimationFrame(handleAudioFrameSync);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [type, mediaUrl, isPaused, effectiveMuted, handleAudioFrameSync, retryNonce]);
+
   const filterCss = `brightness(${brightness}%) contrast(${contrast}%)`;
   const mediaTransformCss = rotation ? `rotate(${rotation}deg)` : undefined;
   const textFontCss = getVibeFontCss(vibe?.textStyle?.font || vibe?.font || 'display');
@@ -234,8 +293,8 @@ export const VibeRenderer = memo(function VibeRenderer({
 
   const hasValidMedia = type === 'text'
     ? Boolean(String(vibe?.caption ?? vibe?.content ?? '').trim())
-    : type === 'audio'
-      ? Boolean(mediaUrl)
+    : type === 'event'
+      ? Boolean(eventData?.title || vibe?.caption || vibe?.content || mediaUrl)
       : Boolean(mediaUrl);
 
   if (!hasValidMedia || mediaLoadError) {
@@ -288,13 +347,20 @@ export const VibeRenderer = memo(function VibeRenderer({
     );
   }
 
+  const resolvedEventTitle = eventData?.title || vibe?.caption || vibe?.content || 'Featured Event';
+  const resolvedEventStartsAt = eventData?.startsAt || null;
+  const resolvedEventLocation = eventData?.location || vibe?.location || null;
+  const resolvedEventDescription = eventData?.description || (eventData?.title && vibe?.caption && vibe.caption !== eventData.title ? vibe.caption : null);
+  const resolvedEventCtaText = eventData?.ctaText || vibe?.ctaText || 'RSVP / Details';
+  const resolvedEventCtaUrl = eventData?.ctaUrl || vibe?.ctaUrl || vibe?.linkUrl || null;
+
   return (
     <div
       className={cn(
         'relative w-full h-full flex items-center justify-center overflow-hidden bg-[#060918]',
         className
       )}
-      style={type === 'text' || type === 'audio' ? { background: textBg } : undefined}
+      style={type === 'text' || type === 'audio' || (type === 'event' && !mediaUrl) ? { background: textBg } : undefined}
     >
       {/* Text Vibe Canvas */}
       {type === 'text' && (
@@ -317,18 +383,154 @@ export const VibeRenderer = memo(function VibeRenderer({
       {/* Audio Vibe Canvas */}
       {type === 'audio' && (
         <div className="flex flex-col items-center justify-center px-8 text-center gap-4">
-          <div className="w-24 h-24 rounded-3xl bg-white/15 border border-white/25 backdrop-blur-xl flex items-center justify-center shadow-xl">
+          <audio
+            key={`${mediaUrl}_${retryNonce}`}
+            ref={internalAudioRef}
+            src={mediaUrl}
+            preload="metadata"
+            muted={effectiveMuted}
+            onLoadedMetadata={(e) => {
+              const aud = e.currentTarget;
+              setMediaLoading(false);
+              setIsBuffering(false);
+              const dur = Number.isFinite(aud.duration) && aud.duration > 0
+                ? Math.min(VIBE_LIMITS.AUDIO_MAX_DURATION_SEC, aud.duration)
+                : (Number(vibe?.duration) || 15);
+              onVideoReady?.({ duration: dur });
+              onMediaLoaded?.();
+            }}
+            onWaiting={() => {
+              setIsBuffering(true);
+              onVideoBuffering?.(true);
+            }}
+            onPlaying={() => {
+              setMediaLoading(false);
+              setIsBuffering(false);
+              onVideoBuffering?.(false);
+              if (rafRef.current) cancelAnimationFrame(rafRef.current);
+              rafRef.current = requestAnimationFrame(handleAudioFrameSync);
+            }}
+            onCanPlay={() => {
+              setMediaLoading(false);
+              setIsBuffering(false);
+              onVideoBuffering?.(false);
+            }}
+            onEnded={() => {
+              if (!endedFiredRef.current) {
+                endedFiredRef.current = true;
+                if (interactiveMode === 'preview') {
+                  const aud = internalAudioRef.current;
+                  if (aud) {
+                    aud.currentTime = 0;
+                    endedFiredRef.current = false;
+                    if (!isPaused) aud.play().catch(() => {});
+                  }
+                } else {
+                  onVideoEnded?.();
+                }
+              }
+            }}
+            onError={() => {
+              setMediaLoading(false);
+              setIsBuffering(false);
+              setMediaLoadError(true);
+              onVideoBuffering?.(false);
+              onVideoError?.();
+              onMediaError?.();
+            }}
+            className="hidden"
+          />
+          <div className={cn(
+            'w-24 h-24 rounded-3xl bg-white/15 border border-white/25 backdrop-blur-xl flex items-center justify-center shadow-xl',
+            !isPaused && !effectiveMuted && 'ring-2 ring-white/40 animate-pulse'
+          )}>
             <Music className="w-10 h-10 text-white" aria-hidden="true" />
           </div>
           {(vibe?.caption || vibe?.content) && (
-            <p className="text-lg font-bold text-white max-w-xs">
+            <p className="text-lg font-bold max-w-xs break-words" style={{ color: textColor }}>
               {vibe?.caption || vibe?.content}
             </p>
           )}
-          <span className="text-xs font-medium text-white/80">
+          <span
+            className="text-xs font-semibold px-3 py-1 rounded-full bg-black/25 backdrop-blur-md text-white/90 border border-white/15"
+          >
             {effectiveMuted ? 'Muted — tap speaker to listen' : isPaused ? 'Paused' : 'Playing Audio Vibe'}
           </span>
         </div>
+      )}
+
+      {/* Event Vibe Canvas */}
+      {type === 'event' && (
+        <>
+          {mediaUrl && (
+            <>
+              <LazyImage
+                src={mediaUrl}
+                alt={resolvedEventTitle}
+                loading="eager"
+                fallback={null}
+                referrerPolicy="no-referrer"
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/45 to-black/80" />
+            </>
+          )}
+          <div className="relative z-10 w-full max-w-sm mx-auto px-5">
+            <div className="rounded-3xl bg-black/55 backdrop-blur-2xl border border-white/20 p-5 text-white shadow-2xl space-y-3.5 text-left">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-[11px] font-bold uppercase tracking-wider text-white">
+                <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Event Vibe</span>
+              </div>
+
+              <h3 className="text-xl sm:text-2xl font-extrabold leading-tight break-words">
+                {resolvedEventTitle}
+              </h3>
+
+              {(resolvedEventStartsAt || resolvedEventLocation) && (
+                <div className="space-y-1.5 text-xs text-white/85 font-medium">
+                  {resolvedEventStartsAt && (
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-3.5 h-3.5 text-sky-300 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{resolvedEventStartsAt}</span>
+                    </div>
+                  )}
+                  {resolvedEventLocation && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-rose-300 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{resolvedEventLocation}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {resolvedEventDescription && (
+                <p className="text-xs sm:text-sm text-white/80 leading-relaxed break-words">
+                  {resolvedEventDescription}
+                </p>
+              )}
+
+              {resolvedEventCtaUrl ? (
+                <a
+                  href={resolvedEventCtaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full min-h-[42px] px-4 py-2.5 rounded-2xl text-xs font-bold text-white flex items-center justify-center gap-1.5 shadow-lg"
+                  style={{ background: BRAND_GRADIENT }}
+                >
+                  <span>{resolvedEventCtaText}</span>
+                  <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                </a>
+              ) : (
+                <div
+                  className="w-full min-h-[40px] px-4 py-2 rounded-2xl bg-white/15 border border-white/20 text-xs font-bold text-white flex items-center justify-center"
+                >
+                  {resolvedEventCtaText}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Image Vibe Canvas (with ambient backdrop in contain mode) */}
@@ -509,7 +711,7 @@ export const VibeRenderer = memo(function VibeRenderer({
       )}
 
       {/* Optional Viewer Caption if there are no custom positioned overlays */}
-      {type !== 'text' && (vibe?.caption || vibe?.content) && (
+      {type !== 'text' && type !== 'audio' && type !== 'event' && (vibe?.caption || vibe?.content) && (
         <div
           className={cn(
             'absolute bottom-24 left-4 right-4 z-20 transition-opacity duration-150 pointer-events-none',

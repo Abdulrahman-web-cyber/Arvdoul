@@ -88,6 +88,8 @@ const VideoComments = memo(({
       text: c.content || c.text || '',
       likes: typeof c.likes === 'number' ? c.likes : null,
       isLiked: Array.isArray(c.likesBy) && !!viewerUid && c.likesBy.includes(viewerUid),
+      reactionCounts: c.reactionCounts && typeof c.reactionCounts === 'object' ? { ...c.reactionCounts } : {},
+      userReaction: c.userReaction || null,
       isEdited: Boolean(c.isEdited),
       repliesCount: Math.max(totalReplies, mappedReplies.length),
       createdAt: c.createdAt instanceof Date
@@ -118,7 +120,12 @@ const VideoComments = memo(({
         if (!uid) return;
         const { default: userService } = await import('../../services/userService.js');
         const res = await userService.getBlockedUserIds(uid);
-        if (!cancelled) setBlockedUserIds(new Set(res?.ids || []));
+        if (!cancelled) {
+          const ids = res instanceof Set
+            ? res
+            : new Set(Array.isArray(res) ? res : (res?.ids || []));
+          setBlockedUserIds(ids);
+        }
       } catch (err) {
         console.warn('[VideoComments] blocked-users load failed', err);
       }
@@ -360,9 +367,101 @@ const VideoComments = memo(({
         await getCommentService().removeLikeDislike(commentId, uid);
       }
     } catch (err) {
-      setComments((prev) => applyToggle(prev, wasLiked));
-      console.error('Failed to like comment:', err);
-      toast.error('Could not update reaction');
+      const msg = String(err?.message || '').toLowerCase();
+      if (!wasLiked && msg.includes('already liked')) {
+        // Server already recorded this viewer's like; keep liked state without double counting.
+        setComments((prev) =>
+          prev.map((c) => {
+            if (isReply && parentId && c.id === parentId) {
+              return {
+                ...c,
+                replies: (c.replies || []).map((r) =>
+                  r.id === commentId ? { ...r, isLiked: true, likes: currentTarget.likes } : r
+                ),
+              };
+            }
+            if (!isReply && c.id === commentId) {
+              return { ...c, isLiked: true, likes: currentTarget.likes };
+            }
+            return c;
+          })
+        );
+      } else {
+        setComments((prev) => applyToggle(prev, wasLiked));
+        console.error('Failed to like comment:', err);
+        toast.error('Could not update reaction');
+      }
+    }
+  };
+
+  const handleReactComment = async (commentId, emoji, isReply = false, parentId = null) => {
+    if (!commentId || !emoji) return;
+    if (String(commentId).startsWith('local_')) {
+      toast.info('This comment is still syncing');
+      return;
+    }
+
+    const currentTarget = isReply && parentId
+      ? comments.find((c) => c.id === parentId)?.replies?.find((r) => r.id === commentId)
+      : comments.find((c) => c.id === commentId);
+    if (!currentTarget) return;
+
+    const prevCounts = { ...(currentTarget.reactionCounts || {}) };
+    const prevReaction = currentTarget.userReaction || null;
+    const nextCounts = { ...prevCounts };
+    if (prevReaction) {
+      nextCounts[prevReaction] = Math.max(0, (nextCounts[prevReaction] || 0) - 1);
+    }
+    const nextReaction = prevReaction === emoji ? null : emoji;
+    if (nextReaction) {
+      nextCounts[nextReaction] = (nextCounts[nextReaction] || 0) + 1;
+    }
+
+    const patchReaction = (counts, userReaction) => {
+      setComments((prev) =>
+        prev.map((c) => {
+          if (isReply && parentId && c.id === parentId) {
+            return {
+              ...c,
+              replies: (c.replies || []).map((r) =>
+                r.id === commentId ? { ...r, reactionCounts: counts, userReaction } : r
+              ),
+            };
+          }
+          if (!isReply && c.id === commentId) {
+            return { ...c, reactionCounts: counts, userReaction };
+          }
+          return c;
+        })
+      );
+    };
+
+    patchReaction(nextCounts, nextReaction);
+
+    try {
+      const { getAuthInstance } = await import('../../firebase/firebase.js');
+      const auth = await getAuthInstance();
+      const uid = auth?.currentUser?.uid;
+      if (!uid) {
+        patchReaction(prevCounts, prevReaction);
+        toast.error('Sign in to react to comments');
+        return;
+      }
+      const { getCommentService } = await import('../../services/commentService.js');
+      const res = await getCommentService().addReaction(commentId, uid, emoji);
+      if (res?.success && (res.previousReaction ?? null) !== prevReaction) {
+        const reconciled = { ...prevCounts };
+        if (res.previousReaction) {
+          reconciled[res.previousReaction] = Math.max(0, (reconciled[res.previousReaction] || 0) - 1);
+        }
+        if (res.action !== 'removed') {
+          reconciled[emoji] = (reconciled[emoji] || 0) + 1;
+        }
+        patchReaction(reconciled, res.action === 'removed' ? null : emoji);
+      }
+    } catch (err) {
+      patchReaction(prevCounts, prevReaction);
+      toast.error(err?.message || 'Could not update reaction');
     }
   };
 
@@ -587,6 +686,7 @@ const VideoComments = memo(({
                   hasMoreReplies={Boolean(replyCursorMap[comment.id]) || ((comment.repliesCount || 0) > (comment.replies?.length || 0))}
                   blockedUserIds={blockedUserIds}
                   onLike={handleLike}
+                  onReact={handleReactComment}
                   onReply={() => handleReply(comment)}
                   onEdit={handleEdit}
                   onReport={handleReportComment}
@@ -705,6 +805,7 @@ const CommentItem = memo(({
   hasMoreReplies = false,
   blockedUserIds,
   onLike,
+  onReact,
   onReply,
   onEdit,
   onReport,
@@ -826,7 +927,7 @@ const CommentItem = memo(({
           </p>
         )}
 
-        <div className="flex items-center gap-4 mt-2">
+        <div className="flex flex-wrap items-center gap-3 mt-2">
           <button
             type="button"
             onClick={() => onLike(comment.id, false, null)}
@@ -836,6 +937,42 @@ const CommentItem = memo(({
               className={`w-3.5 h-3.5 ${comment.isLiked ? 'fill-red-400 text-red-400 scale-110' : ''}`}
             />
             <span className="text-xs font-semibold">{comment.likes ?? '—'}</span>
+          </button>
+
+          {['❤️', '🔥', '👏', '😂'].map((emoji) => {
+            const count = Number(comment.reactionCounts?.[emoji] || 0);
+            const isReacted = comment.userReaction === emoji;
+            if (count <= 0 && !isReacted) return null;
+            return (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => onReact?.(comment.id, emoji, false, null)}
+                aria-label={`Toggle ${emoji} reaction (${count})`}
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-semibold border transition-colors ${
+                  isReacted
+                    ? 'bg-purple-500/20 border-purple-400/50 text-purple-300'
+                    : isDark
+                      ? 'bg-white/5 border-white/10 text-white/75 hover:border-white/25'
+                      : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <span>{emoji}</span>
+                <span className="tabular-nums">{count}</span>
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => onReact?.(comment.id, '🔥', false, null)}
+            aria-label="React 🔥"
+            title="Quick react 🔥"
+            className={`text-xs transition-transform hover:scale-110 ${
+              comment.userReaction === '🔥' ? 'opacity-100' : 'opacity-60 hover:opacity-100'
+            }`}
+          >
+            <Smile className="w-3.5 h-3.5" />
           </button>
 
           <button
@@ -1117,6 +1254,7 @@ CommentItem.propTypes = {
   hasMoreReplies: PropTypes.bool,
   blockedUserIds: PropTypes.instanceOf(Set),
   onLike: PropTypes.func.isRequired,
+  onReact: PropTypes.func,
   onReply: PropTypes.func.isRequired,
   onEdit: PropTypes.func.isRequired,
   onReport: PropTypes.func.isRequired,

@@ -582,12 +582,44 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
       });
 
       const giftTxRef = admin.firestore().collection('gift_transactions').doc();
+      const nowGiftTS = admin.firestore.FieldValue.serverTimestamp();
+      const giftExpireAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
       t.set(giftTxRef, {
         senderId: senderUid, receiverId: authorUid, postId, giftType, value: giftValue,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: nowGiftTS,
         idempotencyKey: key,
-        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        expireAt: giftExpireAt,
       });
+
+      const senderTxRef = admin.firestore().collection('coin_transactions').doc();
+      t.set(senderTxRef, {
+        userId: senderUid,
+        type: 'debit',
+        amount: giftValue,
+        reason: 'gift',
+        relatedUserId: authorUid,
+        metadata: { postId, giftType },
+        idempotencyKey: key,
+        balanceAfter: senderNewBalance,
+        createdAt: nowGiftTS,
+        expireAt: giftExpireAt,
+      });
+
+      if (authorUid !== senderUid) {
+        const authorTxRef = admin.firestore().collection('coin_transactions').doc();
+        t.set(authorTxRef, {
+          userId: authorUid,
+          type: 'credit',
+          amount: giftValue,
+          reason: 'gift_received',
+          relatedUserId: senderUid,
+          metadata: { postId, giftType },
+          idempotencyKey: `${key}_rx`,
+          balanceAfter: authorNewBalance,
+          createdAt: nowGiftTS,
+          expireAt: giftExpireAt,
+        });
+      }
 
       createLedgerEntry(t, `users:${senderUid}`, `users:${authorUid}`, giftValue, { reason: 'gift', postId, giftType, transactionId: giftTxRef.id });
 
@@ -1679,12 +1711,13 @@ exports.getSubscriptionStatus = functions.https.onCall(async (data, context) => 
   try {
     const uid = getUserIdFromContext(context);
     const snap = await admin.firestore().collection('subscriptions').doc(uid).get();
-    if (!snap.exists) return { success: true, active: false, subscription: null };
+    if (!snap.exists) return { success: true, active: false, tier: null, subscription: null };
     const sub = snap.data();
     const active = sub.status === 'active';
     return {
       success: true,
       active,
+      tier: active ? (sub.tier || null) : null,
       subscription: {
         ...sub,
         currentPeriodEnd: sub.currentPeriodEnd?.toDate?.()?.toISOString?.() || sub.currentPeriodEnd || null,
@@ -1972,6 +2005,11 @@ exports.watchAd = functions.https.onCall(async (data, context) => {
       const { coins: oldBalance } = await readCoinBalance(t, uid, { fallbackToPublic: true });
       const newBalance = oldBalance + reward;
       writeCoinBalance(t, uid, { coins: newBalance });
+      t.set(
+        admin.firestore().collection('system').doc('coin_supply'),
+        { totalCoins: admin.firestore.FieldValue.increment(reward) },
+        { merge: true }
+      );
 
       const impRef = admin.firestore().collection('ad_impressions').doc();
       t.set(impRef, {
@@ -2346,12 +2384,21 @@ exports.sendLiveGift = functions.https.onCall(async (data, context) => {
       });
 
       const txRef = admin.firestore().collection('coin_transactions').doc();
+      const rxTxRef = admin.firestore().collection('coin_transactions').doc();
+      const liveGiftExpireAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
       t.set(txRef, {
         userId: senderUid, type: 'debit', amount: giftValue, reason: 'live_gift',
         relatedUserId: recipientUid, metadata: { streamId, giftType },
         idempotencyKey: key, balanceAfter: senderNewBalance,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        expireAt: liveGiftExpireAt,
+      });
+      t.set(rxTxRef, {
+        userId: recipientUid, type: 'credit', amount: giftValue, reason: 'live_gift',
+        relatedUserId: senderUid, metadata: { streamId, giftType },
+        idempotencyKey: `${key}_rx`, balanceAfter: recipientNewBalance,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: liveGiftExpireAt,
       });
 
       createLedgerEntry(t, `users:${senderUid}`, `users:${recipientUid}`, giftValue, {
@@ -2485,12 +2532,21 @@ exports.sendLiveTip = functions.https.onCall(async (data, context) => {
       });
 
       const txRef = admin.firestore().collection('coin_transactions').doc();
+      const rxTxRef = admin.firestore().collection('coin_transactions').doc();
+      const liveTipExpireAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
       t.set(txRef, {
         userId: senderUid, type: 'debit', amount, reason: 'live_tip',
         relatedUserId: recipientUid, metadata: { streamId },
         idempotencyKey: key, balanceAfter: senderNewBalance,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        expireAt: liveTipExpireAt,
+      });
+      t.set(rxTxRef, {
+        userId: recipientUid, type: 'credit', amount, reason: 'live_tip',
+        relatedUserId: senderUid, metadata: { streamId },
+        idempotencyKey: `${key}_rx`, balanceAfter: recipientNewBalance,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: liveTipExpireAt,
       });
 
       createLedgerEntry(t, `users:${senderUid}`, `users:${recipientUid}`, amount, {
@@ -2706,6 +2762,8 @@ exports.sendVibeGift = functions.https.onCall(async (data, context) => {
       });
 
       const coinTxRef = db.collection('coin_transactions').doc();
+      const creatorTxRef = db.collection('coin_transactions').doc();
+      const vibeGiftExpireAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
       t.set(coinTxRef, {
         userId: senderUid,
         type: 'debit',
@@ -2716,7 +2774,19 @@ exports.sendVibeGift = functions.https.onCall(async (data, context) => {
         idempotencyKey: key,
         balanceAfter: senderNewBalance,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        expireAt: vibeGiftExpireAt,
+      });
+      t.set(creatorTxRef, {
+        userId: creatorUid,
+        type: 'credit',
+        amount: giftValue,
+        reason: 'vibe_gift_received',
+        relatedUserId: senderUid,
+        metadata: { vibeId, giftType },
+        idempotencyKey: `${key}_rx`,
+        balanceAfter: creatorNewBalance,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: vibeGiftExpireAt,
       });
 
       createLedgerEntry(t, `users:${senderUid}`, `users:${creatorUid}`, giftValue, {

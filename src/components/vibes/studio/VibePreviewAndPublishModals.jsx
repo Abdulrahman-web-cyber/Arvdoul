@@ -53,7 +53,7 @@ export function VibePreviewModal({
               </div>
 
               <div className="flex items-center gap-1.5">
-                {previewVibe.type === 'video' && (
+                {(previewVibe.type === 'video' || previewVibe.type === 'audio' || previewVibe.music?.audioUrl) && (
                   <button
                     type="button"
                     onClick={() => setMuted((m) => !m)}

@@ -33,17 +33,35 @@ jest.mock('sonner', () => ({
 }));
 
 const mockGetStoriesFeed = jest.fn();
+const mockGetCachedFeedSnapshot = jest.fn(() => null);
+const mockGetStoryByIdForDeepLink = jest.fn();
+const mockGetStoryInsights = jest.fn();
+const mockGetStoryViewers = jest.fn();
 const mockReportStoryView = jest.fn(async () => {});
 const mockReportStoryCompletion = jest.fn(async () => {});
 const mockDeleteStory = jest.fn(async () => ({ success: true }));
 const mockGetArchivedStories = jest.fn();
 const mockDeleteArchivedStory = jest.fn(async () => ({ success: true }));
 const mockTrackStoryAnalytics = jest.fn(async () => {});
+const mockSendVibeGift = jest.fn(async () => ({ success: true, newBalance: 725, coinsSpent: 25 }));
+const mockGetBalance = jest.fn(async () => 750);
+
+jest.mock('../services/monetizationService', () => ({
+  __esModule: true,
+  getMonetizationService: () => ({
+    getBalance: (...a) => mockGetBalance(...a),
+    sendVibeGift: (...a) => mockSendVibeGift(...a),
+  }),
+}));
 
 jest.mock('../services/storyService', () => ({
   __esModule: true,
   default: {
     getStoriesFeed: (...a) => mockGetStoriesFeed(...a),
+    getCachedFeedSnapshot: (...a) => mockGetCachedFeedSnapshot(...a),
+    getStoryByIdForDeepLink: (...a) => mockGetStoryByIdForDeepLink(...a),
+    getStoryInsights: (...a) => mockGetStoryInsights(...a),
+    getStoryViewers: (...a) => mockGetStoryViewers(...a),
     reportStoryView: (...a) => mockReportStoryView(...a),
     reportStoryCompletion: (...a) => mockReportStoryCompletion(...a),
     deleteStory: (...a) => mockDeleteStory(...a),
@@ -53,6 +71,10 @@ jest.mock('../services/storyService', () => ({
   },
   getStoryService: () => ({
     getStoriesFeed: (...a) => mockGetStoriesFeed(...a),
+    getCachedFeedSnapshot: (...a) => mockGetCachedFeedSnapshot(...a),
+    getStoryByIdForDeepLink: (...a) => mockGetStoryByIdForDeepLink(...a),
+    getStoryInsights: (...a) => mockGetStoryInsights(...a),
+    getStoryViewers: (...a) => mockGetStoryViewers(...a),
     reportStoryView: (...a) => mockReportStoryView(...a),
     reportStoryCompletion: (...a) => mockReportStoryCompletion(...a),
     deleteStory: (...a) => mockDeleteStory(...a),
@@ -60,6 +82,7 @@ jest.mock('../services/storyService', () => ({
     deleteArchivedStory: (...a) => mockDeleteArchivedStory(...a),
     trackStoryAnalytics: (...a) => mockTrackStoryAnalytics(...a),
   }),
+  buildVibeDeepLink: (id) => `https://arvdoul.app/stories?vibeId=${id}`,
 }));
 
 jest.mock('../services/socialGraphService.js', () => ({
@@ -204,5 +227,91 @@ describe('StoriesScreen Directory, Fullscreen Viewer & Archive', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(mockDeleteArchivedStory).toHaveBeenCalledWith('arch_1'));
+  });
+
+  test('deep-link ?vibeId= opens exact slide and allows sending gift via single-source Vibe Gift Picker', async () => {
+    mockGetStoriesFeed.mockResolvedValue({
+      groups: [
+        {
+          userId: 'creator_2',
+          stories: [
+            { id: 's_first', userId: 'creator_2', type: 'text', content: 'First Slide', seen: true, createdAt: new Date() },
+            { id: 's_target', userId: 'creator_2', type: 'text', content: 'Target Deep Link Slide', seen: false, createdAt: new Date() },
+          ],
+        },
+      ],
+      hasMore: false,
+      cached: false,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/stories?vibeId=s_target']}>
+        <Routes>
+          <Route path="/stories" element={<StoriesScreen />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const viewerDialog = await screen.findByRole('dialog', { name: /Viewing Vibes by Nadia Vance/i });
+    expect(within(viewerDialog).getByText('Target Deep Link Slide')).toBeInTheDocument();
+
+    // Open Gift Picker
+    fireEvent.click(within(viewerDialog).getByRole('button', { name: 'Send Gift on this Vibe' }));
+    const giftDialog = await screen.findByRole('dialog', { name: 'Send Vibe Gift' });
+    expect(await within(giftDialog).findByText('750 Coins')).toBeInTheDocument();
+
+    // Choose Star (25 coins) and send
+    fireEvent.click(within(giftDialog).getByRole('button', { name: /Star/i }));
+    fireEvent.click(within(giftDialog).getByRole('button', { name: 'Send Star' }));
+
+    await waitFor(() => expect(mockSendVibeGift).toHaveBeenCalledWith('s_target', 'star'));
+  });
+
+  test('owner Insights drawer displays Viewers, Reactions, and Gifts tabs from getStoryViewers/insights', async () => {
+    mockGetStoriesFeed.mockResolvedValue({
+      groups: [
+        {
+          userId: 'viewer_1',
+          stories: [
+            { id: 'own_insight', userId: 'viewer_1', type: 'text', content: 'Insights Slide', seen: true, createdAt: new Date() },
+          ],
+        },
+      ],
+      hasMore: false,
+      cached: false,
+    });
+    mockGetStoryViewers.mockResolvedValue({
+      viewers: [
+        { userId: 'creator_2', profile: { id: 'creator_2', displayName: 'Nadia Vance', username: 'nadiavance' }, completed: true },
+      ],
+      reactors: [
+        { userId: 'creator_2', displayName: 'Nadia Vance', username: 'nadiavance', reaction: '❤️' },
+      ],
+      gifts: [
+        { id: 'g1', senderId: 'creator_2', displayName: 'Nadia Vance', giftType: 'star', coins: 25 },
+      ],
+      insights: { viewsCount: 12, uniqueViewersCount: 10, totalReactions: 4, totalReplies: 2, totalGiftsCoins: 25 },
+      showReactionDetails: true,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/stories?vibeId=own_insight']}>
+        <Routes>
+          <Route path="/stories" element={<StoriesScreen />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const viewerDialog = await screen.findByRole('dialog', { name: /Viewing Vibes by Viewer One/i });
+    fireEvent.click(within(viewerDialog).getByRole('button', { name: 'See who viewed this Vibe' }));
+
+    const insightsDialog = await screen.findByRole('dialog', { name: 'Vibe viewers' });
+    expect(await within(insightsDialog).findByText('Nadia Vance')).toBeInTheDocument();
+
+    fireEvent.click(within(insightsDialog).getByRole('button', { name: /Reactions \(1\)/i }));
+    expect(within(insightsDialog).getByText('Nadia Vance')).toBeInTheDocument();
+
+    fireEvent.click(within(insightsDialog).getByRole('button', { name: /Gifts \(1\)/i }));
+    expect(within(insightsDialog).getByText(/\+25\s*Coins/i)).toBeInTheDocument();
   });
 });

@@ -22,7 +22,7 @@ import {
   X, Zap, RefreshCw, Sliders, Type, Smile, Music, BarChart2, HelpCircle,
   AtSign, MapPin, Link2, Timer, ChevronRight, Sparkles, Send, Check,
   Video, Square, Image as ImageIcon, Mic, Camera, Eye, Scissors,
-  Brush, Shield, Save, FolderOpen, Trash2, AlignLeft, AlignCenter, AlignRight
+  Brush, Shield, Save, FolderOpen, Trash2, AlignLeft, AlignCenter, AlignRight, Calendar
 } from 'lucide-react';
 import { getStoryService } from '../services/storyService';
 import GIFPicker from '../components/Shared/GIFPicker';
@@ -37,6 +37,8 @@ import {
   VIBE_UPLOAD_STATES,
   getAudienceMeta,
   getVibeFontCss,
+  inferVibeMediaKindAndMime,
+  validateVibeEvent,
   validateVibeMedia,
   validateVibeText,
   validateAudienceSelection,
@@ -67,7 +69,7 @@ const CREATIVE_TOOLS = [
   { id: 'timer', label: 'Countdown', icon: Timer },
 ];
 
-const CAPTURE_MODES = ['STORY', 'TEXT', 'PHOTO', 'VIDEO', 'AUDIO'];
+const CAPTURE_MODES = ['STORY', 'TEXT', 'PHOTO', 'VIDEO', 'AUDIO', 'EVENT'];
 
 const DEFAULT_MEDIA_EDITS = {
   aspectRatio: 'original',
@@ -165,6 +167,17 @@ export default function CreateStory() {
   const [mentionHandle, setMentionHandle] = useState('');
   const [storyTimer, setStoryTimer] = useState(0);
 
+  // Event Vibe State
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventStartsAt, setEventStartsAt] = useState('');
+  const [eventLocation, setEventLocation] = useState('');
+  const [eventCtaText, setEventCtaText] = useState('RSVP / Details');
+  const [eventCtaUrl, setEventCtaUrl] = useState('');
+  const [eventDescription, setEventDescription] = useState('');
+
+  // Audio Mic Recording State
+  const [audioPermission, setAudioPermission] = useState('idle'); // idle | requesting | granted | denied | unavailable
+
   // Audience & Preview & Publish State
   const [audience, setAudience] = useState('public');
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -185,6 +198,7 @@ export default function CreateStory() {
   const fileInputRef = useRef(null);
   const timerRef = useRef(null);
   const recorderRef = useRef(null);
+  const audioStreamRef = useRef(null);
   const chunksRef = useRef([]);
   const recordedSecondsRef = useRef(0);
   const previewUrlRef = useRef(null);
@@ -200,6 +214,13 @@ export default function CreateStory() {
     }
     previewUrlRef.current = url;
     setCapturedPreview(url);
+  }, []);
+
+  const stopAudioStream = useCallback(() => {
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach((track) => track.stop());
+      audioStreamRef.current = null;
+    }
   }, []);
 
   const stopCameraStream = useCallback(() => {
@@ -257,8 +278,8 @@ export default function CreateStory() {
     }
   }, [user?.uid]);
 
-  const requestCameraAccess = useCallback(async (overrideFacing = facingMode) => {
-    if (activeMode === 'TEXT' || activeMode === 'AUDIO') {
+  const requestCameraAccess = useCallback(async (overrideFacing = facingMode, overrideMode = activeMode) => {
+    if (overrideMode === 'TEXT' || overrideMode === 'AUDIO' || overrideMode === 'EVENT') {
       stopCameraStream();
       setCameraPermission('idle');
       return;
@@ -269,12 +290,13 @@ export default function CreateStory() {
     }
     setCameraPermission('requesting');
     stopCameraStream();
+    const needsAudioTrack = overrideMode === 'VIDEO' || overrideMode === 'STORY';
     try {
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: overrideFacing, width: { ideal: 1080 }, height: { ideal: 1920 } },
-          audio: activeMode === 'VIDEO',
+          audio: needsAudioTrack,
         });
       } catch {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -300,16 +322,17 @@ export default function CreateStory() {
     }
   }, [activeMode, facingMode, stopCameraStream]);
 
-  // Cleanup camera & blob URLs on unmount
+  // Cleanup camera, mic & blob URLs on unmount
   useEffect(() => {
     return () => {
       stopCameraStream();
+      stopAudioStream();
       if (timerRef.current) clearInterval(timerRef.current);
       if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrlRef.current);
       }
     };
-  }, [stopCameraStream]);
+  }, [stopCameraStream, stopAudioStream]);
 
   const handleFlipCamera = () => {
     const next = facingMode === 'user' ? 'environment' : 'user';
@@ -410,6 +433,98 @@ export default function CreateStory() {
     }
   }, [isRecording]);
 
+  const stopAudioRecording = useCallback(() => {
+    if (!isRecording) return;
+    setIsRecording(false);
+    if (timerRef.current) clearInterval(timerRef.current);
+    try {
+      if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+        recorderRef.current.stop();
+      } else {
+        stopAudioStream();
+      }
+    } catch {
+      stopAudioStream();
+      toast.error('Could not stop audio recording cleanly.');
+    }
+  }, [isRecording, stopAudioStream]);
+
+  const startAudioRecording = useCallback(async () => {
+    if (capturedPreview || isRecording) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setAudioPermission('unavailable');
+      toast.error('Microphone recording is unavailable on this browser. Upload an audio clip instead.');
+      return;
+    }
+
+    setAudioPermission('requesting');
+    stopAudioStream();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+      setAudioPermission('granted');
+
+      const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/ogg'];
+      const mime = candidates.find((c) => MediaRecorder.isTypeSupported?.(c)) || '';
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      recorderRef.current = recorder;
+      chunksRef.current = [];
+      recordedSecondsRef.current = 0;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        stopAudioStream();
+        const baseMime = (mime || recorder.mimeType || 'audio/webm').split(';')[0].trim();
+        const ext = baseMime.includes('mp4') ? 'm4a' : baseMime.includes('ogg') ? 'ogg' : 'webm';
+        const blob = new Blob(chunksRef.current, { type: baseMime });
+        const secs = Math.max(1, Math.min(VIBE_LIMITS.AUDIO_MAX_DURATION_SEC, recordedSecondsRef.current || 1));
+        if (blob.size > 0) {
+          const file = new File([blob], `vibe-audio-${Date.now()}.${ext}`, { type: baseMime });
+          const url = URL.createObjectURL(file);
+          setMediaFile(file);
+          setMediaType('audio');
+          setNativeDuration(secs);
+          setMediaDuration(secs);
+          setMediaEdits(DEFAULT_MEDIA_EDITS);
+          setPreviewSafely(url);
+          toast.success(`Audio recorded (${secs}s)`);
+        } else {
+          toast.error('Audio recording produced no data. Try again.');
+        }
+      };
+
+      recorder.start(250);
+      setIsRecording(true);
+      setRecordSeconds(0);
+      timerRef.current = setInterval(() => {
+        setRecordSeconds((sec) => {
+          const next = sec + 1;
+          recordedSecondsRef.current = next;
+          if (next >= VIBE_LIMITS.AUDIO_MAX_DURATION_SEC) {
+            if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+              recorderRef.current.stop();
+            }
+            setIsRecording(false);
+            clearInterval(timerRef.current);
+            return VIBE_LIMITS.AUDIO_MAX_DURATION_SEC;
+          }
+          return next;
+        });
+      }, 1000);
+    } catch (err) {
+      const name = err?.name || '';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        setAudioPermission('denied');
+        toast.error('Microphone permission denied. Allow mic access or upload an audio file.');
+      } else {
+        setAudioPermission('unavailable');
+        toast.error('Could not access microphone. Try uploading an audio file.');
+      }
+    }
+  }, [capturedPreview, isRecording, setPreviewSafely, stopAudioStream]);
+
   const handleCapturePhoto = useCallback(() => {
     if (!cameraActive || !videoRef.current) {
       requestCameraAccess();
@@ -441,9 +556,44 @@ export default function CreateStory() {
     );
   }, [cameraActive, requestCameraAccess, setPreviewSafely]);
 
+  const handleSelectCaptureMode = useCallback((mode) => {
+    if (isRecording) {
+      if (activeMode === 'AUDIO') stopAudioRecording();
+      else stopVideoRecording();
+    }
+    setActiveMode(mode);
+    if (mode === 'TEXT' || mode === 'AUDIO' || mode === 'EVENT') {
+      stopCameraStream();
+      setCameraPermission('idle');
+    } else if ((mode === 'VIDEO' || mode === 'STORY') && cameraActive) {
+      const hasAudio = Boolean(videoRef.current?.srcObject?.getAudioTracks?.().length);
+      if (!hasAudio) {
+        requestCameraAccess(facingMode, mode);
+      }
+    }
+  }, [activeMode, cameraActive, facingMode, isRecording, requestCameraAccess, stopAudioRecording, stopCameraStream, stopVideoRecording]);
+
   const handleShutterClick = () => {
     if (holdActiveRef.current) {
       holdActiveRef.current = false;
+      return;
+    }
+    if (activeMode === 'EVENT') {
+      if (capturedPreview) {
+        clearPreview();
+      } else {
+        fileInputRef.current?.click();
+      }
+      return;
+    }
+    if (activeMode === 'AUDIO') {
+      if (capturedPreview) {
+        clearPreview();
+      } else if (isRecording) {
+        stopAudioRecording();
+      } else {
+        startAudioRecording();
+      }
       return;
     }
     if (capturedPreview) {
@@ -463,7 +613,7 @@ export default function CreateStory() {
   };
 
   const handleShutterHoldStart = () => {
-    if (activeMode === 'VIDEO' || activeMode === 'TEXT' || activeMode === 'AUDIO' || capturedPreview || !cameraActive) return;
+    if (activeMode !== 'STORY' || capturedPreview || !cameraActive) return;
     holdActiveRef.current = false;
     timerRef.current = setTimeout(() => {
       holdActiveRef.current = true;
@@ -476,41 +626,58 @@ export default function CreateStory() {
       clearTimeout(timerRef.current);
       return;
     }
-    if (isRecording && activeMode !== 'VIDEO') {
+    if (isRecording && activeMode === 'STORY') {
       stopVideoRecording();
     }
   };
 
   const handleFilePicked = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFile = e.target.files?.[0];
+    if (!rawFile) return;
     e.target.value = '';
 
-    const isAud = file.type.startsWith('audio/');
-    if (isAud) {
-      if (file.size > VIBE_LIMITS.AUDIO_MAX_BYTES) {
-        toast.error('Audio clip must be 25 MB or smaller.');
-        return;
-      }
-      const url = URL.createObjectURL(file);
-      const dur = await probeMediaDuration(url, 'audio');
-      setMediaFile(file);
-      setMediaType('audio');
-      setNativeDuration(dur);
-      setMediaDuration(Math.min(60, Math.round(dur)));
-      setActiveMode('AUDIO');
-      setMediaEdits(DEFAULT_MEDIA_EDITS);
-      setPreviewSafely(url);
-      return;
-    }
+    const inferred = inferVibeMediaKindAndMime(rawFile, activeMode === 'AUDIO' ? 'audio' : null);
+    const file = (!rawFile.type && inferred.mime)
+      ? new File([rawFile], rawFile.name, { type: inferred.mime, lastModified: rawFile.lastModified || Date.now() })
+      : rawFile;
 
-    const preCheck = validateVibeMedia(file);
+    const preCheck = validateVibeMedia(file, {
+      expectedKind: activeMode === 'AUDIO' ? 'audio' : activeMode === 'EVENT' ? 'image' : null,
+    });
     if (!preCheck.valid) {
       toast.error(preCheck.error);
       return;
     }
 
     const url = URL.createObjectURL(file);
+    if (activeMode === 'EVENT') {
+      if (preCheck.kind !== 'image') {
+        URL.revokeObjectURL(url);
+        toast.error('Select an image as your Event Vibe cover.');
+        return;
+      }
+      setMediaFile(file);
+      setMediaType('image');
+      setMediaDuration(VIBE_LIMITS.EVENT_DEFAULT_DURATION_SEC);
+      setMediaEdits(DEFAULT_MEDIA_EDITS);
+      setPreviewSafely(url);
+      toast.success('Event cover image attached');
+      return;
+    }
+
+    if (preCheck.kind === 'audio') {
+      const dur = await probeMediaDuration(url, 'audio');
+      const clampedAudioDur = Math.min(VIBE_LIMITS.AUDIO_MAX_DURATION_SEC, Math.max(1, Math.round(dur)));
+      setMediaFile(file);
+      setMediaType('audio');
+      setNativeDuration(dur);
+      setMediaDuration(clampedAudioDur);
+      setActiveMode('AUDIO');
+      setMediaEdits(DEFAULT_MEDIA_EDITS);
+      setPreviewSafely(url);
+      return;
+    }
+
     if (preCheck.kind === 'video') {
       const rawDur = await probeMediaDuration(url, 'video');
       const clampedDur = Math.min(VIBE_LIMITS.VIDEO_MAX_DURATION_SEC, Math.max(1, Math.round(rawDur)));
@@ -540,12 +707,12 @@ export default function CreateStory() {
       return;
     }
     const canvas = document.createElement('canvas');
-    canvas.width = Math.min(720, vid.videoWidth);
+    canvas.width = Math.min(360, vid.videoWidth);
     canvas.height = Math.round((vid.videoHeight / vid.videoWidth) * canvas.width);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-    const coverDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const coverDataUrl = canvas.toDataURL('image/jpeg', 0.72);
     setMediaEdits((prev) => ({ ...prev, coverUrl: coverDataUrl }));
     toast.success('Cover frame saved');
   };
@@ -645,15 +812,30 @@ export default function CreateStory() {
   };
 
   const isTextMode = activeMode === 'TEXT';
-  const canPublish = isTextMode ? storyText.trim().length > 0 : Boolean(mediaFile);
+  const isEventMode = activeMode === 'EVENT';
+  const isAudioMode = activeMode === 'AUDIO';
+  const canPublish = isTextMode
+    ? storyText.trim().length > 0
+    : isEventMode
+      ? eventTitle.trim().length > 0
+      : Boolean(mediaFile);
+
+  const normalizedEventDraft = useMemo(() => ({
+    title: eventTitle.trim(),
+    startsAt: eventStartsAt.trim() || null,
+    location: eventLocation.trim() || null,
+    ctaText: eventCtaText.trim() || 'RSVP / Details',
+    ctaUrl: eventCtaUrl.trim() || null,
+    description: eventDescription.trim() || null,
+  }), [eventTitle, eventStartsAt, eventLocation, eventCtaText, eventCtaUrl, eventDescription]);
 
   const previewVibeObject = useMemo(() => ({
     id: 'studio_preview',
-    type: isTextMode ? 'text' : mediaType,
+    type: isTextMode ? 'text' : isEventMode ? 'event' : mediaType,
     url: isTextMode ? '' : (capturedPreview || ''),
-    caption: storyText.trim(),
-    content: storyText.trim(),
-    duration: isTextMode ? 6 : mediaDuration,
+    caption: isEventMode ? eventTitle.trim() : storyText.trim(),
+    content: isEventMode ? eventTitle.trim() : storyText.trim(),
+    duration: isTextMode ? 6 : isEventMode ? VIBE_LIMITS.EVENT_DEFAULT_DURATION_SEC : mediaDuration,
     backgroundColor: backgroundGradient,
     textColor,
     textStyle: {
@@ -666,8 +848,14 @@ export default function CreateStory() {
     textOverlays: sanitizeTextOverlays(textOverlays),
     drawingPaths: sanitizeDrawingPaths(drawingPaths),
     music: selectedMusic,
+    eventData: isEventMode ? normalizedEventDraft : null,
+    ctaText: isEventMode ? normalizedEventDraft.ctaText : '',
+    ctaUrl: isEventMode ? normalizedEventDraft.ctaUrl : '',
   }), [
     isTextMode,
+    isEventMode,
+    eventTitle,
+    normalizedEventDraft,
     mediaType,
     capturedPreview,
     storyText,
@@ -689,19 +877,20 @@ export default function CreateStory() {
       return null;
     }
     if (!canPublish && textOverlays.length === 0 && drawingPaths.length === 0) {
-      if (!silent) toast.error('Add media or text before saving a draft.');
+      if (!silent) toast.error('Add media, event details, or text before saving a draft.');
       return null;
     }
     try {
+      const targetDraftType = isTextMode ? 'text' : isEventMode ? 'event' : mediaType;
       const saved = await vibeDraftService.saveDraft(user.uid, {
         id: activeDraftId || undefined,
         idempotencyKey,
-        type: isTextMode ? 'text' : mediaType,
-        content: storyText,
+        type: targetDraftType,
+        content: isEventMode ? eventTitle : storyText,
         mediaBlob: isTextMode ? null : mediaFile,
         mediaName: mediaFile?.name || null,
         mediaType: mediaFile?.type || null,
-        duration: isTextMode ? 6 : mediaDuration,
+        duration: isTextMode ? 6 : isEventMode ? VIBE_LIMITS.EVENT_DEFAULT_DURATION_SEC : mediaDuration,
         nativeDuration,
         backgroundColor: backgroundGradient,
         textColor,
@@ -711,8 +900,19 @@ export default function CreateStory() {
         drawingPaths,
         visibility: audience,
         selectedUsers,
-        location: storyLocation,
-        linkUrl,
+        location: isEventMode ? eventLocation : storyLocation,
+        linkUrl: isEventMode ? eventCtaUrl : linkUrl,
+        ctaText: isEventMode ? normalizedEventDraft.ctaText : '',
+        ctaUrl: isEventMode ? (normalizedEventDraft.ctaUrl || '') : '',
+        eventData: isEventMode ? normalizedEventDraft : null,
+        music: selectedMusic || null,
+        pollQuestion,
+        pollOption1,
+        pollOption2,
+        questionPrompt,
+        mentionHandle,
+        selectedGif: selectedGif || null,
+        storyTimer: Number(storyTimer) || 0,
       });
       setActiveDraftId(saved.id);
       setIdempotencyKey(saved.idempotencyKey);
@@ -741,8 +941,36 @@ export default function CreateStory() {
     setSelectedUsers(Array.isArray(draft.selectedUsers) ? draft.selectedUsers : []);
     setStoryLocation(draft.location || '');
     setLinkUrl(draft.linkUrl || '');
+    setSelectedMusic(draft.music || null);
+    setPollQuestion(draft.pollQuestion || '');
+    setPollOption1(draft.pollOption1 || '');
+    setPollOption2(draft.pollOption2 || '');
+    setQuestionPrompt(draft.questionPrompt || '');
+    setMentionHandle(draft.mentionHandle || '');
+    setSelectedGif(draft.selectedGif || null);
+    setStoryTimer(Number(draft.storyTimer) || 0);
 
-    if (draft.type === 'text' || !draft.mediaBlob) {
+    if (draft.type === 'event') {
+      const ev = draft.eventData || {};
+      setEventTitle(ev.title || draft.content || '');
+      setEventStartsAt(ev.startsAt || '');
+      setEventLocation(ev.location || draft.location || '');
+      setEventCtaText(ev.ctaText || draft.ctaText || 'RSVP / Details');
+      setEventCtaUrl(ev.ctaUrl || draft.ctaUrl || draft.linkUrl || '');
+      setEventDescription(ev.description || '');
+      if (draft.mediaBlob) {
+        const restoredCover = draft.mediaBlob instanceof File
+          ? draft.mediaBlob
+          : new File([draft.mediaBlob], draft.mediaName || `event-cover-${Date.now()}.jpg`, { type: draft.mediaType || 'image/jpeg' });
+        const url = URL.createObjectURL(restoredCover);
+        setMediaFile(restoredCover);
+        setMediaType('image');
+        setPreviewSafely(url);
+      } else {
+        clearPreview();
+      }
+      setActiveMode('EVENT');
+    } else if (draft.type === 'text' || !draft.mediaBlob) {
       clearPreview();
       setActiveMode('TEXT');
     } else {
@@ -775,23 +1003,46 @@ export default function CreateStory() {
       return;
     }
 
+    let validatedEvent = null;
     if (isTextMode) {
       const textValidation = validateVibeText(storyText);
       if (!textValidation.valid) {
         toast.error(textValidation.error);
         return;
       }
+    } else if (isEventMode) {
+      const eventValidation = validateVibeEvent({
+        title: eventTitle,
+        startsAt: eventStartsAt,
+        location: eventLocation,
+        ctaText: eventCtaText,
+        ctaUrl: eventCtaUrl,
+        description: eventDescription,
+      });
+      if (!eventValidation.valid) {
+        toast.error(eventValidation.error);
+        return;
+      }
+      validatedEvent = eventValidation.eventData;
+      if (mediaFile) {
+        const coverValidation = validateVibeMedia(mediaFile, { expectedKind: 'image' });
+        if (!coverValidation.valid) {
+          toast.error(coverValidation.error);
+          return;
+        }
+      }
     } else {
       if (!mediaFile) {
         toast.error('Capture or select a photo, video, or audio clip.');
         return;
       }
-      if (mediaType !== 'audio') {
-        const mediaValidation = validateVibeMedia(mediaFile, { durationSec: mediaDuration });
-        if (!mediaValidation.valid) {
-          toast.error(mediaValidation.error);
-          return;
-        }
+      const mediaValidation = validateVibeMedia(mediaFile, {
+        durationSec: mediaDuration,
+        expectedKind: mediaType === 'audio' ? 'audio' : null,
+      });
+      if (!mediaValidation.valid) {
+        toast.error(mediaValidation.error);
+        return;
       }
     }
 
@@ -804,7 +1055,7 @@ export default function CreateStory() {
     }
 
     const vibeSafety = evaluateContentSafety({
-      text: storyText,
+      text: isEventMode ? `${eventTitle}\n${eventDescription}` : storyText,
       extraFields: [
         ...(Array.isArray(textOverlays) ? textOverlays.map((ov) => ov?.text || '') : []),
         pollQuestion,
@@ -814,6 +1065,9 @@ export default function CreateStory() {
         storyLocation,
         linkUrl,
         mentionHandle,
+        eventLocation,
+        eventCtaText,
+        eventCtaUrl,
         mediaFile?.name || '',
       ],
     });
@@ -832,14 +1086,14 @@ export default function CreateStory() {
 
     try {
       const storyService = getStoryService();
-      const targetType = isTextMode ? 'text' : mediaType;
+      const targetType = isTextMode ? 'text' : isEventMode ? 'event' : mediaType;
       const cleanPoll = pollQuestion.trim() && pollOption1.trim() && pollOption2.trim()
         ? { question: pollQuestion.trim(), options: [pollOption1.trim(), pollOption2.trim()] }
         : null;
 
       let uploadFile = isTextMode ? null : mediaFile;
       let normalizedEdits = { ...mediaEdits };
-      if (targetType === 'image' && uploadFile && capturedPreview) {
+      if ((targetType === 'image' || (targetType === 'event' && uploadFile)) && capturedPreview) {
         uploadFile = await bakeEditedImageFile(uploadFile, capturedPreview, mediaEdits);
         normalizedEdits = {
           ...mediaEdits,
@@ -854,11 +1108,13 @@ export default function CreateStory() {
         ? Math.max(1, Math.min(VIBE_LIMITS.VIDEO_MAX_DURATION_SEC, Math.round((mediaEdits.trimEnd ?? mediaDuration) - (mediaEdits.trimStart ?? 0))))
         : isTextMode
           ? 6
-          : mediaDuration;
+          : isEventMode
+            ? VIBE_LIMITS.EVENT_DEFAULT_DURATION_SEC
+            : mediaDuration;
 
       const storyPayload = {
         type: targetType,
-        content: storyText.trim(),
+        content: isEventMode ? (validatedEvent?.title || '') : storyText.trim(),
         mediaFile: uploadFile,
         duration: clippedDuration,
         backgroundColor: backgroundGradient || '#0c0f24',
@@ -869,13 +1125,20 @@ export default function CreateStory() {
         drawingPaths: sanitizeDrawingPaths(drawingPaths),
         poll: cleanPoll,
         music: selectedMusic || null,
-        linkUrl: linkUrl.trim() || null,
-        location: storyLocation.trim() || null,
+        linkUrl: (isEventMode ? validatedEvent?.ctaUrl : linkUrl.trim()) || null,
+        location: (isEventMode ? (validatedEvent?.location || storyLocation.trim()) : storyLocation.trim()) || null,
         taggedUsers: mentionHandle.trim() ? [mentionHandle.trim().replace(/^@/, '')] : [],
         stickers: buildStickers(),
         visibility: audience,
         selectedUserIds: audienceCheck.selectedUserIds,
         idempotencyKey,
+        ...(isEventMode && validatedEvent
+          ? {
+              eventData: validatedEvent,
+              ctaText: validatedEvent.ctaText,
+              ctaUrl: validatedEvent.ctaUrl,
+            }
+          : {}),
       };
 
       const publishOptions = {
@@ -1051,9 +1314,106 @@ export default function CreateStory() {
           {/* Media / Canvas Stage */}
           <div
             className="absolute inset-0 z-0 bg-[#0c0f24]"
-            style={isTextMode || mediaType === 'audio' ? { background: backgroundGradient } : undefined}
+            style={isTextMode || isEventMode || mediaType === 'audio' ? { background: backgroundGradient } : undefined}
           >
-            {capturedPreview ? (
+            {isEventMode ? (
+              <div className="relative w-full h-full flex flex-col justify-center px-5 py-20 overflow-y-auto">
+                {capturedPreview && (
+                  <>
+                    <LazyImage
+                      src={capturedPreview}
+                      alt="Event cover"
+                      className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/50 to-black/80 pointer-events-none" />
+                  </>
+                )}
+                <div className="relative z-10 w-full rounded-3xl bg-black/55 backdrop-blur-2xl border border-white/20 p-4 space-y-2.5 shadow-2xl">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-white/85">
+                      <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Event Vibe</span>
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-[11px] font-semibold text-white cursor-pointer"
+                      >
+                        {capturedPreview ? 'Change Cover' : 'Add Cover'}
+                      </button>
+                      {capturedPreview && (
+                        <button
+                          type="button"
+                          onClick={clearPreview}
+                          className="px-2 py-1 rounded-lg bg-rose-500/30 hover:bg-rose-500/45 text-[11px] font-semibold text-white cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    aria-label="Event title"
+                    type="text"
+                    maxLength={120}
+                    value={eventTitle}
+                    onChange={(e) => setEventTitle(e.target.value)}
+                    placeholder="Event title (required)"
+                    className="w-full px-3 py-2 rounded-xl bg-white/10 border border-white/20 text-sm font-bold text-white placeholder:text-white/55 outline-none focus:border-white/50"
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      aria-label="Event date and time"
+                      type="text"
+                      maxLength={64}
+                      value={eventStartsAt}
+                      onChange={(e) => setEventStartsAt(e.target.value)}
+                      placeholder="Date & time (e.g. Fri 8 PM)"
+                      className="w-full px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-xs text-white placeholder:text-white/55 outline-none focus:border-white/40"
+                    />
+                    <input
+                      aria-label="Event location"
+                      type="text"
+                      maxLength={140}
+                      value={eventLocation}
+                      onChange={(e) => setEventLocation(e.target.value)}
+                      placeholder="Venue or City"
+                      className="w-full px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-xs text-white placeholder:text-white/55 outline-none focus:border-white/40"
+                    />
+                  </div>
+                  <textarea
+                    aria-label="Event details"
+                    rows={2}
+                    maxLength={300}
+                    value={eventDescription}
+                    onChange={(e) => setEventDescription(e.target.value)}
+                    placeholder="What should attendees expect?"
+                    className="w-full px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-xs text-white placeholder:text-white/55 outline-none focus:border-white/40 resize-none"
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      aria-label="Event button label"
+                      type="text"
+                      maxLength={40}
+                      value={eventCtaText}
+                      onChange={(e) => setEventCtaText(e.target.value)}
+                      placeholder="Button label (e.g. RSVP)"
+                      className="w-full px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-xs text-white placeholder:text-white/55 outline-none focus:border-white/40"
+                    />
+                    <input
+                      aria-label="Event link URL"
+                      type="url"
+                      maxLength={500}
+                      value={eventCtaUrl}
+                      onChange={(e) => setEventCtaUrl(e.target.value)}
+                      placeholder="https://… (optional)"
+                      className="w-full px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-xs text-white placeholder:text-white/55 outline-none focus:border-white/40"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : capturedPreview ? (
               mediaType === 'video' ? (
                 <video
                   ref={previewVideoRef}
@@ -1116,6 +1476,52 @@ export default function CreateStory() {
                 <span className="text-[11px] font-medium text-white/70 mt-2">
                   {storyText.length} / {VIBE_LIMITS.TEXT_MAX_LENGTH}
                 </span>
+              </div>
+            ) : isAudioMode ? (
+              <div className="w-full h-full flex flex-col items-center justify-center px-6 text-center bg-[#0c0f24] gap-3.5">
+                <div className={cn(
+                  'w-16 h-16 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center',
+                  isRecording && 'ring-2 ring-rose-500 bg-rose-500/20 animate-pulse'
+                )}>
+                  <Mic className="w-7 h-7 text-white" aria-hidden="true" />
+                </div>
+                <div className="space-y-1 max-w-xs">
+                  <p className="text-white font-bold text-sm">
+                    {isRecording
+                      ? `Recording Audio (${recordSeconds}s / ${VIBE_LIMITS.AUDIO_MAX_DURATION_SEC}s)`
+                      : audioPermission === 'denied'
+                        ? 'Microphone permission blocked'
+                        : audioPermission === 'unavailable'
+                          ? 'Microphone unavailable on this browser'
+                          : 'Record or Upload Audio'}
+                  </p>
+                  <p className="text-white/65 text-xs leading-relaxed">
+                    {audioPermission === 'denied'
+                      ? 'Allow microphone access in browser settings, or upload an MP3, M4A, WAV, or OGG clip.'
+                      : 'Capture a voice note up to 60 seconds or choose an audio file from your device.'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={isRecording ? stopAudioRecording : startAudioRecording}
+                    disabled={audioPermission === 'requesting'}
+                    className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold text-white inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    style={{ background: isRecording ? '#E11D48' : BRAND_GRADIENT }}
+                  >
+                    <Mic className="w-4 h-4" aria-hidden="true" />
+                    <span>{isRecording ? 'Stop Recording' : audioPermission === 'requesting' ? 'Requesting…' : 'Record Audio'}</span>
+                  </button>
+                  {!isRecording && (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="min-h-[44px] px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-white cursor-pointer"
+                    >
+                      Upload Audio
+                    </button>
+                  )}
+                </div>
               </div>
             ) : cameraActive ? (
               <video
@@ -1191,7 +1597,7 @@ export default function CreateStory() {
             />
 
             {/* Overlay Text Caption when in Media mode */}
-            {!isTextMode && storyText && (
+            {!isTextMode && !isEventMode && storyText && (
               <div className="absolute inset-x-6 bottom-44 flex items-center justify-center z-10 pointer-events-none">
                 <p className="text-lg font-extrabold text-white text-center px-3 py-1.5 rounded-xl bg-black/55 backdrop-blur-md drop-shadow">
                   {storyText}
@@ -1216,6 +1622,30 @@ export default function CreateStory() {
               {mentionHandle.trim() && (
                 <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-xs font-semibold text-white">
                   <span>@{mentionHandle.trim().replace(/^@/, '')}</span>
+                </span>
+              )}
+              {pollQuestion.trim() && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-xs font-semibold text-white">
+                  <BarChart2 className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span className="truncate max-w-[160px]">{pollQuestion.trim()}</span>
+                </span>
+              )}
+              {questionPrompt.trim() && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-xs font-semibold text-white">
+                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span className="truncate max-w-[160px]">{questionPrompt.trim()}</span>
+                </span>
+              )}
+              {storyTimer > 0 && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-xs font-semibold text-white">
+                  <Timer className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>{storyTimer}s</span>
+                </span>
+              )}
+              {linkUrl.trim() && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-xs font-semibold text-white">
+                  <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span className="truncate max-w-[150px]">{linkUrl.trim()}</span>
                 </span>
               )}
             </div>
@@ -1362,7 +1792,7 @@ export default function CreateStory() {
               </div>
             )}
 
-            {activeTool === 'text' && !isTextMode && (
+            {activeTool === 'text' && !isTextMode && !isEventMode && (
               <div className="absolute top-20 inset-x-5 z-30 p-4 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-white/70">Caption</span>
@@ -1642,8 +2072,8 @@ export default function CreateStory() {
 
           {/* Bottom Controls */}
           <div className="relative z-20 pb-4 px-3.5 space-y-2.5">
-            {/* Rich Text Controls (Background + Font + Alignment) */}
-            {(isTextMode || mediaType === 'audio') && (
+            {/* Rich Text / Audio / Event Theme Controls */}
+            {(isTextMode || isEventMode || mediaType === 'audio') && (
               <div className="space-y-2 bg-black/45 backdrop-blur-md p-2.5 rounded-2xl border border-white/10">
                 <div className="flex items-center justify-center gap-2">
                   {VIBE_TEXT_BACKGROUNDS.map((g) => (
@@ -1709,7 +2139,7 @@ export default function CreateStory() {
             )}
 
             {/* Zoom Selector for Live Camera */}
-            {cameraActive && !capturedPreview && !isTextMode && activeMode !== 'AUDIO' && (
+            {cameraActive && !capturedPreview && !isTextMode && !isAudioMode && !isEventMode && (
               <div className="flex items-center justify-center gap-2">
                 {['0.5', '1x', '2'].map((z) => (
                   <button
@@ -1740,17 +2170,17 @@ export default function CreateStory() {
                 <div className="w-11 h-11 rounded-2xl border border-white/25 bg-black/55 backdrop-blur-md flex items-center justify-center hover:border-white/50 transition-colors">
                   <ImageIcon className="w-5 h-5 text-white" aria-hidden="true" />
                 </div>
-                <span className="text-[10px] font-semibold text-white/80">Gallery</span>
+                <span className="text-[10px] font-semibold text-white/80">{isEventMode ? 'Cover' : 'Gallery'}</span>
               </button>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,video/*,audio/*"
+                accept={isEventMode ? 'image/*' : 'image/*,video/*,audio/*,.mp3,.m4a,.aac,.wav,.ogg,.webm,.flac'}
                 onChange={handleFilePicked}
                 className="hidden"
               />
 
-              {!isTextMode && (
+              {!isTextMode && !isEventMode && (
                 <button
                   type="button"
                   onClick={handleShutterClick}
@@ -1761,13 +2191,17 @@ export default function CreateStory() {
                   aria-label={
                     capturedPreview
                       ? 'Discard capture and retake'
-                      : !cameraActive
-                        ? 'Enable camera'
-                        : isRecording
-                          ? 'Stop video recording'
-                          : activeMode === 'VIDEO'
-                            ? 'Start video recording'
-                            : 'Capture Vibe'
+                      : isAudioMode
+                        ? isRecording
+                          ? 'Stop audio recording'
+                          : 'Start audio recording'
+                        : !cameraActive
+                          ? 'Enable camera'
+                          : isRecording
+                            ? 'Stop video recording'
+                            : activeMode === 'VIDEO'
+                              ? 'Start video recording'
+                              : 'Capture Vibe'
                   }
                   className="relative w-16 h-16 rounded-full p-1.5 shadow-xl active:scale-95 transition-transform cursor-pointer"
                   style={{ background: isRecording ? '#E11D48' : BRAND_GRADIENT }}
@@ -1775,14 +2209,18 @@ export default function CreateStory() {
                   <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
                     {capturedPreview ? (
                       <Check className="w-6 h-6 text-slate-900" aria-hidden="true" />
+                    ) : isAudioMode ? (
+                      isRecording ? (
+                        <Square className="w-5 h-5 text-rose-600 fill-rose-600" aria-hidden="true" />
+                      ) : (
+                        <Mic className="w-6 h-6 text-rose-600" aria-hidden="true" />
+                      )
                     ) : !cameraActive ? (
                       <Camera className="w-6 h-6 text-slate-900" aria-hidden="true" />
                     ) : isRecording ? (
                       <Square className="w-5 h-5 text-rose-600 fill-rose-600" aria-hidden="true" />
                     ) : activeMode === 'VIDEO' ? (
                       <Video className="w-6 h-6 text-rose-600" aria-hidden="true" />
-                    ) : activeMode === 'AUDIO' ? (
-                      <Mic className="w-6 h-6 text-slate-900" aria-hidden="true" />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-300" />
                     )}
@@ -1813,12 +2251,7 @@ export default function CreateStory() {
                   <button
                     type="button"
                     key={mode}
-                    onClick={() => {
-                      setActiveMode(mode);
-                      if (mode === 'AUDIO' && !mediaFile) {
-                        fileInputRef.current?.click();
-                      }
-                    }}
+                    onClick={() => handleSelectCaptureMode(mode)}
                     className={cn(
                       'px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-all whitespace-nowrap cursor-pointer',
                       isActive ? 'text-white shadow-md' : 'text-white/60 hover:text-white'
@@ -1871,7 +2304,7 @@ export default function CreateStory() {
                     <button
                       type="button"
                       key={mode}
-                      onClick={() => setActiveMode(mode)}
+                      onClick={() => handleSelectCaptureMode(mode)}
                       className={cn(
                         'w-full min-h-[40px] text-left px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer border',
                         active

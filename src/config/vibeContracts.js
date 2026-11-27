@@ -85,8 +85,10 @@ export const VIBE_LIMITS = Object.freeze({
   VIDEO_MAX_BYTES: 100 * 1024 * 1024, // 100 MB
   AUDIO_MAX_BYTES: 25 * 1024 * 1024, // 25 MB
   VIDEO_MAX_DURATION_SEC: 60,
+  AUDIO_MAX_DURATION_SEC: 60,
   VIDEO_MIN_TRIM_SEC: 1,
   IMAGE_DEFAULT_DURATION_SEC: 5,
+  EVENT_DEFAULT_DURATION_SEC: 7,
   TEXT_MIN_DURATION_SEC: 4,
   TEXT_MAX_DURATION_SEC: 10,
   TEXT_MAX_LENGTH: 500,
@@ -115,6 +117,44 @@ export const VIBE_ALLOWED_VIDEO_TYPES = Object.freeze([
   'video/quicktime',
   'video/x-m4v',
 ]);
+
+export const VIBE_ALLOWED_AUDIO_TYPES = Object.freeze([
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/m4a',
+  'audio/aac',
+  'audio/wav',
+  'audio/wave',
+  'audio/x-wav',
+  'audio/ogg',
+  'application/ogg',
+  'audio/webm',
+  'audio/flac',
+]);
+
+const EXT_TO_MIME = Object.freeze({
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  heif: 'image/heif',
+  avif: 'image/avif',
+  mp4: 'video/mp4',
+  m4v: 'video/x-m4v',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  opus: 'audio/ogg',
+  flac: 'audio/flac',
+});
 
 export const VIBE_TEXT_BACKGROUNDS = Object.freeze([
   {
@@ -186,19 +226,58 @@ export function isValidAudience(audience) {
   return Object.values(VIBE_AUDIENCES).includes(audience);
 }
 
-export function validateVibeMedia(file, { durationSec = null } = {}) {
+export function inferVibeMediaKindAndMime(file, fallbackKind = null) {
+  const rawMime = String(file?.type || '').toLowerCase().split(';')[0].trim();
+  const name = String(file?.name || '');
+  const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+
+  if (rawMime === 'application/ogg') {
+    return { kind: 'audio', mime: 'audio/ogg' };
+  }
+  if (rawMime.startsWith('image/')) {
+    return { kind: 'image', mime: rawMime };
+  }
+  if (rawMime.startsWith('video/')) {
+    if (fallbackKind === 'audio' && rawMime === 'video/webm') {
+      return { kind: 'audio', mime: 'audio/webm' };
+    }
+    return { kind: 'video', mime: rawMime };
+  }
+  if (rawMime.startsWith('audio/')) {
+    return { kind: 'audio', mime: rawMime };
+  }
+
+  if (ext && EXT_TO_MIME[ext]) {
+    const inferredMime = EXT_TO_MIME[ext];
+    if (fallbackKind === 'audio' && ext === 'webm') {
+      return { kind: 'audio', mime: 'audio/webm' };
+    }
+    const kind = inferredMime.startsWith('image/')
+      ? 'image'
+      : inferredMime.startsWith('video/')
+        ? 'video'
+        : 'audio';
+    return { kind, mime: inferredMime };
+  }
+
+  if (fallbackKind === 'audio') return { kind: 'audio', mime: 'audio/webm' };
+  if (fallbackKind === 'video') return { kind: 'video', mime: 'video/mp4' };
+  if (fallbackKind === 'image') return { kind: 'image', mime: 'image/jpeg' };
+  return { kind: null, mime: rawMime };
+}
+
+export function validateVibeMedia(file, { durationSec = null, expectedKind = null } = {}) {
   if (!file) {
-    return { valid: false, kind: null, error: 'Please select a photo or video file.' };
+    return { valid: false, kind: null, error: 'Please select a photo, video, or audio file.' };
   }
-  const mime = String(file.type || '').toLowerCase();
-  const isImage = mime.startsWith('image/');
-  const isVideo = mime.startsWith('video/');
+  const rawMime = String(file.type || '').toLowerCase().split(';')[0].trim();
+  const { kind, mime } = inferVibeMediaKindAndMime(file, expectedKind);
 
-  if (!isImage && !isVideo) {
-    return { valid: false, kind: null, error: 'Unsupported media format. Choose a photo or video.' };
+  if (!kind) {
+    return { valid: false, kind: null, error: 'Unsupported media format. Choose a photo, video, or audio clip.' };
   }
 
-  if (isImage) {
+  if (kind === 'image') {
     if (mime && VIBE_ALLOWED_IMAGE_TYPES.length && !VIBE_ALLOWED_IMAGE_TYPES.includes(mime)) {
       return { valid: false, kind: 'image', error: `Unsupported image type (${mime}). Use JPEG, PNG, WebP, or HEIC.` };
     }
@@ -206,6 +285,25 @@ export function validateVibeMedia(file, { durationSec = null } = {}) {
       return { valid: false, kind: 'image', error: 'Image must be 10 MB or smaller.' };
     }
     return { valid: true, kind: 'image', error: null };
+  }
+
+  if (kind === 'audio') {
+    const checkMime = rawMime || mime;
+    if (
+      checkMime &&
+      VIBE_ALLOWED_AUDIO_TYPES.length &&
+      !VIBE_ALLOWED_AUDIO_TYPES.includes(checkMime) &&
+      !checkMime.startsWith('audio/')
+    ) {
+      return { valid: false, kind: 'audio', error: `Unsupported audio format (${checkMime}). Use MP3, M4A, AAC, WAV, OGG, or WebM.` };
+    }
+    if (typeof file.size === 'number' && file.size > VIBE_LIMITS.AUDIO_MAX_BYTES) {
+      return { valid: false, kind: 'audio', error: 'Audio clip must be 25 MB or smaller.' };
+    }
+    if (typeof durationSec === 'number' && Number.isFinite(durationSec) && durationSec <= 0) {
+      return { valid: false, kind: 'audio', error: 'Audio duration could not be read.' };
+    }
+    return { valid: true, kind: 'audio', error: null };
   }
 
   if (mime && VIBE_ALLOWED_VIDEO_TYPES.length && !VIBE_ALLOWED_VIDEO_TYPES.includes(mime)) {
@@ -218,6 +316,36 @@ export function validateVibeMedia(file, { durationSec = null } = {}) {
     return { valid: false, kind: 'video', error: 'Video duration could not be read.' };
   }
   return { valid: true, kind: 'video', error: null };
+}
+
+export function validateVibeEvent(eventData = {}) {
+  const title = String(eventData?.title || '').trim();
+  if (!title) {
+    return { valid: false, eventData: null, error: 'Enter an event title before publishing your Event Vibe.' };
+  }
+  if (title.length > 120) {
+    return { valid: false, eventData: null, error: 'Event title must be 120 characters or fewer.' };
+  }
+  const startsAt = String(eventData?.startsAt || '').trim().slice(0, 64);
+  const location = String(eventData?.location || '').trim().slice(0, 140);
+  const ctaText = String(eventData?.ctaText || '').trim().slice(0, 40) || 'RSVP / Details';
+  const rawCtaUrl = String(eventData?.ctaUrl || '').trim().slice(0, 500);
+  if (rawCtaUrl && !/^https?:\/\//i.test(rawCtaUrl) && !rawCtaUrl.startsWith('/')) {
+    return { valid: false, eventData: null, error: 'Event link must start with https://, http://, or /.' };
+  }
+  const description = String(eventData?.description || '').trim().slice(0, 300);
+  return {
+    valid: true,
+    eventData: {
+      title,
+      startsAt: startsAt || null,
+      location: location || null,
+      ctaText,
+      ctaUrl: rawCtaUrl || null,
+      description: description || null,
+    },
+    error: null,
+  };
 }
 
 export function validateVibeText(content) {
@@ -340,6 +468,20 @@ export function calculateVibeDuration(vibe = {}) {
       return Math.min(VIBE_LIMITS.VIDEO_MAX_DURATION_SEC, Math.max(VIBE_LIMITS.VIDEO_MIN_TRIM_SEC, rawDuration));
     }
     return 15;
+  }
+  if (type === VIBE_TYPES.AUDIO) {
+    const rawDuration = Number(vibe?.media?.duration ?? vibe?.duration ?? 0);
+    if (Number.isFinite(rawDuration) && rawDuration > 0) {
+      return Math.min(VIBE_LIMITS.AUDIO_MAX_DURATION_SEC, Math.max(3, rawDuration));
+    }
+    return 15;
+  }
+  if (type === VIBE_TYPES.EVENT) {
+    const explicit = Number(vibe?.duration);
+    if (Number.isFinite(explicit) && explicit >= 4 && explicit <= 30) {
+      return explicit;
+    }
+    return VIBE_LIMITS.EVENT_DEFAULT_DURATION_SEC;
   }
   if (type === VIBE_TYPES.TEXT) {
     const text = String(vibe?.content || '').trim();
@@ -545,6 +687,7 @@ export default {
   VIBE_AUDIENCE_OPTIONS,
   VIBE_UPLOAD_STATES,
   VIBE_LIMITS,
+  VIBE_ALLOWED_AUDIO_TYPES,
   VIBE_TEXT_BACKGROUNDS,
   VIBE_FONT_OPTIONS,
   VIBE_COLOR_PALETTE,
@@ -560,7 +703,9 @@ export default {
   getVibeFontCss,
   getAudienceMeta,
   isValidAudience,
+  inferVibeMediaKindAndMime,
   validateVibeMedia,
+  validateVibeEvent,
   validateVibeText,
   validateAudienceSelection,
   clampOverlayPosition,

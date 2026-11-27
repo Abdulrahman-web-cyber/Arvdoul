@@ -3,6 +3,7 @@
 // Send coin gifts to creators — double-entry coin transfer via the monetization ledger
 
 import { useState, memo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Zap, Coins, Loader2 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
@@ -20,6 +21,7 @@ const VideoGiftModal = memo(({
   video = null,
   onGiftSent,
 }) => {
+  const navigate = useNavigate();
   const { isDark } = useTheme();
   const { user } = useAuth();
   const { currentUser, updateUserProfile } = useAppStore();
@@ -75,18 +77,22 @@ const VideoGiftModal = memo(({
     setSending(true);
     try {
       const { getMonetizationService } = await import('../../services/monetizationService.js');
-      const res = await getMonetizationService().transferCoins(
-        user.uid,
-        recipientId,
-        selectedGift.coins,
-        'video_gift',
-        {
-          giftType: selectedGift.type,
-          giftName: selectedGift.name,
-          videoId: video?.id || null,
-          postId: video?.canonicalPostId || video?.id || null,
-        }
-      );
+      const svc = getMonetizationService();
+      const canonicalPostId = video?.canonicalPostId || null;
+      const res = canonicalPostId
+        ? await svc.sendGift(user.uid, canonicalPostId, selectedGift.type || selectedGift.id)
+        : await svc.transferCoins(
+            user.uid,
+            recipientId,
+            selectedGift.coins,
+            'video_gift',
+            {
+              giftType: selectedGift.type || selectedGift.id,
+              giftName: selectedGift.name,
+              videoId: video?.id || null,
+              postId: video?.id || null,
+            }
+          );
       if (!res?.success) {
         throw new Error(res?.message || 'Gift could not be sent');
       }
@@ -201,24 +207,43 @@ const VideoGiftModal = memo(({
               })}
             </div>
 
-            {/* Send */}
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={sending || (balance != null && balance < selectedGift.coins)}
-              className="w-full py-4 min-h-[48px] rounded-2xl font-bold text-white shadow-xl hover:opacity-95 disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ background: BRAND_GRADIENT }}
-            >
-              {sending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Sending...
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4" /> Send {selectedGift.name}
-                </>
-              )}
-            </button>
+            {/* Send or Top-Up */}
+            {balance != null && balance < selectedGift.coins ? (
+              <div className="space-y-2.5">
+                <p className={`text-xs text-center ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>
+                  You need {(selectedGift.coins - balance).toLocaleString()} more coins to send {selectedGift.name}.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    navigate('/coins');
+                  }}
+                  className="w-full py-4 min-h-[48px] rounded-2xl font-bold text-white shadow-xl hover:opacity-95 flex items-center justify-center gap-2 cursor-pointer"
+                  style={{ background: BRAND_GRADIENT }}
+                >
+                  <Coins className="w-4 h-4" /> Get More Coins
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={sending || !recipientId || recipientId === user?.uid}
+                className="w-full py-4 min-h-[48px] rounded-2xl font-bold text-white shadow-xl hover:opacity-95 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                style={{ background: BRAND_GRADIENT }}
+              >
+                {sending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Sending...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" /> Send {selectedGift.name}
+                  </>
+                )}
+              </button>
+            )}
 
             {/* Sent animation */}
             {sentAnimation && (

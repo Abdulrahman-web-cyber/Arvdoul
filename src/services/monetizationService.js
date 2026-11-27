@@ -412,10 +412,15 @@ class MonetizationService {
     if (!userId) {
       this._balanceCache.clear();
       this._levelCache.clear();
-      return;
+    } else {
+      this._balanceCache.delete(userId);
+      this._levelCache.delete(userId);
     }
-    this._balanceCache.delete(userId);
-    this._levelCache.delete(userId);
+    if (hasWindow) {
+      window.dispatchEvent(new CustomEvent('arvdoul:balance_updated', {
+        detail: { userId: userId || null },
+      }));
+    }
   }
 
   async ensureInitialized() {
@@ -709,6 +714,9 @@ class MonetizationService {
       const result = await retryOperation(() =>
         this.cfWatchAd({ placement, adId, watchDurationSeconds, deviceMetadata, idempotencyKey: key })
       );
+      if (result.data?.success) {
+        this.invalidateBalanceCache(auth?.currentUser?.uid || null);
+      }
       return result.data;
     } catch (err) {
       // No client-side reward fallback: ad rewards are server-verified. If the
@@ -774,6 +782,7 @@ class MonetizationService {
           return { success: true, stripeRedirect: true };
         }
         if (result.data?.success) {
+          this.invalidateBalanceCache(auth?.currentUser?.uid || null);
           return {
             success: true,
             receipt: {
@@ -829,19 +838,33 @@ class MonetizationService {
 
   async getSubscriptionStatus() {
     await this._ensureInitialized();
+    const normalize = (raw) => {
+      if (!raw || typeof raw !== 'object') {
+        return { success: true, active: false, tier: null, subscription: null };
+      }
+      const sub = raw.subscription && typeof raw.subscription === 'object' ? raw.subscription : (raw.tier ? raw : null);
+      const active = typeof raw.active === 'boolean' ? raw.active : sub?.status === 'active';
+      const tier = active ? (raw.tier || sub?.tier || null) : null;
+      return {
+        success: true,
+        active,
+        tier,
+        subscription: sub,
+      };
+    };
     try {
       const result = await retryOperation(() => this.cfGetSubscriptionStatus());
-      return result.data;
+      return normalize(result.data);
     } catch (err) {
       const uid = auth?.currentUser?.uid;
-      if (!uid) return { active: false, tier: null };
+      if (!uid) return { success: true, active: false, tier: null, subscription: null };
       try {
         const subDoc = await getDoc(doc(this.db, 'subscriptions', uid));
-        if (subDoc.exists()) return subDoc.data();
+        if (subDoc.exists()) return normalize(subDoc.data());
       } catch (e) {
         log.warn('Subscription fallback read failed', { uid, error: e?.message });
       }
-      return { active: false, tier: null };
+      return { success: true, active: false, tier: null, subscription: null };
     }
   }
 
@@ -853,6 +876,9 @@ class MonetizationService {
     const key = idempotencyKey || generateIdempotencyKey();
     try {
       const result = await retryOperation(() => this.cfCreateSubscription({ tier, paymentMethodId, deviceMetadata, idempotencyKey: key }));
+      if (result.data?.success) {
+        this.invalidateBalanceCache(auth?.currentUser?.uid || null);
+      }
       return result.data;
     } catch (err) {
       // Entitlement state is server-owned (subscriptions is server-write-only).
@@ -867,6 +893,9 @@ class MonetizationService {
     const key = idempotencyKey || generateIdempotencyKey();
     try {
       const result = await retryOperation(() => this.cfCancelSubscription({ idempotencyKey: key }));
+      if (result.data?.success) {
+        this.invalidateBalanceCache(auth?.currentUser?.uid || null);
+      }
       return result.data;
     } catch (err) {
       // Cancellation is server-owned; do not flip entitlement locally.
@@ -1048,6 +1077,7 @@ class MonetizationService {
       const result = await retryOperation(() =>
         this.cfRequestWithdrawal({ userId, amount, paymentMethod, paymentDetails, idempotencyKey: key, deviceMetadata })
       );
+      this.invalidateBalanceCache(userId);
       return result.data;
     } catch (err) {
       // Server-authoritative money path: there is deliberately NO

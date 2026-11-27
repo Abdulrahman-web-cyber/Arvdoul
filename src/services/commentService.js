@@ -184,7 +184,7 @@ class UltimateCommentService {
       }
 
       // Enforce post-level comment permissions (enableComments / commentMode)
-      if (options.targetType !== 'legacy_video') {
+      if (options.targetType !== 'legacy_video' && options.targetType !== 'story') {
         try {
           const postSnap = await this.firestoreMethods.getDoc(
             this.firestoreMethods.doc(this.firestore, 'posts', postId)
@@ -292,7 +292,9 @@ class UltimateCommentService {
       // post shard directly; only un-migrated legacy `videos/{id}` items pass
       // `targetType: 'legacy_video'` (which are tallied by `aggregateVideoComments`).
       if (options.targetType !== 'legacy_video' && options.targetType !== 'video') {
-        await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments' });
+        if (options.targetType !== 'story') {
+          await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments' });
+        }
       }
 
       if (options.parentId) {
@@ -317,7 +319,7 @@ class UltimateCommentService {
       // Social loop: notify the post author (top-level comments only - replies
       // have their own _notifyReply) + award comment_created XP to the author.
       // Both are best-effort and never break the comment write.
-      if (!options.parentId) {
+      if (!options.parentId && options.targetType !== 'story') {
         this._notifyPostAuthor(postId, userId, commentId).catch((e) =>
           logger.warn('Comment author notification failed', { commentId, error: e?.message }));
       }
@@ -697,16 +699,19 @@ class UltimateCommentService {
 
       const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
       const likeRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'likes', userId);
+      const dislikeRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'dislikes', userId);
 
-      const likeSnap = await this.firestoreMethods.getDoc(likeRef);
+      const [likeSnap, dislikeSnap] = await Promise.all([
+        this.firestoreMethods.getDoc(likeRef),
+        this.firestoreMethods.getDoc(dislikeRef).catch(() => null),
+      ]);
       const alreadyLiked = likeSnap.exists();
 
       if (alreadyLiked) {
         throw new Error('You have already liked this comment');
       }
 
-      const comment = await this.getComment(commentId);
-      const hadDislike = comment.success && comment.comment.dislikesBy?.includes(userId);
+      const hadDislike = Boolean(dislikeSnap?.exists?.());
 
       await countersManager.increment({ docPath: `comments/${commentId}`, field: 'likes' });
       await this.firestoreMethods.setDoc(likeRef, {
@@ -722,7 +727,7 @@ class UltimateCommentService {
       if (hadDislike) {
         updates.dislikesBy = this.firestoreMethods.arrayRemove(userId);
         await countersManager.increment({ docPath: `comments/${commentId}`, field: 'dislikes', amount: -1 });
-        await this.firestoreMethods.deleteDoc(this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'dislikes', userId));
+        await this.firestoreMethods.deleteDoc(dislikeRef);
       }
       await this.firestoreMethods.updateDoc(commentRef, updates);
       await this._trimReactionArray(commentId, 'likesBy', COMMENT_REACTION_ARRAY_CAP);
@@ -744,14 +749,17 @@ class UltimateCommentService {
 
       const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
       const dislikeRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'dislikes', userId);
+      const likeRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'likes', userId);
 
-      const dislikeSnap = await this.firestoreMethods.getDoc(dislikeRef);
+      const [dislikeSnap, likeSnap] = await Promise.all([
+        this.firestoreMethods.getDoc(dislikeRef),
+        this.firestoreMethods.getDoc(likeRef).catch(() => null),
+      ]);
       if (dislikeSnap.exists()) {
         throw new Error('You have already disliked this comment');
       }
 
-      const comment = await this.getComment(commentId);
-      const hadLike = comment.success && comment.comment.likesBy?.includes(userId);
+      const hadLike = Boolean(likeSnap?.exists?.());
 
       await countersManager.increment({ docPath: `comments/${commentId}`, field: 'dislikes' });
       await this.firestoreMethods.setDoc(dislikeRef, {
@@ -767,7 +775,7 @@ class UltimateCommentService {
       if (hadLike) {
         updates.likesBy = this.firestoreMethods.arrayRemove(userId);
         await countersManager.increment({ docPath: `comments/${commentId}`, field: 'likes', amount: -1 });
-        await this.firestoreMethods.deleteDoc(this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'likes', userId));
+        await this.firestoreMethods.deleteDoc(likeRef);
       }
       await this.firestoreMethods.updateDoc(commentRef, updates);
       await this._trimReactionArray(commentId, 'dislikesBy', COMMENT_REACTION_ARRAY_CAP);
@@ -787,27 +795,37 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      const comment = await this.getComment(commentId);
-      if (!comment.success) {
-        throw new Error('Comment not found');
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const likeRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'likes', userId);
+      const dislikeRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'dislikes', userId);
+
+      const [likeSnap, dislikeSnap] = await Promise.all([
+        this.firestoreMethods.getDoc(likeRef),
+        this.firestoreMethods.getDoc(dislikeRef).catch(() => null),
+      ]);
+
+      const hadLike = likeSnap.exists();
+      const hadDislike = Boolean(dislikeSnap?.exists?.());
+
+      if (!hadLike && !hadDislike) {
+        return { success: true, commentId, action: 'none' };
       }
 
-      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
       const updates = {
         updatedAt: this.firestoreMethods.serverTimestamp(),
         lastActivityAt: this.firestoreMethods.serverTimestamp()
       };
 
-      if (comment.comment.likesBy?.includes(userId)) {
+      if (hadLike) {
         await countersManager.increment({ docPath: `comments/${commentId}`, field: 'likes', amount: -1 });
         updates.likesBy = this.firestoreMethods.arrayRemove(userId);
-        await this.firestoreMethods.deleteDoc(this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'likes', userId));
+        await this.firestoreMethods.deleteDoc(likeRef);
       }
 
-      if (comment.comment.dislikesBy?.includes(userId)) {
+      if (hadDislike) {
         await countersManager.increment({ docPath: `comments/${commentId}`, field: 'dislikes', amount: -1 });
         updates.dislikesBy = this.firestoreMethods.arrayRemove(userId);
-        await this.firestoreMethods.deleteDoc(this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'dislikes', userId));
+        await this.firestoreMethods.deleteDoc(dislikeRef);
       }
 
       await this.firestoreMethods.updateDoc(commentRef, updates);
@@ -873,7 +891,7 @@ class UltimateCommentService {
       });
 
       this._invalidateCommentCache(commentId);
-      return { success: true, commentId, action, emoji };
+      return { success: true, commentId, action, emoji, previousReaction: previous };
     } catch (error) {
       logger.error('Add comment reaction failed', { error: error.message, commentId, userId });
       throw this._enhanceError(error, 'Failed to react to comment');

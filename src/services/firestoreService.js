@@ -959,6 +959,7 @@ class EnterpriseFirestoreService {
       const userLikeRef = doc(this.firestore, 'users', userId, 'liked_posts', postId);
       const postLikeRef = doc(this.firestore, 'posts', postId, 'likes', userId);
       let alreadyLiked = false;
+      let postExists = true;
       let authorId = null;
 
       // No inner catch: a failed transaction surfaces as success:false so the
@@ -966,7 +967,10 @@ class EnterpriseFirestoreService {
       // that was never persisted.
       await runTransaction(this.firestore, async (transaction) => {
         const postSnap = await transaction.get(postRef);
-        if (!postSnap.exists()) return;
+        if (!postSnap.exists()) {
+          postExists = false;
+          return;
+        }
         authorId = postSnap.data().authorId;
         const likeSnap = await transaction.get(userLikeRef);
         alreadyLiked = likeSnap.exists();
@@ -990,6 +994,10 @@ class EnterpriseFirestoreService {
           transaction.set(postLikeRef, { userId, likedAt: serverTimestamp() });
         }
       });
+
+      if (!postExists) {
+        return { success: false, error: 'Post not found' };
+      }
 
       this._rememberLocalLike(postId, userId, true);
       this.cache.delete(postId);
@@ -1371,6 +1379,32 @@ class EnterpriseFirestoreService {
     return liked;
   }
 
+  /**
+   * Batch resolve whether the viewer has bookmarked each post in `postIds`
+   * via `users/{uid}/saved_posts` `documentId() in` chunks of 30.
+   */
+  async getSavedPostIds(userId, postIds) {
+    const ids = [...new Set((postIds || []).filter(Boolean))];
+    if (!userId || ids.length === 0) return new Set();
+    await this.ensureInitialized();
+    const { collection, query, where, documentId, limit: fLimit, getDocs } = this.firestoreMethods;
+    const saved = new Set();
+    for (let i = 0; i < ids.length; i += 30) {
+      const chunk = ids.slice(i, i + 30);
+      try {
+        const snap = await getDocs(query(
+          collection(this.firestore, 'users', userId, 'saved_posts'),
+          where(documentId(), 'in', chunk),
+          fLimit(chunk.length)
+        ));
+        snap.forEach((d) => saved.add(d.id));
+      } catch {
+        // Leave unresolved ids as not saved on read failure.
+      }
+    }
+    return saved;
+  }
+
   async incrementCommentCount(postId, delta = 1) {
     await this.ensureInitialized();
     try {
@@ -1694,6 +1728,7 @@ const firestoreService = {
   getUserReaction: (pid, uid) => getFirestoreService().getUserReaction(pid, uid),
   getPostViewerState: (pid, uid) => getFirestoreService().getPostViewerState(pid, uid),
   getLikedPostIds: (uid, ids) => getFirestoreService().getLikedPostIds(uid, ids),
+  getSavedPostIds: (uid, ids) => getFirestoreService().getSavedPostIds(uid, ids),
   voteOnPoll: (pid, uid, optIdx, mult) => getFirestoreService().voteOnPoll(pid, uid, optIdx, mult),
   getUserPollVote: (pid, uid) => getFirestoreService().getUserPollVote(pid, uid),
   addAnswer: (pid, answer, key) => getFirestoreService().addAnswer(pid, answer, key),

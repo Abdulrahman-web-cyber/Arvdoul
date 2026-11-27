@@ -19,7 +19,17 @@ import { unknownNumber } from '../lib/unknownNumber.js';
 // The earnings breakdown must come from the real coin ledger, never a fixed
 // ratio. Gifts/tips and ad revenue are credited with these reasons by
 // functions/monetization.js; the split is a sum over actual transactions.
-const GIFT_REASONS = ['gift', 'tip', 'super_thanks'];
+const GIFT_REASONS = [
+  'gift',
+  'tip',
+  'super_thanks',
+  'gift_received',
+  'vibe_gift_received',
+  'live_gift',
+  'live_tip',
+  'video_gift',
+  'chat_gift',
+];
 const AD_REASONS = ['ad_reward', 'ad_share', 'ad_revenue'];
 const OTHER_EARNING_REASONS = ['poll_vote_reward', 'level_up_reward', 'subscription', 'purchase', 'bonus', 'reward'];
 
@@ -89,13 +99,14 @@ export default function CreatorPayoutScreen() {
       if (histRes.status === 'fulfilled' && Array.isArray(histRes.value?.items)) {
         setPayouts(histRes.value.items.filter(tx => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')));
       }
+      let nextGifts = null;
+      let nextAds = null;
+      let nextOther = null;
       if (earnRes.status === 'fulfilled' && Array.isArray(earnRes.value)) {
         const earned = earnRes.value;
-        setEarnings({
-          gifts: sumCredits(earned, GIFT_REASONS),
-          ads: sumCredits(earned, AD_REASONS),
-          other: sumCredits(earned, OTHER_EARNING_REASONS),
-        });
+        nextGifts = sumCredits(earned, GIFT_REASONS);
+        nextAds = sumCredits(earned, AD_REASONS);
+        nextOther = sumCredits(earned, OTHER_EARNING_REASONS);
       }
       if (spendRes.status === 'fulfilled' && Array.isArray(spendRes.value)) {
         const withdrawals = spendRes.value.filter(
@@ -110,9 +121,15 @@ export default function CreatorPayoutScreen() {
         setLifetimeWithdrawnCoins(total);
       }
       if (ledgerRes.status === 'fulfilled' && ledgerRes.value?.success) {
-        setLedgerSummary(ledgerRes.value.summary || null);
+        const summary = ledgerRes.value.summary || null;
+        setLedgerSummary(summary);
         setLedgerEntries(Array.isArray(ledgerRes.value.entries) ? ledgerRes.value.entries : []);
+        const ledgerGiftCoins = unknownNumber(summary?.totalGiftCoins);
+        if (ledgerGiftCoins != null && ledgerGiftCoins > 0) {
+          nextGifts = nextGifts == null ? ledgerGiftCoins : Math.max(nextGifts, ledgerGiftCoins);
+        }
       }
+      setEarnings({ gifts: nextGifts, ads: nextAds, other: nextOther });
       if (assetsRes.status === 'fulfilled') {
         setAffiliateLinks(Array.isArray(assetsRes.value?.affiliateLinks) ? assetsRes.value.affiliateLinks : []);
         setPromoCodes(Array.isArray(assetsRes.value?.promoCodes) ? assetsRes.value.promoCodes : []);
@@ -136,6 +153,17 @@ export default function CreatorPayoutScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    const onBalanceUpdated = (evt) => {
+      if (!evt?.detail?.userId || evt.detail.userId === user.uid) {
+        loadData();
+      }
+    };
+    window.addEventListener('arvdoul:balance_updated', onBalanceUpdated);
+    return () => window.removeEventListener('arvdoul:balance_updated', onBalanceUpdated);
+  }, [user?.uid, loadData]);
 
   const handleCreateAffiliateLink = async (e) => {
     e.preventDefault();
@@ -766,7 +794,8 @@ export default function CreatorPayoutScreen() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 py-2.5 rounded-arvdoul-sm text-xs font-bold bg-arvdoul-purple text-white hover:bg-violet-600 active:scale-95 disabled:opacity-50"
+                    style={{ background: BRAND_GRADIENT }}
+                    className="flex-1 py-2.5 rounded-arvdoul-sm text-xs font-bold text-white hover:brightness-110 active:scale-95 disabled:opacity-50 cursor-pointer"
                   >
                     {submitting ? 'Processing...' : 'Confirm Withdrawal'}
                   </button>

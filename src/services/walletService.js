@@ -50,24 +50,24 @@ class WalletService {
       const lockedCoins = Number(balanceData.lockedCoins || 0);
       const availableCoins = coins == null ? null : Math.max(0, coins - lockedCoins);
 
-      // Fetch pending withdrawals for the itemised breakdown only.
+      // Fetch pending withdrawals for the itemised breakdown only when coins are actually locked.
       let pendingWithdrawals = 0;
-      try {
-        const wCol = collection(db, 'withdrawal_requests');
-        const wQ = query(
-          wCol,
-          where('userId', '==', userId),
-          where('status', 'in', ['pending', 'pending_review', 'processing']),
-          limit(100)
-        );
-        const wSnap = await getDocs(wQ);
-        wSnap.forEach((d) => {
-          pendingWithdrawals += Number(d.data().amount || 0);
-        });
-      } catch (e) {
-        // The pending-withdrawal total feeds the available balance, so a failed
-        // read must be visible rather than silently showing the full balance.
-        logger.warn('Pending withdrawals read failed; available balance may be overstated', { userId, error: e?.message });
+      if (lockedCoins > 0) {
+        try {
+          const wCol = collection(db, 'withdrawal_requests');
+          const wQ = query(
+            wCol,
+            where('userId', '==', userId),
+            where('status', 'in', ['pending', 'pending_review', 'processing']),
+            limit(100)
+          );
+          const wSnap = await getDocs(wQ);
+          wSnap.forEach((d) => {
+            pendingWithdrawals += Number(d.data().amount || 0);
+          });
+        } catch (e) {
+          logger.warn('Pending withdrawals read failed; available balance may be overstated', { userId, error: e?.message });
+        }
       }
 
       return {
