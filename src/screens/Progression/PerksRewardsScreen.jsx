@@ -21,7 +21,8 @@ import {
   MAX_LEVEL,
   ROYAL_ELIGIBILITY,
 } from '../../shared/levelConfig.cjs';
-import { Gift, Coins, Crown, Lock, CheckCircle2, Send, Zap, ArrowRight, UserCheck } from "lucide-react";
+import { Gift, Coins, Crown, Lock, CheckCircle2, Send, Zap, ArrowRight, UserCheck, Compass, Award, Star, RefreshCw } from "lucide-react";
+import { CitizenTierIcon, PerkIcon, GiftCatalogIcon } from '../../components/Shared/ProgressionIcons.jsx';
 import { getMonetizationService } from '../../services/monetizationService.js';
 import { getUserService } from '../../services/userService.js';
 import { levelSystemService } from '../../services/levelSystemService.js';
@@ -48,36 +49,48 @@ export default function PerksRewardsScreen() {
   const [liveProfile, setLiveProfile] = useState(null);
   const [liveBalance, setLiveBalance] = useState(undefined);
   const [liveLevelInfo, setLiveLevelInfo] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
 
+  const fetchLive = useMemo(() => async () => {
+    if (!uid) return;
+    setLoadError(null);
+    try {
+      const requests = [
+        getMonetizationService().getBalance(uid),
+        levelSystemService.getLevelInfo(uid),
+      ];
+      if (!authProfile?.activeDaysCount) {
+        requests.push(getUserService().getUserProfile(uid, uid));
+      }
+      const [balRes, lvlRes, profRes] = await Promise.allSettled(requests);
+      if (balRes.status === 'fulfilled') {
+        setLiveBalance(typeof balRes.value === 'number' ? balRes.value : null);
+      }
+      if (lvlRes.status === 'fulfilled' && lvlRes.value) {
+        setLiveLevelInfo(lvlRes.value);
+      }
+      if (profRes?.status === 'fulfilled' && profRes.value) {
+        setLiveProfile(profRes.value);
+      }
+      if (balRes.status === 'rejected' && lvlRes.status === 'rejected' && (!profRes || profRes.status === 'rejected')) {
+        setLoadError('Could not load live rewards and balance.');
+      }
+    } catch (err) {
+      setLoadError(err?.message || 'Could not load live rewards data.');
+      console.warn('[PerksRewards] live fetch failed:', err?.message);
+    }
+  }, [uid, authProfile]);
+
   useEffect(() => {
-    if (!uid) return undefined;
     let cancelled = false;
     (async () => {
-      try {
-        const [balRes, profRes, lvlRes] = await Promise.allSettled([
-          getMonetizationService().getBalance(uid),
-          getUserService().getUserProfile(uid, uid),
-          levelSystemService.getLevelInfo(uid),
-        ]);
-        if (cancelled) return;
-        if (balRes.status === 'fulfilled') {
-          setLiveBalance(typeof balRes.value === 'number' ? balRes.value : null);
-        }
-        if (profRes.status === 'fulfilled' && profRes.value) {
-          setLiveProfile(profRes.value);
-        }
-        if (lvlRes.status === 'fulfilled' && lvlRes.value) {
-          setLiveLevelInfo(lvlRes.value);
-        }
-      } catch (err) {
-        console.warn('[PerksRewards] live fetch failed:', err?.message);
-      }
+      if (!cancelled) await fetchLive();
     })();
     return () => {
       cancelled = true;
     };
-  }, [uid]);
+  }, [fetchLive]);
 
   const profile = liveProfile || authProfile;
   const storedLevel = liveLevelInfo?.level != null
@@ -152,6 +165,17 @@ export default function PerksRewardsScreen() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => navigate('/levels')}
+              className={cn(
+                "min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold border whitespace-nowrap shrink-0 transition-colors cursor-pointer inline-flex items-center gap-1.5",
+                isDark ? "border-white/15 hover:bg-white/[0.06] text-slate-200" : "border-slate-200 bg-white hover:bg-slate-100 text-slate-700"
+              )}
+            >
+              <Compass className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Roadmap</span>
+            </button>
+            <button
+              type="button"
               onClick={() => navigate('/progress')}
               className={cn(
                 "min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold border whitespace-nowrap shrink-0 transition-colors cursor-pointer",
@@ -208,17 +232,33 @@ export default function PerksRewardsScreen() {
       </div>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-5 sm:py-6 space-y-6">
+        {loadError && (
+          <div className={cn("p-4 rounded-2xl border flex items-center justify-between gap-3", isDark ? "bg-rose-500/10 border-rose-400/25 text-rose-200" : "bg-rose-50 border-rose-200 text-rose-700")}>
+            <span className="text-xs font-semibold">{loadError}</span>
+            <button
+              type="button"
+              onClick={fetchLive}
+              className={cn("min-h-[36px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer", isDark ? "border-white/15 bg-white/10 text-white" : "border-rose-200 bg-white text-rose-700")}
+            >
+              <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Retry</span>
+            </button>
+          </div>
+        )}
+
         {/* Hero Overview */}
         <section className={cn(
-          "rounded-3xl border p-6 sm:p-7 space-y-5 transition-colors",
+          "rounded-3xl border p-6 sm:p-7 space-y-5 transition-colors backdrop-blur-xl",
           isDark
-            ? "bg-[#080F2E]/90 border-white/[0.08]"
-            : "bg-white border-slate-200/80 shadow-sm"
+            ? "bg-white/[0.03] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            : "bg-white/90 border-slate-200/80 shadow-sm"
         )}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-xs">
-                <span className="text-xl" aria-hidden="true">{hasStoredLevel ? citizenTier.icon : '—'}</span>
+                <span className={cn("w-7 h-7 rounded-lg border flex items-center justify-center shrink-0", isDark ? "bg-purple-500/15 border-purple-400/30 text-purple-300" : "bg-purple-50 border-purple-200 text-purple-700")}>
+                  {hasStoredLevel ? <CitizenTierIcon tier={citizenTier.tier} className="w-4 h-4" /> : <Compass className="w-4 h-4" aria-hidden="true" />}
+                </span>
                 <span className={cn("font-semibold", isDark ? "text-purple-400" : "text-purple-700")}>
                   {hasStoredLevel ? `${citizenTier.tier} Standing · Level ${currentLevel}` : 'Standing unavailable'}
                 </span>
@@ -345,7 +385,9 @@ export default function PerksRewardsScreen() {
                         : "bg-slate-50 hover:bg-white border-slate-200"
                     )}
                   >
-                    <div className="text-3xl my-1" aria-hidden="true">{g.emoji}</div>
+                    <div className={cn("w-11 h-11 mx-auto rounded-2xl border flex items-center justify-center my-1", isDark ? "bg-white/[0.04] border-white/[0.08]" : "bg-white border-slate-200/80")}>
+                      <GiftCatalogIcon giftId={g.id} className="w-5 h-5" />
+                    </div>
                     <div>
                       <h3 className="font-semibold text-xs">{g.name}</h3>
                       <div className={cn("flex items-center justify-center gap-1 text-xs font-bold mt-0.5 tabular-nums", isDark ? "text-amber-400" : "text-amber-700")}>
@@ -466,8 +508,8 @@ export default function PerksRewardsScreen() {
                         : isDark ? "bg-[#03071B]/50 border-white/[0.06] opacity-70" : "bg-slate-50 border-slate-200 opacity-75"
                     )}
                   >
-                    <div className="text-2xl p-1 shrink-0" aria-hidden="true">
-                      {perk.icon}
+                    <div className={cn("p-2 rounded-xl border shrink-0", isDark ? "bg-white/[0.04] border-white/[0.08] text-purple-300" : "bg-white border-slate-200 text-purple-700")}>
+                      <PerkIcon minLevel={perk.minLevel} title={perk.title} className="w-4 h-4" />
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -527,7 +569,9 @@ export default function PerksRewardsScreen() {
                 "p-4 rounded-2xl border text-center space-y-1.5",
                 isDark ? "bg-[#03071B]/60 border-white/[0.08]" : "bg-slate-50 border-slate-200"
               )}>
-                <span className="text-2xl" aria-hidden="true">⭐</span>
+                <div className={cn("w-10 h-10 mx-auto rounded-xl border flex items-center justify-center", isDark ? "bg-cyan-500/10 border-cyan-400/25 text-cyan-300" : "bg-cyan-50 border-cyan-200 text-cyan-700")}>
+                  <Star className="w-5 h-5" aria-hidden="true" />
+                </div>
                 <h3 className="font-bold text-xs sm:text-sm">Founding Citizen</h3>
                 <p className="text-xs text-slate-500">Level {MAX_LEVEL} · {ROYAL_ELIGIBILITY.king.minActiveDays} Active Days</p>
               </div>
@@ -536,7 +580,9 @@ export default function PerksRewardsScreen() {
                 "p-4 rounded-2xl border text-center space-y-1.5",
                 isDark ? "bg-[#03071B]/60 border-white/[0.08]" : "bg-slate-50 border-slate-200"
               )}>
-                <span className="text-2xl" aria-hidden="true">⚜️</span>
+                <div className={cn("w-10 h-10 mx-auto rounded-xl border flex items-center justify-center", isDark ? "bg-purple-500/10 border-purple-400/25 text-purple-300" : "bg-purple-50 border-purple-200 text-purple-700")}>
+                  <Award className="w-5 h-5" aria-hidden="true" />
+                </div>
                 <h3 className="font-bold text-xs sm:text-sm">Ducal Nobility</h3>
                 <p className="text-xs text-slate-500">Level {ROYAL_ELIGIBILITY.duke.minLevel} · High Reputation &amp; Contribution</p>
               </div>
@@ -545,7 +591,9 @@ export default function PerksRewardsScreen() {
                 "p-4 rounded-2xl border text-center space-y-1.5",
                 isDark ? "bg-[#03071B]/60 border-white/[0.08]" : "bg-slate-50 border-slate-200"
               )}>
-                <span className="text-2xl" aria-hidden="true">👑</span>
+                <div className={cn("w-10 h-10 mx-auto rounded-xl border flex items-center justify-center", isDark ? "bg-amber-500/15 border-amber-400/30 text-amber-300" : "bg-amber-50 border-amber-200 text-amber-600")}>
+                  <Crown className="w-5 h-5" aria-hidden="true" />
+                </div>
                 <h3 className="font-bold text-xs sm:text-sm">Crown Sovereign</h3>
                 <p className="text-xs text-slate-500">Level {ROYAL_ELIGIBILITY.king.minLevel} · Impeccable Provenance</p>
               </div>

@@ -10,7 +10,7 @@ import {
 import { RouteProgressBar } from "../components/Navigation/RouteProgressBar.jsx";
 
 import { useTheme } from "../context/ThemeContext.jsx";
-import { tokens } from "../design-system/tokens.js";
+import BrandBootCanvas from "../components/Shared/BrandBootCanvas.jsx";
 
 export default function AppStateGuard({ children }) {
   const location = useLocation();
@@ -83,27 +83,17 @@ export default function AppStateGuard({ children }) {
       return children;
     }
     return (
-      <div
-        className="min-h-[100dvh] w-full"
-        style={{ backgroundColor: isDark ? tokens.color.bg.dark : tokens.color.bg.light }}
-        aria-busy="true"
-        aria-label="Preparing screen"
-      >
+      <BrandBootCanvas isDark={isDark} label="Preparing screen">
         <RouteProgressBar isAnimating={true} />
-      </div>
+      </BrandBootCanvas>
     );
   }
 
   if (decision.destination && !decision.wait) {
     return (
-      <div
-        className="min-h-[100dvh] w-full"
-        style={{ backgroundColor: isDark ? tokens.color.bg.dark : tokens.color.bg.light }}
-        aria-busy="true"
-        aria-label="Navigating"
-      >
+      <BrandBootCanvas isDark={isDark} label="Navigating">
         <RouteProgressBar isAnimating={true} />
-      </div>
+      </BrandBootCanvas>
     );
   }
 

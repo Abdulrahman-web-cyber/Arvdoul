@@ -177,8 +177,10 @@ class UltimateFeedService {
     this.notInterestedPosts = new Map();
     this.diversityMetrics = new Map();
     this.interestVectorCache = new Map();
+    this._pendingVectorFlushes = new Set();
+    this._flushBound = false;
     this.activeUsers = new Set();
-    this.algorithmVersion = 'v24.2';
+    this.algorithmVersion = 'v25.0';
     this.mlCache = new Map();
     this._inflightPromises = new Map();
 
@@ -321,43 +323,179 @@ class UltimateFeedService {
     return group;
   }
 
+  _bindVectorFlush() {
+    if (this._flushBound || typeof window === 'undefined' || typeof document === 'undefined') return;
+    this._flushBound = true;
+    const flushAll = () => {
+      for (const uid of Array.from(this._pendingVectorFlushes)) {
+        this._flushInterestVectorNow(uid).catch(() => {});
+      }
+    };
+    window.addEventListener('pagehide', flushAll);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushAll();
+    });
+  }
+
+  _extractSignalTokens(postOrTopics) {
+    if (Array.isArray(postOrTopics)) {
+      const cleaned = [];
+      for (const item of postOrTopics) {
+        if (typeof item !== 'string') continue;
+        const trimmed = item.trim();
+        if (!trimmed) continue;
+        cleaned.push(trimmed.startsWith('creator:') || trimmed.startsWith('type:') ? trimmed : trimmed.toLowerCase());
+      }
+      return Array.from(new Set(cleaned)).slice(0, 12);
+    }
+    if (!postOrTopics || typeof postOrTopics !== 'object') return [];
+    const tokens = [];
+    const pushLower = (val, prefix = '') => {
+      if (typeof val !== 'string') return;
+      const clean = val.trim().replace(/^#/, '').toLowerCase();
+      if (clean && clean.length <= 48) tokens.push(`${prefix}${clean}`);
+    };
+    if (Array.isArray(postOrTopics.topics)) postOrTopics.topics.forEach((t) => pushLower(t));
+    if (Array.isArray(postOrTopics.tags)) postOrTopics.tags.forEach((t) => pushLower(t));
+    if (Array.isArray(postOrTopics.hashtags)) postOrTopics.hashtags.forEach((t) => pushLower(t));
+    if (typeof postOrTopics.category === 'string') pushLower(postOrTopics.category);
+    if (typeof postOrTopics.type === 'string') pushLower(postOrTopics.type, 'type:');
+    if (typeof postOrTopics.authorId === 'string' && postOrTopics.authorId.trim()) {
+      tokens.push(`creator:${postOrTopics.authorId.trim()}`);
+    }
+    return Array.from(new Set(tokens)).slice(0, 12);
+  }
+
+  _readLocalInterestVector(userId) {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    try {
+      const raw = window.localStorage.getItem(`arvdoul_iv_${userId}`);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.vector === 'object') return parsed;
+    } catch {
+      // ignore storage quota / parse failures
+    }
+    return null;
+  }
+
+  _writeLocalInterestVector(userId, vector, decayTs = Date.now()) {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      window.localStorage.setItem(
+        `arvdoul_iv_${userId}`,
+        JSON.stringify({ vector, ts: decayTs })
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }
+
+  _pruneAndDecayVector(rawVector, lastDecayTs = Date.now()) {
+    const now = Date.now();
+    const elapsedDays = Math.max(0, (now - lastDecayTs) / (1000 * 60 * 60 * 24));
+    const decayFactor = elapsedDays > 0.04 ? Math.pow(0.96, elapsedDays) : 1;
+    const entries = [];
+    for (const [key, value] of Object.entries(rawVector || {})) {
+      if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+      const decayed = Math.max(-5, Math.min(25, value * decayFactor));
+      if (Math.abs(decayed) >= 0.01) {
+        entries.push([key, Number(decayed.toFixed(4))]);
+      }
+    }
+    entries.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+    return Object.fromEntries(entries.slice(0, 80));
+  }
+
+  async _flushInterestVectorNow(userId) {
+    if (this.offlineMode || !userId || userId === 'guest_user') return;
+    const cached = this.interestVectorCache.get(userId);
+    if (!cached?.vector) return;
+    this._pendingVectorFlushes.delete(userId);
+    try {
+      await this._ensureInitialized();
+      const { doc, setDoc } = this.firestoreMethods;
+      await setDoc(
+        doc(this.firestore, 'user_interest_vectors', userId),
+        { vector: cached.vector, updatedAt: Date.now() },
+        { merge: true }
+      );
+    } catch (e) {
+      logger.warn('Interest-vector persist failed; ranking signal not stored', { userId, error: e?.message });
+    }
+  }
+
   async getUserInterestVector(userId) {
-    if (this.offlineMode) return {};
+    if (this.offlineMode || !userId || userId === 'guest_user') return {};
     if (this.interestVectorCache.has(userId)) {
       const cached = this.interestVectorCache.get(userId);
       if (Date.now() - cached.ts < FEED_CONFIG.PERFORMANCE.PREF_CACHE_TTL) return cached.vector;
+    }
+    const local = this._readLocalInterestVector(userId);
+    if (local?.vector && Date.now() - (local.ts || 0) < FEED_CONFIG.PERFORMANCE.PREF_CACHE_TTL) {
+      const pruned = this._pruneAndDecayVector(local.vector, local.ts);
+      this.interestVectorCache.set(userId, { vector: pruned, ts: Date.now() });
+      return pruned;
     }
     try {
       await this._ensureInitialized();
       const { doc, getDoc } = this.firestoreMethods;
       const snap = await getDoc(doc(this.firestore, 'user_interest_vectors', userId));
       if (snap.exists()) {
-        const vector = snap.data().vector || {};
-        this.interestVectorCache.set(userId, { vector, ts: Date.now() });
-        return vector;
+        const data = snap.data() || {};
+        const pruned = this._pruneAndDecayVector(data.vector || {}, data.updatedAt || Date.now());
+        this.interestVectorCache.set(userId, { vector: pruned, ts: Date.now() });
+        this._writeLocalInterestVector(userId, pruned, Date.now());
+        return pruned;
       }
     } catch (e) {
       logger.warn('Interest-vector read failed; ranking falls back to defaults', { userId, error: e?.message });
     }
-    return {};
+    return local?.vector ? this._pruneAndDecayVector(local.vector, local.ts || Date.now()) : {};
   }
 
-  async updateUserInterestVector(userId, postTopics, action = 'view') {
-    if (this.offlineMode) return {};
-    const vector = await this.getUserInterestVector(userId);
-    const weight = action === 'like' ? 0.1 : action === 'comment' ? 0.15 : 0.05;
-    (postTopics || []).forEach(topic => {
-      vector[topic] = (vector[topic] || 0) + weight;
+  async updateUserInterestVector(userId, postOrTopics, action = 'view') {
+    if (!userId || userId === 'guest_user') return {};
+    const tokens = this._extractSignalTokens(postOrTopics);
+    if (tokens.length === 0) return {};
+    const cached = this.interestVectorCache.get(userId);
+    const baseVector = cached?.vector
+      ? { ...cached.vector }
+      : (this.offlineMode ? {} : { ...(await this.getUserInterestVector(userId)) });
+    const weights = {
+      watch_complete: 0.25,
+      save: 0.22,
+      share: 0.20,
+      comment: 0.18,
+      dwell: 0.12,
+      like: 0.10,
+      view: 0.04,
+      skip: -0.06,
+      not_interested: -0.35,
+      demote: -0.40,
+    };
+    const delta = weights[action] ?? 0.05;
+    tokens.forEach((topic) => {
+      const multiplier = topic.startsWith('creator:') ? 1.25 : 1;
+      const next = (baseVector[topic] || 0) + (delta * multiplier);
+      baseVector[topic] = Math.max(-5, Math.min(25, next));
     });
-    try {
-      await this._ensureInitialized();
-      const { doc, setDoc } = this.firestoreMethods;
-      await setDoc(doc(this.firestore, 'user_interest_vectors', userId), { vector, updatedAt: Date.now() }, { merge: true });
-      this.interestVectorCache.set(userId, { vector, ts: Date.now() });
-    } catch (e) {
-      logger.warn('Interest-vector persist failed; ranking signal not stored', { userId, error: e?.message });
-    }
-    return vector;
+    const pruned = this._pruneAndDecayVector(baseVector, Date.now());
+    this.interestVectorCache.set(userId, { vector: pruned, ts: Date.now() });
+    this._writeLocalInterestVector(userId, pruned, Date.now());
+    if (this.offlineMode) return pruned;
+
+    this._bindVectorFlush();
+    this._pendingVectorFlushes.add(userId);
+    const timerKey = `iv_persist_${userId}`;
+    if (this.debounceTimers.has(timerKey)) clearTimeout(this.debounceTimers.get(timerKey));
+    const delayMs = action === 'not_interested' || action === 'demote' ? 2000 : 12000;
+    const timer = setTimeout(() => {
+      this.debounceTimers.delete(timerKey);
+      this._flushInterestVectorNow(userId).catch(() => {});
+    }, delayMs);
+    this.debounceTimers.set(timerKey, timer);
+    return pruned;
   }
 
   async _loadSessionState(userId) {
@@ -451,22 +589,32 @@ class UltimateFeedService {
     ];
   }
 
+  _parseCursorTimestamp(lastDoc) {
+    if (!lastDoc) return null;
+    const raw = lastDoc?.lastCreatedAt || lastDoc?.t || lastDoc?.c || null;
+    if (!raw) return null;
+    const dt = raw instanceof Date ? raw : new Date(raw);
+    if (Number.isNaN(dt.getTime())) return null;
+    const tsFactory = this.firestoreMethods?.Timestamp?.fromDate;
+    return typeof tsFactory === 'function' ? tsFactory(dt) : dt;
+  }
+
   async _getFollowingFeedEfficient(userId, options = {}) {
     if (this.offlineMode) return [];
     const { limit = 20, lastDoc } = options || {};
     try {
       const hiddenAuthorsPromise = this._getHiddenAuthorsCached(userId);
-      const followsSnap = await this.firestoreMethods.getDocs(
-        this.firestoreMethods.query(
-          this.firestoreMethods.collection(this.firestore, 'follows'),
-          this.firestoreMethods.where('followerId', '==', userId),
-          this.firestoreMethods.orderBy('__name__')
-        )
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const followingRes = await getSocialGraphService()
+        .listEdges(userId, 'following', { limit: 120 })
+        .catch(() => ({ ids: [] }));
+      const hiddenAuthors = await hiddenAuthorsPromise;
+      const followedIds = (Array.isArray(followingRes?.ids) ? followingRes.ids : []).filter(
+        (id) => id && !hiddenAuthors.has(id)
       );
-      const followedIds = followsSnap.docs.map(doc => doc.data().followingId);
       if (followedIds.length === 0) return [];
 
-      const hiddenAuthors = await hiddenAuthorsPromise;
+      const cursorTs = this._parseCursorTimestamp(lastDoc);
       const posts = [];
       const chunkSize = 30;
       const chunks = [];
@@ -474,16 +622,18 @@ class UltimateFeedService {
         chunks.push(followedIds.slice(i, i + chunkSize));
       }
       const chunkResults = await Promise.all(
-        chunks.map((chunk) => {
-          const q = this.firestoreMethods.query(
-            this.firestoreMethods.collection(this.firestore, 'posts'),
-            this.firestoreMethods.where('authorId', 'in', chunk),
-            ...this._publicPostFilters(),
-            this.firestoreMethods.orderBy('createdAt', 'desc'),
-            this.firestoreMethods.limit(10)
-          );
-          return this.firestoreMethods.getDocs(q);
-        })
+        chunks.map((chunk) =>
+          this.firestoreMethods.getDocs(
+            this.firestoreMethods.query(
+              this.firestoreMethods.collection(this.firestore, 'posts'),
+              this.firestoreMethods.where('authorId', 'in', chunk),
+              ...this._publicPostFilters(),
+              ...(cursorTs ? [this.firestoreMethods.where('createdAt', '<', cursorTs)] : []),
+              this.firestoreMethods.orderBy('createdAt', 'desc'),
+              this.firestoreMethods.limit(10)
+            )
+          )
+        )
       );
       chunkResults.forEach((snap) => {
         snap.forEach((doc) => {
@@ -500,14 +650,8 @@ class UltimateFeedService {
       });
 
       posts.sort((a, b) => b.createdAt - a.createdAt);
-      let startIndex = 0;
-      if (lastDoc && lastDoc.lastCreatedAt) {
-        const lastDate = new Date(lastDoc.lastCreatedAt);
-        startIndex = posts.findIndex(p => p.createdAt <= lastDate);
-        if (startIndex === -1) startIndex = posts.length;
-      }
-      const paginated = posts.slice(startIndex, startIndex + limit);
-      const nextCursor = paginated.length > 0 ? { lastCreatedAt: paginated[paginated.length-1].createdAt.toISOString() } : null;
+      const paginated = posts.slice(0, limit);
+      const nextCursor = paginated.length > 0 ? { lastCreatedAt: paginated[paginated.length - 1].createdAt.toISOString() } : null;
       paginated._nextCursor = nextCursor;
       return paginated;
     } catch (error) {
@@ -533,6 +677,7 @@ class UltimateFeedService {
         .filter((id) => id && followerSet.has(id) && !hiddenAuthors.has(id));
       if (friendIds.length === 0) return [];
 
+      const cursorTs = this._parseCursorTimestamp(lastDoc);
       const posts = [];
       const chunkSize = 30;
       const chunks = [];
@@ -540,16 +685,18 @@ class UltimateFeedService {
         chunks.push(friendIds.slice(i, i + chunkSize));
       }
       const chunkResults = await Promise.all(
-        chunks.map((chunk) => {
-          const q = this.firestoreMethods.query(
-            this.firestoreMethods.collection(this.firestore, 'posts'),
-            this.firestoreMethods.where('authorId', 'in', chunk),
-            ...this._publicPostFilters(),
-            this.firestoreMethods.orderBy('createdAt', 'desc'),
-            this.firestoreMethods.limit(10)
-          );
-          return this.firestoreMethods.getDocs(q);
-        })
+        chunks.map((chunk) =>
+          this.firestoreMethods.getDocs(
+            this.firestoreMethods.query(
+              this.firestoreMethods.collection(this.firestore, 'posts'),
+              this.firestoreMethods.where('authorId', 'in', chunk),
+              ...this._publicPostFilters(),
+              ...(cursorTs ? [this.firestoreMethods.where('createdAt', '<', cursorTs)] : []),
+              this.firestoreMethods.orderBy('createdAt', 'desc'),
+              this.firestoreMethods.limit(10)
+            )
+          )
+        )
       );
       chunkResults.forEach((snap) => {
         snap.forEach((doc) => {
@@ -566,13 +713,7 @@ class UltimateFeedService {
       });
 
       posts.sort((a, b) => b.createdAt - a.createdAt);
-      let startIndex = 0;
-      if (lastDoc && lastDoc.lastCreatedAt) {
-        const lastDate = new Date(lastDoc.lastCreatedAt);
-        startIndex = posts.findIndex(p => p.createdAt <= lastDate);
-        if (startIndex === -1) startIndex = posts.length;
-      }
-      const paginated = posts.slice(startIndex, startIndex + limit);
+      const paginated = posts.slice(0, limit);
       const nextCursor = paginated.length > 0 ? { lastCreatedAt: paginated[paginated.length - 1].createdAt.toISOString() } : null;
       paginated._nextCursor = nextCursor;
       return paginated;
@@ -593,12 +734,21 @@ class UltimateFeedService {
     try {
       const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
       const { limit = 20, lastDoc } = options;
+      const cursorTs = this._parseCursorTimestamp(lastDoc);
       const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      
+
       let snapshot;
       try {
-        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
+        snapshot = await getDocs(
+          query(
+            postsRef,
+            ...this._publicPostFilters(),
+            ...(cursorTs ? [where('createdAt', '<', cursorTs)] : []),
+            orderBy('createdAt', 'desc'),
+            firestoreLimit(limit * 3)
+          )
+        );
       } catch (err) {
         snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
@@ -610,7 +760,7 @@ class UltimateFeedService {
         if (data.status === 'draft') return;
         if (data.visibility === 'private' && data.authorId !== userId) return;
         if (hiddenAuthors.has(data.authorId)) return;
-        
+
         posts.push({
           id: doc.id,
           ...data,
@@ -621,7 +771,7 @@ class UltimateFeedService {
         });
       });
 
-      if (posts.length === 0) {
+      if (posts.length === 0 && !cursorTs) {
         return this._getFallbackSimpleFeed(userId, options, 'for_you');
       }
       return posts.slice(0, limit);
@@ -704,17 +854,26 @@ class UltimateFeedService {
     if (this.offlineMode) return [];
     try {
       const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
-      const { limit = 20 } = options;
+      const { limit = 20, lastDoc } = options;
+      const cursorTs = this._parseCursorTimestamp(lastDoc);
       const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      
+
       let snapshot;
       try {
-        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
+        snapshot = await getDocs(
+          query(
+            postsRef,
+            ...this._publicPostFilters(),
+            ...(cursorTs ? [where('createdAt', '<', cursorTs)] : []),
+            orderBy('createdAt', 'desc'),
+            firestoreLimit(limit * 3)
+          )
+        );
       } catch {
         snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
-      
+
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
@@ -723,13 +882,36 @@ class UltimateFeedService {
           id: doc.id,
           ...data,
           _source: 'trending',
-          _score: (data.likeCount || 0) + (data.commentCount || 0) + (data.viewCount || 0) + 1,
           createdAt: data.createdAt?.toDate?.() || (data.createdAt ? new Date(data.createdAt) : new Date()),
           updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : new Date())
         });
       });
-      posts.sort((a, b) => (b._score || 0) - (a._score || 0));
-      if (posts.length === 0) return this._getFallbackSimpleFeed(userId, options, 'trending');
+      if (posts.length === 0) {
+        return cursorTs ? [] : this._getFallbackSimpleFeed(userId, options, 'trending');
+      }
+
+      await countersManager.applyAll({
+        items: posts,
+        collection: 'posts',
+        fields: ['likes', 'comments', 'shares', 'saves', 'views'],
+        scope: 'stats',
+      }).catch(() => {});
+
+      const now = Date.now();
+      posts.forEach((p) => {
+        const s = p.stats || {};
+        const likes = s.likes ?? 0;
+        const comments = s.comments ?? 0;
+        const shares = s.shares ?? 0;
+        const saves = s.saves ?? 0;
+        const views = s.views ?? 0;
+        const ageHours = Math.max(0, (now - new Date(p.createdAt).getTime()) / (1000 * 60 * 60));
+        const engagement = (saves * 3) + (shares * 2.5) + (comments * 2) + likes + (Math.log1p(Math.max(0, views)) * 0.5) + 1;
+        p.trendingScore = engagement / Math.pow(ageHours + 2, 1.35);
+        p._score = Math.min(1.0, Math.max(0.15, Math.log1p(p.trendingScore) / 6));
+      });
+
+      posts.sort((a, b) => (b.trendingScore || 0) - (a.trendingScore || 0));
       return posts.slice(0, limit);
     } catch (error) {
       return this._getFallbackSimpleFeed(userId, options, 'trending');
@@ -740,17 +922,26 @@ class UltimateFeedService {
     if (this.offlineMode) return [];
     try {
       const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
-      const { limit = 20 } = options;
+      const { limit = 20, lastDoc } = options;
+      const cursorTs = this._parseCursorTimestamp(lastDoc);
       const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      
+
       let snapshot;
       try {
-        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
+        snapshot = await getDocs(
+          query(
+            postsRef,
+            ...this._publicPostFilters(),
+            ...(cursorTs ? [where('createdAt', '<', cursorTs)] : []),
+            orderBy('createdAt', 'desc'),
+            firestoreLimit(limit * 3)
+          )
+        );
       } catch {
         snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
-      
+
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
@@ -764,7 +955,7 @@ class UltimateFeedService {
           updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : new Date())
         });
       });
-      if (posts.length === 0) return this._getFallbackSimpleFeed(userId, options, 'discover');
+      if (posts.length === 0 && !cursorTs) return this._getFallbackSimpleFeed(userId, options, 'discover');
       return posts.slice(0, limit);
     } catch (error) {
       return this._getFallbackSimpleFeed(userId, options, 'discover');
@@ -775,7 +966,8 @@ class UltimateFeedService {
     if (this.offlineMode) return [];
     try {
       const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
-      const { limit = 20 } = options;
+      const { limit = 20, lastDoc } = options;
+      const cursorTs = this._parseCursorTimestamp(lastDoc);
       const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
 
@@ -786,6 +978,7 @@ class UltimateFeedService {
             postsRef,
             ...this._publicPostFilters(),
             where('type', '==', 'video'),
+            ...(cursorTs ? [where('createdAt', '<', cursorTs)] : []),
             orderBy('createdAt', 'desc'),
             firestoreLimit(limit * 2)
           )
@@ -867,8 +1060,9 @@ class UltimateFeedService {
     if (this.offlineMode) return [];
     try {
       const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
-      const { limit = 20 } = options;
-      const { collection, query, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
+      const { limit = 20, lastDoc } = options;
+      const cursorTs = this._parseCursorTimestamp(lastDoc);
+      const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
 
       let snapshot;
@@ -877,6 +1071,7 @@ class UltimateFeedService {
           query(
             postsRef,
             ...this._publicPostFilters(),
+            ...(cursorTs ? [where('createdAt', '<', cursorTs)] : []),
             orderBy('createdAt', 'desc'),
             firestoreLimit(limit * 4)
           )
@@ -1123,13 +1318,26 @@ class UltimateFeedService {
       if (cached) return { ...cached, cached: true, operationId, duration: Date.now() - startTime };
     }
 
-    const [sessionRes, weightsRes, userWeightsRes, userPrefsRes] = await Promise.allSettled([
+    const [sessionRes, weightsRes, userWeightsRes, userPrefsRes, , interestVectorRes, followingEdgesRes] = await Promise.allSettled([
       this._loadSessionState(userId),
       this._loadWeightsFromConfig(),
       this._getUserFeedWeights(userId),
       this._getUserPreferencesCached(userId),
       this._getHiddenAuthorsCached(userId),
+      this.getUserInterestVector(userId),
+      import('./socialGraphService.js')
+        .then(({ getSocialGraphService }) => getSocialGraphService().listEdges(userId, 'following', { limit: 120 }))
+        .catch(() => ({ ids: [] })),
     ]);
+
+    const interestVector = interestVectorRes.status === 'fulfilled' && interestVectorRes.value
+      ? interestVectorRes.value
+      : {};
+    const followingSet = new Set(
+      followingEdgesRes.status === 'fulfilled' && Array.isArray(followingEdgesRes.value?.ids)
+        ? followingEdgesRes.value.ids
+        : []
+    );
 
     const sessionState = sessionRes.status === 'fulfilled' && sessionRes.value
       ? sessionRes.value
@@ -1205,6 +1413,9 @@ class UltimateFeedService {
     let scoredPosts = this._scoreAndRankPostsOptimized(feedSources, userId, dynamicWeights, sessionSeed, hiddenPosts, seenPostIds, {
       allowSeenFallback: !lastDoc,
       targetLimit: limit,
+      interestVector,
+      followingSet,
+      notInterestedPosts,
     });
     scoredPosts = this._applySessionBoosts(userId, scoredPosts);
     scoredPosts = scoredPosts.filter(p => !notInterestedPosts.has(p.id));
@@ -1389,7 +1600,21 @@ class UltimateFeedService {
     }
   }
 
-  _scoreAndRankPostsOptimized(sources, userId, dynamicWeights, sessionSeed, hiddenPosts, seenPostIds, { allowSeenFallback = false, targetLimit = 10 } = {}) {
+  _scoreAndRankPostsOptimized(
+    sources,
+    userId,
+    dynamicWeights,
+    sessionSeed,
+    hiddenPosts,
+    seenPostIds,
+    {
+      allowSeenFallback = false,
+      targetLimit = 10,
+      interestVector = null,
+      followingSet = null,
+      notInterestedPosts = null,
+    } = {}
+  ) {
     const rawPostsMap = new Map();
     const unseenPosts = [];
 
@@ -1415,6 +1640,8 @@ class UltimateFeedService {
       pool = [...pool, ...seenFallback];
     }
     const allPosts = [];
+    const vec = interestVector && typeof interestVector === 'object' ? interestVector : {};
+    const hasVector = Object.keys(vec).length > 0;
 
     pool.forEach(({ post: p, source, weight, seen }) => {
       let baseScore = p._score || 1.0;
@@ -1423,7 +1650,37 @@ class UltimateFeedService {
       }
 
       let finalScore = baseScore * weight;
-      if (seen) finalScore *= 0.45;
+
+      if (hasVector && source !== 'sponsored') {
+        const tokens = this._extractSignalTokens(p);
+        let affinitySum = 0;
+        let matches = 0;
+        for (const token of tokens) {
+          const v = vec[token];
+          if (typeof v === 'number' && Number.isFinite(v)) {
+            affinitySum += v;
+            matches += 1;
+          }
+        }
+        if (matches > 0) {
+          const avgSignal = affinitySum / matches;
+          const affinityMultiplier = Math.max(0.45, Math.min(2.2, 1 + Math.tanh(avgSignal / 3) * 0.9));
+          finalScore *= affinityMultiplier;
+        }
+      }
+
+      if (followingSet && followingSet.has(p.authorId) && source !== 'following') {
+        finalScore *= 1.25;
+      }
+
+      if (notInterestedPosts && notInterestedPosts.size > 0) {
+        const topics = Array.isArray(p.topics) ? p.topics : [];
+        if (topics.some((t) => notInterestedPosts.has(`topic_${t}`))) {
+          finalScore *= 0.3;
+        }
+      }
+
+      if (seen) finalScore *= 0.38;
 
       if (p.toxicityScore !== undefined) finalScore *= (1 - (p.toxicityScore || 0));
       // Average watch time is not tracked on posts (or mirrored for videos — the
@@ -1457,13 +1714,13 @@ class UltimateFeedService {
     const likes = post.stats?.likes ?? post.likeCount ?? post.likes ?? 0;
     const comments = post.stats?.comments ?? post.commentCount ?? post.comments ?? 0;
     const shares = post.stats?.shares ?? post.shareCount ?? post.shares ?? 0;
+    const saves = post.stats?.saves ?? post.saveCount ?? post.saves ?? 0;
     const views = post.stats?.views ?? post.viewCount ?? post.views ?? 0;
-    const ageHours = post.createdAt ? (Date.now() - new Date(post.createdAt).getTime()) / (1000 * 60 * 60) : 24;
+    const ageHours = post.createdAt ? Math.max(0, (Date.now() - new Date(post.createdAt).getTime()) / (1000 * 60 * 60)) : 24;
     const recencyScore = Math.exp(-ageHours / 24);
-    const engagementScore = (
-      (likes * w.likes) + (comments * w.comments) + (shares * w.shares) + (Math.log(views + 1) * w.views)
-    ) / 100;
-    const final = (engagementScore * 0.7) + (recencyScore * w.recency * 0.3);
+    const weightedEngagement = (likes * w.likes) + (comments * w.comments) + (shares * w.shares) + (saves * 0.25) + (Math.log1p(Math.max(0, views)) * w.views);
+    const engagementScore = Math.min(1.0, Math.log1p(Math.max(0, weightedEngagement)) / Math.log1p(120));
+    const final = (engagementScore * 0.65) + (recencyScore * Math.max(0.25, w.recency) * 0.35);
     return Math.min(1.0, Math.max(0.1, final));
   }
 
@@ -1707,18 +1964,22 @@ class UltimateFeedService {
     await this._saveSessionState(userId, sessionState, true);
 
     const postDetails = await this._getPostDetails(postId);
-    if (postDetails && postDetails.topics && postDetails.topics.length) {
-      const notInterestedSet = new Set(sessionState.notInterested || []);
-      for (const topic of postDetails.topics) {
-        notInterestedSet.add(`topic_${topic}`);
+    if (postDetails) {
+      if (Array.isArray(postDetails.topics) && postDetails.topics.length) {
+        const notInterestedSet = new Set(sessionState.notInterested || []);
+        for (const topic of postDetails.topics) {
+          notInterestedSet.add(`topic_${topic}`);
+        }
+        sessionState.notInterested = Array.from(notInterestedSet);
+        await this._saveSessionState(userId, sessionState, true);
       }
-      sessionState.notInterested = Array.from(notInterestedSet);
-      await this._saveSessionState(userId, sessionState, true);
+      await this.updateUserInterestVector(userId, postDetails, 'not_interested').catch(() => {});
     }
 
     const { collection, addDoc, serverTimestamp } = this.firestoreMethods;
     const feedbackRef = collection(this.firestore, 'user_feedback');
     await addDoc(feedbackRef, { userId, postId, type: 'demote', reason, createdAt: serverTimestamp() });
+    this.clearUserCache(userId);
     return { success: true };
   }
 

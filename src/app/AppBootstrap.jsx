@@ -16,20 +16,15 @@ import PWAInstallBanner from '../components/common/PWAInstallBanner.jsx';
 import SWUpdateBanner from '../components/common/SWUpdateBanner.jsx';
 import { RouteProgressBar } from '../components/Navigation/RouteProgressBar.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
-import { tokens } from '../design-system/tokens.js';
+import BrandBootCanvas from '../components/Shared/BrandBootCanvas.jsx';
 import { initAppBackgroundPrefetch } from '../utils/routePrefetcher.js';
 
 const AppBootFallback = () => {
   const { isDark } = useTheme();
   return (
-    <div
-      className="min-h-[100dvh] w-full"
-      style={{ backgroundColor: isDark ? tokens.color.bg.dark : tokens.color.bg.light }}
-      aria-busy="true"
-      aria-label="Loading application"
-    >
+    <BrandBootCanvas isDark={isDark} label="Loading application">
       <RouteProgressBar isAnimating={true} />
-    </div>
+    </BrandBootCanvas>
   );
 };
 

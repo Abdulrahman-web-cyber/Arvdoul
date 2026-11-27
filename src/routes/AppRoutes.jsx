@@ -9,22 +9,25 @@ import SplashScreen from "../screens/SplashScreen.jsx";
 import logger from "../utils/Logger.js";
 import metricsService from "../services/metricsService.js";
 
-import IntroScreen from "../screens/IntroScreen.jsx";
-import LoginScreen from "../screens/LoginScreen.jsx";
-import HomeScreen from "../screens/HomeScreen.jsx";
-import VideosScreen from "../screens/VideosScreen.jsx";
-import MessagingScreen from "../screens/MessagingScreen.jsx";
-import NotificationsScreen from "../screens/NotificationsScreen.jsx";
-import ProfileScreen from "../screens/Profile/ProfileScreen.jsx";
-import ProfilePublicScreen from "../screens/Profile/ProfilePublicScreen.jsx";
-import ProfileMyScreen from "../screens/Profile/ProfileMyScreen.jsx";
-import EditProfile from "../screens/Profile/EditProfileScreen.jsx";
-import CreatorDashboardScreen from "../screens/Profile/CreatorDashboardScreen.jsx";
-import FollowersScreen from "../screens/Profile/FollowersScreen.jsx";
-import FollowingScreen from "../screens/Profile/FollowingScreen.jsx";
-import FriendsScreen from "../screens/Profile/FriendsScreen.jsx";
-import ConnectionsScreen from "../screens/Profile/ConnectionsScreen.jsx";
-import PassportScreen from "../screens/Citizenship/PassportScreen.jsx";
+import BrandBootCanvas from "../components/Shared/BrandBootCanvas.jsx";
+import { useTheme } from "../context/ThemeContext.jsx";
+
+const IntroScreen = lazyWithRetry(() => import("../screens/IntroScreen.jsx"), "IntroScreen");
+const LoginScreen = lazyWithRetry(() => import("../screens/LoginScreen.jsx"), "LoginScreen");
+const HomeScreen = lazyWithRetry(() => import("../screens/HomeScreen.jsx"), "HomeScreen");
+const VideosScreen = lazyWithRetry(() => import("../screens/VideosScreen.jsx"), "VideosScreen");
+const MessagingScreen = lazyWithRetry(() => import("../screens/MessagingScreen.jsx"), "MessagingScreen");
+const NotificationsScreen = lazyWithRetry(() => import("../screens/NotificationsScreen.jsx"), "NotificationsScreen");
+const ProfileScreen = lazyWithRetry(() => import("../screens/Profile/ProfileScreen.jsx"), "ProfileScreen");
+const ProfilePublicScreen = lazyWithRetry(() => import("../screens/Profile/ProfilePublicScreen.jsx"), "ProfilePublicScreen");
+const ProfileMyScreen = lazyWithRetry(() => import("../screens/Profile/ProfileMyScreen.jsx"), "ProfileMyScreen");
+const EditProfile = lazyWithRetry(() => import("../screens/Profile/EditProfileScreen.jsx"), "EditProfile");
+const CreatorDashboardScreen = lazyWithRetry(() => import("../screens/Profile/CreatorDashboardScreen.jsx"), "CreatorDashboardScreen");
+const FollowersScreen = lazyWithRetry(() => import("../screens/Profile/FollowersScreen.jsx"), "FollowersScreen");
+const FollowingScreen = lazyWithRetry(() => import("../screens/Profile/FollowingScreen.jsx"), "FollowingScreen");
+const FriendsScreen = lazyWithRetry(() => import("../screens/Profile/FriendsScreen.jsx"), "FriendsScreen");
+const ConnectionsScreen = lazyWithRetry(() => import("../screens/Profile/ConnectionsScreen.jsx"), "ConnectionsScreen");
+const PassportScreen = lazyWithRetry(() => import("../screens/Citizenship/PassportScreen.jsx"), "PassportScreen");
 
 function isDynamicImportError(err) {
   const msg = String(err?.message || err || '');
@@ -180,23 +183,27 @@ import {
 import { RouteProgressBar } from "../components/Navigation/RouteProgressBar.jsx";
 import FeatureGate from "../components/Shared/FeatureGate.jsx";
 
-// Seamless, non-blocking route transition fallback (ambient top progress line)
-const RouteLoadingFallback = () => (
-  <RouteProgressBar isAnimating={true} />
-);
+// Seamless, branded route transition fallback (never leaves a blank surface)
+const RouteLoadingFallback = () => {
+  const { isDark } = useTheme();
+  return (
+    <BrandBootCanvas isDark={isDark} embedded label="Loading route" showWordmark={false}>
+      <RouteProgressBar isAnimating={true} />
+    </BrandBootCanvas>
+  );
+};
 const RouteFallback = RouteLoadingFallback;
 
-// Layoutless routes (Intro, Login, Signup, Join Group) need a full themed canvas
-// while lazy route chunks load so users never see an unstyled flash.
-const PublicRouteFallback = () => (
-  <div
-    className="min-h-[100dvh] w-full bg-[#F6F8FC] dark:bg-[#03071B]"
-    aria-busy="true"
-    aria-label="Loading screen"
-  >
-    <RouteProgressBar isAnimating={true} />
-  </div>
-);
+// Layoutless routes (Intro, Login, Signup, Join Group) need the full themed
+// Arvdoul lockup while lazy chunks resolve so users never see an unstyled flash.
+const PublicRouteFallback = () => {
+  const { isDark } = useTheme();
+  return (
+    <BrandBootCanvas isDark={isDark} label="Loading screen">
+      <RouteProgressBar isAnimating={true} />
+    </BrandBootCanvas>
+  );
+};
 
 const RedirectChatToMessages = () => {
   const { conversationId } = useParams();

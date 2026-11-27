@@ -634,16 +634,38 @@ const PostWithTracking = React.memo(({
   const { register, unregister } = useContext(VisibilityContext);
   const [isVisible, setIsVisible] = useState(false);
   const ref = useRef(null);
+  const dwellStartRef = useRef(null);
+  const dwellReportedRef = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    const flushDwell = () => {
+      if (!dwellStartRef.current || dwellReportedRef.current) return;
+      const elapsedSec = (Date.now() - dwellStartRef.current) / 1000;
+      dwellStartRef.current = null;
+      if (elapsedSec >= 2.5 && currentUser?.uid && post?.id) {
+        dwellReportedRef.current = true;
+        const signal = elapsedSec >= 12 ? 'watch_complete' : 'dwell';
+        feedService.updateUserInterestVector?.(currentUser.uid, post, signal)?.catch?.(() => {});
+      }
+    };
     const handleVisibility = (visible) => {
+      if (visible) {
+        if (!dwellStartRef.current && !dwellReportedRef.current) {
+          dwellStartRef.current = Date.now();
+        }
+      } else {
+        flushDwell();
+      }
       setIsVisible(prev => (prev !== visible ? visible : prev));
     };
     register(el, handleVisibility);
-    return () => unregister(el);
-  }, [register, unregister]);
+    return () => {
+      flushDwell();
+      unregister(el);
+    };
+  }, [register, unregister, currentUser?.uid, post]);
 
   return (
     <div ref={ref} id={`post-${post.id}`}>
@@ -1115,10 +1137,9 @@ export default function HomeScreen() {
               }
               if (Array.isArray(localPosts) && localPosts.length > 0) {
                 const existingIds = new Set(newPosts.map(p => p.id));
-                // Community posts (visibility 'community') belong to their
-                // community feed, not the home feed; an optimistic one must not
-                // leak across surfaces.
-                const freshLocal = localPosts.filter(p => p && p.id && p.visibility !== 'community' && !existingIds.has(p.id)).map(p => hydratePost(p));
+                const freshLocal = localPosts
+                  .filter(p => p && p.id && p.visibility !== 'community' && !existingIds.has(p.id) && !blockedIds.has(p.authorId))
+                  .map(p => hydratePost(p));
                 newPosts = [...freshLocal, ...newPosts];
               }
 
@@ -1509,7 +1530,7 @@ export default function HomeScreen() {
     return (
       <div className={cn(
         'h-full min-h-0 w-full flex flex-col overflow-hidden max-w-6xl mx-auto px-4 py-6',
-        isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
+        isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
       )}>
         <FeedSkeleton />
       </div>
@@ -1522,7 +1543,7 @@ export default function HomeScreen() {
     <VisibilityProvider root={scrollerRootEl}>
       <div className={cn(
         'h-full min-h-0 w-full max-w-6xl mx-auto xl:grid xl:grid-cols-[minmax(0,640px)_320px] xl:justify-center xl:gap-8 overflow-hidden',
-        isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
+        isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
       )}>
         <div className="h-full min-h-0 w-full flex flex-col overflow-hidden max-w-2xl mx-auto xl:mx-0">
           {/* Banners */}

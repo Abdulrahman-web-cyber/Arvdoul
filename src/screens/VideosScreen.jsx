@@ -10,8 +10,9 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import { useVideoStore } from '../store/videoStore';
-import { VideoFeed } from '../components/Videos';
 import videoService from '../services/videoService';
+import { VideoFeed } from '../components/Videos';
+import { useSparksFeed } from '../hooks/useSparksFeed.js';
 import { toast } from 'sonner';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
@@ -30,25 +31,34 @@ const VideosScreen = () => {
   const { isDark } = useTheme();
   const { user } = useAuth();
   const {
-    videos,
-    setVideos,
-    appendVideos,
-    loading,
-    setLoading,
-    loadingMore,
-    setLoadingMore,
-    hasMore,
-    setHasMore,
-    nextCursor,
-    setNextCursor,
     feedType,
     setFeedType,
     setCurrentIndex,
   } = useVideoStore();
 
-  const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('feed'); // 'feed' | 'grid'
-  const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
+
+  const fetchSparksFeed = useCallback(
+    (_uid, opts) => videoService.getVideoFeed(user?.uid ?? null, { ...opts }),
+    [user?.uid]
+  );
+
+  const {
+    items: videos,
+    loading,
+    loadingMore,
+    hasMore,
+    error,
+    backgroundRefreshing,
+    loadFeed,
+    loadMore,
+  } = useSparksFeed({
+    viewerUid: user?.uid ?? null,
+    feedType,
+    limit: 20,
+    mode: 'store',
+    fetchFeedFn: fetchSparksFeed,
+  });
 
   // Sync the feed type from the URL. The tab bar highlights `feedType`, so a
   // visit to /videos with no `tab` used to load the "sparks" feed while
@@ -57,63 +67,19 @@ const VideosScreen = () => {
     if (initialTab !== feedType) setFeedType(initialTab);
   }, [initialTab, setFeedType, feedType]);
 
-  // Load videos from service (non-blocking background sync if videos already cached)
-  const loadVideos = useCallback(async (type = feedType, { replace = false } = {}) => {
-    if (replace || !videos || videos.length === 0) {
-      setLoading(true);
-      if (replace) setVideos([]);
-    } else {
-      setBackgroundRefreshing(true);
-    }
-    setError(null);
+  const loadVideos = useCallback(
+    (type = feedType, opts = {}) => loadFeed(type, opts),
+    [loadFeed, feedType]
+  );
 
-    try {
-      const result = await videoService.getVideoFeed(user?.uid ?? null, {
-        feedType: type,
-        limit: 20,
-      });
-
-      const feed = result?.feed || result?.videos || [];
-      setVideos(Array.isArray(feed) ? feed : []);
-      setHasMore(Boolean(result?.hasMore));
-      setNextCursor(result?.nextCursor || null);
-    } catch (err) {
-      console.error('Failed to load videos:', err);
-      if (replace || !videos || videos.length === 0) {
-        setError(err?.message || 'Could not load videos.');
-      }
-    } finally {
-      setLoading(false);
-      setBackgroundRefreshing(false);
-    }
-  }, [feedType, videos, user?.uid, setVideos, setLoading, setHasMore, setNextCursor]);
-
-  // Load more pagination
   const loadMoreVideos = useCallback(async () => {
-    if (loadingMore || !hasMore || !nextCursor) return;
-
-    setLoadingMore(true);
-
+    if (loadingMore || !hasMore) return;
     try {
-      const result = await videoService.getVideoFeed(user?.uid ?? null, {
-        feedType,
-        cursor: nextCursor,
-        limit: 20,
-      });
-
-      const feed = result?.feed || result?.videos || [];
-      if (Array.isArray(feed) && feed.length > 0) {
-        appendVideos(feed);
-        setHasMore(result.hasMore || false);
-        setNextCursor(result.nextCursor || null);
-      }
-    } catch (err) {
-      console.error('Failed to load more videos:', err);
+      await loadMore({ overrideFeedType: feedType });
+    } catch {
       toast.error('Failed to load more videos');
-    } finally {
-      setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, nextCursor, feedType, user?.uid, appendVideos, setLoadingMore, setHasMore, setNextCursor]);
+  }, [loadingMore, hasMore, loadMore, feedType]);
 
   // Tab change handler
   const handleTabChange = useCallback((newTab) => {

@@ -25,6 +25,7 @@ import { useLayoutChrome } from '../../context/LayoutChromeContext.jsx';
 import { useProfileStore } from '../../store/profileStore';
 import { getUserService } from '../../services/userService.js';
 import { BRAND_GRADIENT, brandHexRgba, tokens } from '../../design-system/tokens.js';
+import { CitizenTierIcon, PerkIcon } from '../../components/Shared/ProgressionIcons.jsx';
 import {
   LEVEL_PERKS,
   CITIZEN_TIERS,
@@ -496,7 +497,14 @@ export default function LevelRoadmapScreen() {
                       )}
                     >
                       <div className="flex items-start gap-3 min-w-0">
-                        <span className="text-2xl shrink-0 mt-0.5" aria-hidden="true">{perk.icon}</span>
+                        <div className={cn(
+                          'w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 mt-0.5',
+                          isUnlocked
+                            ? isDark ? 'bg-purple-500/15 border-purple-400/30 text-purple-300' : 'bg-purple-50 border-purple-200 text-purple-700'
+                            : isDark ? 'bg-white/[0.04] border-white/[0.08] text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-500'
+                        )}>
+                          <PerkIcon minLevel={perk.minLevel} title={perk.title} className="w-4 h-4" />
+                        </div>
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-bold text-sm">{perk.title}</span>
@@ -558,8 +566,13 @@ export default function LevelRoadmapScreen() {
                     Every registered member of Arvdoul belongs to the community. Citizenship represents identity, belonging, and democratic participation.
                   </p>
                 </div>
-                {currentCitizenTier?.icon && (
-                  <span className="text-3xl shrink-0" aria-hidden="true">{currentCitizenTier.icon}</span>
+                {currentCitizenTier && (
+                  <div className={cn(
+                    'w-11 h-11 rounded-xl border flex items-center justify-center shrink-0',
+                    isDark ? 'bg-cyan-500/15 border-cyan-400/30 text-cyan-300' : 'bg-cyan-50 border-cyan-200 text-cyan-700'
+                  )}>
+                    <CitizenTierIcon tier={currentCitizenTier.tier} className="w-5 h-5" />
+                  </div>
                 )}
               </div>
 
@@ -655,7 +668,14 @@ export default function LevelRoadmapScreen() {
                       )}
                     >
                       <div className="flex items-start gap-3 min-w-0">
-                        <span className="text-2xl mt-0.5 shrink-0" aria-hidden="true">{tier.icon}</span>
+                        <div className={cn(
+                          'w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 mt-0.5',
+                          isReached
+                            ? isDark ? 'bg-cyan-500/15 border-cyan-400/30 text-cyan-300' : 'bg-cyan-50 border-cyan-200 text-cyan-700'
+                            : isDark ? 'bg-white/[0.04] border-white/[0.08] text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-500'
+                        )}>
+                          <CitizenTierIcon tier={tier.tier} className="w-4 h-4" />
+                        </div>
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-bold text-sm">{tier.tier}</span>
@@ -810,6 +830,21 @@ export default function LevelRoadmapScreen() {
                 isDark={isDark}
               />
             </section>
+
+            {isOwner && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => navigate('/titles')}
+                  style={{ background: BRAND_GRADIENT }}
+                  className="min-h-[42px] px-4 py-2 rounded-xl text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-[0_10px_22px_-10px_rgba(68,49,247,0.7)] hover:brightness-110 transition-all"
+                >
+                  <Crown className="w-4 h-4" aria-hidden="true" />
+                  <span>Claim &amp; Manage Royal Titles</span>
+                  <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </main>

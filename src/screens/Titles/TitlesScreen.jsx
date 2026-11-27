@@ -8,8 +8,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import titleService from '../../services/titleService';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { TitleIcon } from '../../components/Shared/ProgressionIcons.jsx';
 import { cn } from '../../lib/utils';
-import { Check, Lock, Info, ShieldCheck, X, CheckCircle2, Loader2 } from "lucide-react";
+import { Check, Lock, Info, ShieldCheck, X, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { toast } from 'sonner';
 
 const DOMAINS = [
@@ -26,6 +27,7 @@ export default function TitlesScreen() {
   const { theme } = useTheme();
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [claiming, setClaiming] = useState(null);
   const [activating, setActivating] = useState(null);
   const [earnedTitles, setEarnedTitles] = useState([]);
@@ -59,10 +61,12 @@ export default function TitlesScreen() {
       setLoading(false);
       return;
     }
+    setLoadError(null);
     try {
       const items = await titleService.getUserTitles(uid);
       setEarnedTitles(items);
     } catch {
+      setLoadError('Failed to load earned titles.');
       toast.error('Failed to load titles');
     } finally {
       setLoading(false);
@@ -178,14 +182,28 @@ export default function TitlesScreen() {
           </div>
         </div>
 
+        {loadError && (
+          <div className={cn('p-4 rounded-2xl border flex items-center justify-between gap-3', isDark ? 'bg-rose-500/10 border-rose-400/25 text-rose-200' : 'bg-rose-50 border-rose-200 text-rose-700')}>
+            <span className="text-xs font-semibold">{loadError}</span>
+            <button
+              type="button"
+              onClick={loadTitles}
+              className={cn('min-h-[36px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer', isDark ? 'border-white/15 bg-white/10 text-white' : 'border-rose-200 bg-white text-rose-700')}
+            >
+              <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Retry</span>
+            </button>
+          </div>
+        )}
+
         {/* Active Title Banner */}
         <section
           aria-labelledby="active-title-heading"
           className={cn(
-            'p-6 rounded-2xl border transition-all',
+            'p-6 rounded-2xl border transition-all backdrop-blur-xl',
             isDark
-              ? 'bg-[#080F2E] border-white/[0.08] shadow-[0_12px_32px_rgba(2,4,16,0.45)]'
-              : 'bg-white border-slate-200/90 shadow-sm'
+              ? 'bg-white/[0.03] border-white/[0.08] shadow-[0_12px_32px_rgba(2,4,16,0.45)]'
+              : 'bg-white/90 border-slate-200/90 shadow-sm'
           )}
         >
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -193,8 +211,12 @@ export default function TitlesScreen() {
               <span className="text-[11px] font-semibold uppercase tracking-wider text-purple-500 dark:text-purple-400">
                 Primary Identity Title
               </span>
-              <h2 id="active-title-heading" className="text-2xl font-black tracking-tight mt-1 flex items-center gap-2 text-slate-900 dark:text-white">
-                {activeTitleObj?.icon && <span className="text-2xl">{activeTitleObj.icon}</span>}
+              <h2 id="active-title-heading" className="text-2xl font-black tracking-tight mt-1 flex items-center gap-2.5 text-slate-900 dark:text-white">
+                {activeTitleObj && (
+                  <span className={cn('w-9 h-9 rounded-xl border flex items-center justify-center shrink-0', isDark ? 'bg-purple-500/15 border-purple-400/30 text-purple-300' : 'bg-purple-50 border-purple-200 text-purple-700')}>
+                    <TitleIcon titleId={activeTitleId || activeTitleObj?.id} domain={activeTitleObj?.domain} className="w-5 h-5" />
+                  </span>
+                )}
                 <span>{profile?.primaryTitle || activeTitleObj?.name || '—'}</span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 max-w-md leading-relaxed">
@@ -293,7 +315,14 @@ export default function TitlesScreen() {
                 <div>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-3xl shrink-0">{t.icon}</span>
+                      <div className={cn(
+                        'w-10 h-10 rounded-xl border flex items-center justify-center shrink-0',
+                        isActive || isEarned
+                          ? isDark ? 'bg-purple-500/15 border-purple-400/30 text-purple-300' : 'bg-purple-50 border-purple-200 text-purple-700'
+                          : isDark ? 'bg-white/[0.04] border-white/[0.08] text-slate-400' : 'bg-white border-slate-200 text-slate-500'
+                      )}>
+                        <TitleIcon titleId={t.id} domain={t.domain} className="w-5 h-5" />
+                      </div>
                       <div className="min-w-0">
                         <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                           <span className="truncate">{t.name}</span>
@@ -381,7 +410,9 @@ export default function TitlesScreen() {
             )}
           >
             <div className="flex items-start justify-between">
-              <div className="text-4xl">{inspectingTitle.icon}</div>
+              <div className={cn('w-12 h-12 rounded-2xl border flex items-center justify-center', isDark ? 'bg-purple-500/15 border-purple-400/30 text-purple-300' : 'bg-purple-50 border-purple-200 text-purple-700')}>
+                <TitleIcon titleId={inspectingTitle.id} domain={inspectingTitle.domain} className="w-6 h-6" />
+              </div>
               <button
                 type="button"
                 onClick={() => setInspectingTitle(null)}

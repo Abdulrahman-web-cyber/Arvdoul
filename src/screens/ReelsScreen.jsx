@@ -1,6 +1,6 @@
 // src/screens/ReelsScreen.jsx
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -35,16 +35,9 @@ import {
 } from "lucide-react";
 import videoService from '../services/videoService';
 import useHlsVideo from '../hooks/useHlsVideo.js';
-import {
-  useSparkViewTracking,
-  useSparkCreatorFollowMap,
-  toggleSparkCreatorFollow,
-  toggleSparkLike,
-  toggleSparkSave,
-  shareSpark,
-} from '../hooks/useSparkInteractions.js';
+import { useSparkViewTracking } from '../hooks/useSparkInteractions.js';
+import { useSparksFeed, normalizeSparkItem } from '../hooks/useSparksFeed.js';
 import { getUserService } from '../services/userService';
-import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar';
 import VideoBottomSheet from '../components/Videos/VideoBottomSheet';
 import VideoComments from '../components/Videos/VideoComments';
@@ -70,13 +63,62 @@ const formatDuration = (seconds) => {
 
   const [activeTab, setActiveTab] = useState('forYou'); // 'following' | 'forYou'
   const [currentReelIndex, setCurrentReelIndex] = useState(0);
-  const [reels, setReels] = useState([]);
-  const [feedLoading, setFeedLoading] = useState(true);
-  const [feedError, setFeedError] = useState(null);
   const [feedNonce, setFeedNonce] = useState(0);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const cursorRef = useRef(null);
+
+  // Keep absent stats unknown (null, never fabricated 0) using canonical Spark normalizer.
+  const mapVideoToReel = useCallback((v) => {
+    const normalized = normalizeSparkItem(v);
+    if (!normalized) return null;
+    return {
+      ...normalized,
+      stats: {
+        ...normalized.stats,
+        likes: v.likes ?? v.stats?.likes ?? null,
+        saves: v.saves ?? v.stats?.saves ?? null,
+      },
+    };
+  }, []);
+
+  const canonicalFeedType = activeTab === 'following' ? 'following' : 'for_you';
+  const fetchReelsFeed = useCallback(
+    (uid, opts) => videoService.getVideoFeed(uid, opts),
+    []
+  );
+  const likeReelApi = useCallback((id) => videoService.likeVideo(id), []);
+  const shareReelApi = useCallback((id, platform) => videoService.shareVideo(id, platform), []);
+
+  const {
+    items: reels,
+    setItems: setReels,
+    loading: feedLoading,
+    setLoading: setFeedLoading,
+    loadingMore,
+    hasMore,
+    error: feedError,
+    setError: setFeedError,
+    cursorRef,
+    loadFeed,
+    loadMore,
+    patchItem: patchReel,
+    removeItem,
+    markNotInterested,
+    toggleLike,
+    toggleSave,
+    shareItem,
+    followCreator,
+  } = useSparksFeed({
+    viewerUid: user?.uid ?? null,
+    feedType: canonicalFeedType,
+    limit: 10,
+    mode: 'local',
+    targetId: targetReelId,
+    syncWatchLater: false,
+    fetchFeedFn: fetchReelsFeed,
+    likeFn: likeReelApi,
+    shareFn: shareReelApi,
+    normalizeFn: mapVideoToReel,
+  });
+
   // Honour the user's playback.autoPlayVideos preference (default on) instead of
   // hardcoding autoplay. When autoplay is off the reel waits for a tap on the
   // play overlay before it starts.
@@ -106,97 +148,20 @@ const formatDuration = (seconds) => {
     enabled: Boolean(currentReel),
   });
 
-  const patchReel = useCallback((id, patch) => {
-    setReels((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  }, []);
-
-  const mapVideoToReel = useCallback((v) => {
-    const creatorName = v.creator?.name || v.authorName || '';
-    const creatorUsername = v.creator?.username || v.authorUsername || '';
-    const creatorId = v.creator?.id || v.authorId || v.userId || null;
-    return {
-      id: v.id,
-      canonicalPostId: v.canonicalPostId || null,
-      _sourceCollection: v._sourceCollection || 'posts',
-      muxPlaybackId: v.muxPlaybackId || null,
-      playbackPolicy: v.playbackPolicy || null,
-      creator: {
-        id: creatorId,
-        name: creatorName,
-        username: creatorUsername,
-        avatar: getSafeAvatarUrl(v.creator?.avatar || v.authorPhoto, creatorName, creatorId),
-        verified: Boolean(v.creator?.isVerified || v.authorVerified),
-        isFollowing: false,
-      },
-      title: v.title || v.description || '',
-      hashtags: v.hashtags || [],
-      music: v.audio?.title || v.music || '',
-      videoUrl: v.signedUrl || v.videoUrl || '',
-      thumbnailUrl: v.thumbnailUrl || '',
-      // An absent stat is unknown (rendered '—'), never a fabricated 0.
-      stats: {
-        likes: v.likes ?? v.stats?.likes ?? null,
-        comments: v.comments ?? v.stats?.comments ?? null,
-        shares: v.shares ?? v.stats?.shares ?? null,
-        saves: v.saves ?? v.stats?.saves ?? null,
-        gifts: v.gifts ?? v.stats?.gifts ?? null,
-      },
-      duration: v.duration || 0,
-      isLiked: Boolean(v.isLiked),
-      isSaved: Boolean(v.isSaved),
-    };
-  }, []);
-
-  // Load reels from the video feed (Firestore-backed, no mock data).
-  const loadReels = useCallback(async (feedType) => {
+  const loadReels = useCallback(async (tab) => {
     if (!user?.uid) {
       setReels([]);
+      setFeedError(null);
       setFeedLoading(false);
       return;
     }
-    try {
-      setFeedLoading(true);
-      setFeedError(null);
-      const res = await videoService.getVideoFeed(user.uid, {
-        feedType: feedType === 'following' ? 'following' : 'for_you',
-        limit: 10,
-        type: 'video',
-      });
-      const mapped = (res.feed || []).map(mapVideoToReel);
-      cursorRef.current = res.nextCursor || null;
-      setHasMore(Boolean(res.hasMore && res.nextCursor));
-      if (targetReelId) {
-        const foundIdx = mapped.findIndex((r) => r.id === targetReelId);
-        if (foundIdx >= 0) {
-          setCurrentReelIndex(foundIdx);
-        } else {
-          try {
-            const fetched = await videoService.getVideo(targetReelId);
-            if (fetched?.video) {
-              mapped.unshift(mapVideoToReel(fetched.video));
-              setCurrentReelIndex(0);
-            }
-          } catch (e) {
-            setCurrentReelIndex(0);
-          }
-        }
-      } else {
-        setCurrentReelIndex(0);
-      }
-      setReels(mapped);
-    } catch (err) {
-      // A failed read must not render the "No Sparks Yet" empty state, which
-      // claims the platform has no content rather than that the fetch failed.
-      setFeedError(err?.message || 'Could not load Sparks.');
-      setReels([]);
-      setHasMore(false);
-      cursorRef.current = null;
-    } finally {
-      setFeedLoading(false);
+    const targetType = tab === 'following' ? 'following' : 'for_you';
+    const res = await loadFeed(targetType, { replace: true });
+    if (res?.items) {
+      setCurrentReelIndex(res.initialIndex || 0);
     }
-  }, [user?.uid, targetReelId, mapVideoToReel]);
+  }, [user?.uid, loadFeed, setReels, setFeedError, setFeedLoading]);
 
-  // Retry trigger for the error state below.
   useEffect(() => {
     if (feedNonce === 0) return;
     loadReels(activeTab);
@@ -205,29 +170,11 @@ const formatDuration = (seconds) => {
   // Append the next page of reels so the feed does not stop at 10 videos.
   const loadMoreReels = useCallback(async () => {
     if (loadingMore || !cursorRef.current || !user?.uid) return;
-    setLoadingMore(true);
-    try {
-      const res = await videoService.getVideoFeed(user.uid, {
-        feedType: activeTab === 'following' ? 'following' : 'for_you',
-        limit: 10,
-        type: 'video',
-        cursor: cursorRef.current,
-      });
-      const mapped = (res.feed || []).map(mapVideoToReel);
-      if (mapped.length > 0) {
-        setReels((prev) => {
-          const seen = new Set(prev.map((r) => r.id));
-          return [...prev, ...mapped.filter((r) => !seen.has(r.id))];
-        });
-      }
-      cursorRef.current = res.nextCursor || null;
-      setHasMore(Boolean(res.hasMore && res.nextCursor));
-    } catch (err) {
-      console.warn('Could not load more reels:', err);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [loadingMore, user?.uid, activeTab, mapVideoToReel]);
+    await loadMore({
+      overrideFeedType: activeTab === 'following' ? 'following' : 'for_you',
+      cursor: cursorRef.current,
+    });
+  }, [loadingMore, cursorRef, user?.uid, activeTab, loadMore]);
 
   useEffect(() => {
     loadReels(activeTab);
@@ -262,48 +209,6 @@ const formatDuration = (seconds) => {
     window.addEventListener('arvdoul:sparks_channel_change', onChannelChange);
     return () => window.removeEventListener('arvdoul:sparks_channel_change', onChannelChange);
   }, []);
-
-  // Resolve the follow state for loaded creators via the shared graph helper
-  // without scanning the viewer's entire follow graph.
-  const creatorIds = useMemo(
-    () => reels.map((r) => r.creator?.id).filter(Boolean),
-    [reels]
-  );
-  const loadFollowStates = useCallback(
-    (uid, ids) => getUserService().getFollowStates(uid, ids),
-    []
-  );
-  const { followStates, setCreatorFollowState } = useSparkCreatorFollowMap(
-    creatorIds,
-    user?.uid,
-    loadFollowStates
-  );
-
-  useEffect(() => {
-    if (followStates.size === 0) return;
-    setReels((prev) =>
-      prev.map((r) => {
-        const state = followStates.get(r.creator?.id);
-        if (!state) return r;
-        const nextFollowing = Boolean(state.isFollowing);
-        const nextRequest = state.requestStatus ?? null;
-        if (
-          r.creator.isFollowing === nextFollowing &&
-          (r.creator.requestStatus ?? null) === nextRequest
-        ) {
-          return r;
-        }
-        return {
-          ...r,
-          creator: {
-            ...r.creator,
-            isFollowing: nextFollowing,
-            requestStatus: nextRequest,
-          },
-        };
-      })
-    );
-  }, [followStates]);
 
   useEffect(() => {
     setCaptionExpanded(false);
@@ -383,90 +288,32 @@ const formatDuration = (seconds) => {
     }
   }, [currentReel?.duration]);
 
-  // Toggle Like — server-authoritative via the likeVideo callable & shared hook.
+  // Toggle Like — server-authoritative via canonical useSparksFeed + videoService.
   const handleLike = async () => {
     if (!currentReel) return;
-    const reel = currentReel;
-    const applyLikeState = ({ isLiked, likes }) => {
-      patchReel(reel.id, {
-        isLiked,
-        stats: { ...reel.stats, likes },
-      });
-    };
-    await toggleSparkLike({
-      video: reel,
-      viewerUid: user?.uid,
-      knownLikesOverride: reel.stats?.likes ?? null,
-      likeFn: (id) => videoService.likeVideo(id),
-      applyState: applyLikeState,
-    });
+    await toggleLike(currentReel);
   };
 
-  // Toggle Bookmark — real server persistence via videoService & shared hook.
+  // Toggle Bookmark — real server persistence via canonical useSparksFeed.
   const handleSave = async () => {
     if (!currentReel) return;
-    const reel = currentReel;
-    const applySaveState = ({ isSaved, saves }) => {
-      patchReel(reel.id, {
-        isSaved,
-        stats: { ...reel.stats, saves },
-      });
-    };
-    await toggleSparkSave({
-      video: reel,
-      viewerUid: user?.uid,
-      knownSavesOverride: reel.stats?.saves ?? null,
-      syncWatchLater: false,
-      saveFn: (id, uid) => videoService.saveVideo(id, uid),
-      unsaveFn: (id, uid) => videoService.unsaveVideo(id, uid),
-      applyState: applySaveState,
-    });
+    await toggleSave(currentReel);
   };
 
-  // Toggle Follow Creator — real follow/unfollow/request via userService & shared hook.
+  // Toggle Follow Creator — real follow/unfollow/request via canonical useSparksFeed.
   const handleFollow = async (creator) => {
     if (!creator?.id) return;
-    const applyCreator = ({ isFollowing, requestStatus = null }) => {
-      setCreatorFollowState(creator.id, { isFollowing, requestStatus });
-      setReels((prev) =>
-        prev.map((r) =>
-          r.creator.id === creator.id
-            ? { ...r, creator: { ...r.creator, isFollowing, requestStatus } }
-            : r
-        )
-      );
-    };
-
-    await toggleSparkCreatorFollow({
-      viewerUid: user?.uid,
-      creatorId: creator.id,
-      creatorLabel: creator.username || creator.name,
-      wasFollowing: Boolean(creator.isFollowing),
-      wasRequested: creator.requestStatus === 'pending',
-      applyState: applyCreator,
-      actions: {
-        follow: (_uid, targetId) => getUserService().followUser(user.uid, targetId),
-        unfollow: (_uid, targetId) => getUserService().unfollowUser(user.uid, targetId),
-        cancelRequest: (_uid, targetId) => getUserService().cancelFollowRequest(user.uid, targetId),
-      },
+    await followCreator(creator, {
+      follow: (_uid, targetId) => getUserService().followUser(user.uid, targetId),
+      unfollow: (_uid, targetId) => getUserService().unfollowUser(user.uid, targetId),
+      cancelRequest: (_uid, targetId) => getUserService().cancelFollowRequest(user.uid, targetId),
     });
   };
 
   // Share — real server-side share counter + AbortError-safe native share/clipboard.
   const handleShare = async () => {
     if (!currentReel) return;
-    const reel = currentReel;
-    await shareSpark({
-      videoId: reel.id,
-      canonicalId: reel.canonicalPostId || reel.id,
-      title: reel.title || 'Watch this on ARVDOUL',
-      shareFn: (id, platform) => videoService.shareVideo(id, platform),
-      onShared: () => {
-        if (reel.stats.shares != null) {
-          patchReel(reel.id, { stats: { ...reel.stats, shares: reel.stats.shares + 1 } });
-        }
-      },
-    });
+    await shareItem(currentReel);
   };
 
   // Reporting is owned by VideoBottomSheet (videoService.reportVideo); the reels
@@ -1304,19 +1151,15 @@ const formatDuration = (seconds) => {
             )));
           }}
           onNotInterested={(hiddenId) => {
-            setReels((prev) => {
-              const filtered = prev.filter((r) => r.id !== hiddenId);
-              setCurrentReelIndex((idx) => Math.max(0, Math.min(idx, filtered.length - 1)));
-              return filtered;
-            });
+            const nextLen = Math.max(0, reels.length - 1);
+            markNotInterested(reels.find((r) => r.id === hiddenId) || hiddenId);
+            setCurrentReelIndex((idx) => Math.max(0, Math.min(idx, nextLen - 1)));
             setSheetView(null);
           }}
           onDeleted={(deletedId) => {
-            setReels((prev) => {
-              const filtered = prev.filter((r) => r.id !== deletedId);
-              setCurrentReelIndex((idx) => Math.max(0, Math.min(idx, filtered.length - 1)));
-              return filtered;
-            });
+            const nextLen = Math.max(0, reels.length - 1);
+            removeItem(deletedId);
+            setCurrentReelIndex((idx) => Math.max(0, Math.min(idx, nextLen - 1)));
             setSheetView(null);
           }}
         />

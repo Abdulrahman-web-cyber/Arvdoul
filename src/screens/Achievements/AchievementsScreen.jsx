@@ -7,7 +7,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import achievementService from '../../services/achievementService';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
-import { CheckCircle2, Lock, Sparkles, Share2, Search, X, Loader2 } from "lucide-react";
+import { AchievementIcon } from '../../components/Shared/ProgressionIcons.jsx';
+import { CheckCircle2, Lock, Sparkles, Share2, Search, X, Loader2, RefreshCw } from "lucide-react";
 import { toast } from 'sonner';
 
 const CATEGORIES = [
@@ -23,10 +24,11 @@ const CATEGORIES = [
 ];
 
 export default function AchievementsScreen() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { theme } = useTheme();
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [evaluating, setEvaluating] = useState(false);
   const [achievements, setAchievements] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -36,15 +38,19 @@ export default function AchievementsScreen() {
 
   const isDark = theme === 'dark' || theme === 'midnight';
 
-  const loadAchievements = useCallback(async () => {
+  const loadAchievements = useCallback(async ({ forceProfile = false } = {}) => {
     if (!user?.uid) {
       setLoading(false);
       return;
     }
+    setLoadError(null);
     try {
-      const { getUserService } = await import('../../services/userService.js');
-      const freshProfile = await getUserService().getUserProfile(user.uid, user.uid).catch(() => null);
-      const source = freshProfile || user;
+      let source = userProfile || user;
+      if (forceProfile || !userProfile?.level) {
+        const { getUserService } = await import('../../services/userService.js');
+        const freshProfile = await getUserService().getUserProfile(user.uid, user.uid).catch(() => null);
+        if (freshProfile) source = freshProfile;
+      }
 
       const items = await achievementService.getEnrichedAchievements(user.uid, {
         level: source.level,
@@ -57,11 +63,12 @@ export default function AchievementsScreen() {
       });
       setAchievements(items);
     } catch {
+      setLoadError('Failed to load achievements.');
       toast.error('Failed to load achievements');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, userProfile]);
 
   useEffect(() => {
     loadAchievements();
@@ -147,6 +154,20 @@ export default function AchievementsScreen() {
             <span>{evaluating ? 'Checking…' : 'Check Milestones'}</span>
           </button>
         </div>
+
+        {loadError && (
+          <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${isDark ? 'bg-rose-500/10 border-rose-400/25 text-rose-200' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
+            <span className="text-xs font-semibold">{loadError}</span>
+            <button
+              type="button"
+              onClick={() => loadAchievements({ forceProfile: true })}
+              className={`min-h-[36px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer ${isDark ? 'border-white/15 bg-white/10 text-white' : 'border-rose-200 bg-white text-rose-700'}`}
+            >
+              <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Retry</span>
+            </button>
+          </div>
+        )}
 
         {/* Summary Card */}
         <section
@@ -290,14 +311,14 @@ export default function AchievementsScreen() {
               }`}
             >
               <div
-                className={`text-2xl shrink-0 p-2.5 rounded-xl ${
+                className={`shrink-0 p-2.5 rounded-xl ${
                   item.unlocked
-                    ? isDark ? 'bg-purple-500/15' : 'bg-purple-50'
-                    : isDark ? 'bg-white/[0.05]' : 'bg-slate-100'
+                    ? isDark ? 'bg-purple-500/15 text-purple-300' : 'bg-purple-50 text-purple-700'
+                    : isDark ? 'bg-white/[0.05] text-slate-400' : 'bg-slate-100 text-slate-500'
                 }`}
                 aria-hidden="true"
               >
-                {item.icon}
+                <AchievementIcon category={item.category} rarity={item.rarity} className="w-5 h-5" />
               </div>
 
               <div className="min-w-0 flex-1">
@@ -347,7 +368,9 @@ export default function AchievementsScreen() {
             }`}
           >
             <div className="flex items-start justify-between">
-              <div className="text-4xl" aria-hidden="true">{inspectingItem.icon}</div>
+              <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center ${isDark ? 'bg-purple-500/15 border-purple-400/30 text-purple-300' : 'bg-purple-50 border-purple-200 text-purple-700'}`}>
+                <AchievementIcon category={inspectingItem.category} rarity={inspectingItem.rarity} className="w-6 h-6" />
+              </div>
               <button
                 type="button"
                 onClick={() => setInspectingItem(null)}

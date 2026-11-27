@@ -11,7 +11,8 @@ import { levelSystemService, getCitizenTier, getPerksForLevel, LEVEL_PERKS, getP
 import { getMonetizationService } from "../../services/monetizationService.js";
 import { getUserService } from "../../services/userService.js";
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
-import { Flame, ChevronRight, Lock, Coins, ShieldCheck, RefreshCw } from "lucide-react";
+import { CitizenTierIcon, PerkIcon } from '../../components/Shared/ProgressionIcons.jsx';
+import { Flame, ChevronRight, Lock, Coins, ShieldCheck, RefreshCw, Compass } from "lucide-react";
 import { toast } from 'sonner';
 
 export default function ProgressScreen() {
@@ -23,6 +24,7 @@ export default function ProgressScreen() {
   const currentUid = authProfile?.uid || user?.uid;
 
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const [levelInfo, setLevelInfo] = useState(null);
   const [liveProfile, setLiveProfile] = useState(null);
   const [liveBalance, setLiveBalance] = useState(undefined);
@@ -31,14 +33,19 @@ export default function ProgressScreen() {
 
   const isDark = theme === 'dark' || theme === 'midnight';
 
-  const loadProgression = useCallback(async () => {
+  const loadProgression = useCallback(async ({ forceProfileRefresh = false } = {}) => {
     if (!currentUid) return;
+    setLoadError(null);
     try {
-      const [infoRes, balRes, profRes] = await Promise.allSettled([
+      const requests = [
         levelSystemService.getLevelInfo(currentUid),
         getMonetizationService().getBalance(currentUid),
-        getUserService().getUserProfile(currentUid, currentUid),
-      ]);
+      ];
+      if (forceProfileRefresh || authProfile?.activeDaysCount == null) {
+        requests.push(getUserService().getUserProfile(currentUid, currentUid));
+      }
+
+      const [infoRes, balRes, profRes] = await Promise.allSettled(requests);
 
       if (infoRes.status === 'fulfilled') {
         setLevelInfo(infoRes.value);
@@ -46,9 +53,13 @@ export default function ProgressScreen() {
       if (balRes.status === 'fulfilled') {
         setLiveBalance(typeof balRes.value === 'number' ? balRes.value : null);
       }
-      const fetchedProfile = profRes.status === 'fulfilled' && profRes.value ? profRes.value : authProfile;
-      if (profRes.status === 'fulfilled' && profRes.value) {
+      const fetchedProfile = profRes?.status === 'fulfilled' && profRes.value ? profRes.value : authProfile;
+      if (profRes?.status === 'fulfilled' && profRes.value) {
         setLiveProfile(profRes.value);
+      }
+
+      if (infoRes.status === 'rejected' && balRes.status === 'rejected' && (!profRes || profRes.status === 'rejected')) {
+        setLoadError('Unable to reach progression services right now.');
       }
 
       const streak = Number(fetchedProfile?.activeStreak);
@@ -56,6 +67,7 @@ export default function ProgressScreen() {
       const days = Number(fetchedProfile?.activeDaysCount ?? fetchedProfile?.activeDays);
       setActiveDaysCount(Number.isFinite(days) && days > 0 ? days : null);
     } catch {
+      setLoadError('Failed to load live progression data.');
       toast.error('Failed to load live progression data');
     } finally {
       setRefreshing(false);
@@ -69,7 +81,7 @@ export default function ProgressScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     levelSystemService.invalidate(currentUid || user?.uid);
-    await loadProgression();
+    await loadProgression({ forceProfileRefresh: true });
   };
 
   const effectiveProfile = liveProfile || authProfile;
@@ -122,6 +134,16 @@ export default function ProgressScreen() {
             </button>
             <button
               type="button"
+              onClick={() => navigate('/levels')}
+              className={`min-h-[40px] text-xs font-semibold px-3.5 py-2 rounded-xl border whitespace-nowrap shrink-0 transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
+                isDark ? 'bg-[#080F2E] border-white/15 hover:bg-white/10 text-white' : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-800'
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Roadmap</span>
+            </button>
+            <button
+              type="button"
               onClick={() => navigate('/perks')}
               className="min-h-[40px] text-xs font-semibold px-3.5 py-2 rounded-xl text-white transition-opacity hover:opacity-95 whitespace-nowrap shrink-0 cursor-pointer"
               style={{ background: BRAND_GRADIENT }}
@@ -140,13 +162,26 @@ export default function ProgressScreen() {
           </div>
         </div>
 
+        {loadError && (
+          <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${isDark ? 'bg-rose-500/10 border-rose-400/25 text-rose-200' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
+            <span className="text-xs font-semibold">{loadError}</span>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              className={`min-h-[36px] px-3 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer ${isDark ? 'border-white/15 bg-white/10 text-white' : 'border-rose-200 bg-white text-rose-700'}`}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Section 1: Primary Progress Overview */}
         <section
           aria-labelledby="progress-overview-heading"
-          className={`p-6 rounded-3xl border transition-colors ${
+          className={`p-6 rounded-3xl border transition-colors backdrop-blur-xl ${
             isDark
-              ? 'bg-[#080F2E]/90 border-white/[0.08]'
-              : 'bg-white border-slate-200/80 shadow-sm'
+              ? 'bg-white/[0.03] border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+              : 'bg-white/90 border-slate-200/80 shadow-sm'
           }`}
         >
           <div className="flex items-start justify-between gap-4">
@@ -163,9 +198,13 @@ export default function ProgressScreen() {
                 )}
               </h2>
             </div>
-            <div className="text-right shrink-0">
-              <span className="text-2xl" aria-hidden="true">{hasLevel ? citizenTier.icon : '—'}</span>
-              <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            <div className="text-right shrink-0 flex flex-col items-end">
+              <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
+                isDark ? 'bg-purple-500/15 border-purple-400/30 text-purple-300' : 'bg-purple-50 border-purple-200 text-purple-700'
+              }`}>
+                {hasLevel ? <CitizenTierIcon tier={citizenTier.tier} className="w-5 h-5" /> : <Compass className="w-5 h-5" aria-hidden="true" />}
+              </div>
+              <p className={`text-xs mt-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 {hasLevel ? `${citizenTier.tier} Tier` : 'Not yet rated'}
               </p>
             </div>
@@ -303,7 +342,9 @@ export default function ProgressScreen() {
                   isDark ? 'bg-[#080F2E]/70 border-white/[0.08]' : 'bg-white border-slate-200/80'
                 }`}
               >
-                <div className="text-xl shrink-0 p-1" aria-hidden="true">{perk.icon}</div>
+                <div className={`p-2 rounded-xl shrink-0 ${isDark ? 'bg-purple-500/15 text-purple-300' : 'bg-purple-50 text-purple-700'}`}>
+                  <PerkIcon minLevel={perk.minLevel} title={perk.title} className="w-4 h-4" />
+                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="text-sm font-semibold truncate">{perk.title}</h4>

@@ -98,11 +98,12 @@ const PALETTE = Object.freeze({
 /* WORDMARK vectors are imported from ArvdoulBrandAssets.js */
 
 // Reveal length in seconds. "quick" is a repeat launch in the same session.
-const REVEAL_S = Object.freeze({ full: 1.3, quick: 0.5, reduced: 0 });
-// Time to finish the reveal when the app is ready early.
-const SNAP_S = 0.16;
-// Shortest presence once ready, so a near-instant start never reads as a flicker.
-const SETTLE_MS = Object.freeze({ full: 240, quick: 120, reduced: 0 });
+const REVEAL_S = Object.freeze({ full: 1.45, quick: 0.72, reduced: 0 });
+// Minimum time to smoothly complete the reveal when startup resolves early.
+const SNAP_S = 0.55;
+// Minimum visible presence once mounted so the orbit + Arvdoul wordmark reveal
+// is always experienced instead of aborting in a single frame.
+const SETTLE_MS = Object.freeze({ full: 1500, quick: 760, reduced: 0 });
 const EXIT_MS = Object.freeze({ full: 320, quick: 220, reduced: 80 });
 // One lap of the "still working" light around the orbit.
 const WAIT_LOOP_S = 2.2;
@@ -1082,10 +1083,11 @@ export default function SplashScreen({
     else if (destination === "/intro") import("../screens/IntroScreen.jsx").catch(() => {});
     else if (destination === "/setup-profile") import("../screens/SetupProfile.jsx").catch(() => {});
     else if (destination === "/verify-email") import("../screens/VerifyEmailScreen.jsx").catch(() => {});
+    else if (destination === "/login") import("../screens/LoginScreen.jsx").catch(() => {});
     return undefined;
   }, [ready, destination]);
 
-  // Ready mid-reveal: finish it quickly instead of making the app wait.
+  // Ready mid-reveal: ensure the orbit + wordmark finish forming cleanly.
   useEffect(() => {
     if (!ready) return undefined;
     if (readyAtRef.current === null) {
@@ -1093,9 +1095,10 @@ export default function SplashScreen({
       perfMark("ready");
     }
     if (mode === "reduced" || t.get() >= 1) return undefined;
+    const remaining = Math.max(SNAP_S, (1 - t.get()) * REVEAL_S[mode]);
     snappedRef.current = true;
     const controls = animate(t, 1, {
-      duration: SNAP_S,
+      duration: remaining,
       ease: "easeOut",
       onComplete: () => {
         if (mountedRef.current) setRevealDone(true);

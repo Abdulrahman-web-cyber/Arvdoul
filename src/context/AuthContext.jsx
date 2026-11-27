@@ -568,7 +568,7 @@ export function AuthProvider({ children }) {
               if (shouldCreditDailyLogin) {
                 import('../services/levelSystemService.js')
                   .then(({ levelSystemService }) =>
-                    levelSystemService.awardExperience({ userId: uid, action: 'daily_login', source: today })
+                    levelSystemService.recordActiveDay({ userId: uid })
                   )
                   .then(() => {
                     try { localStorage.setItem(`arvdoul_daily_login_${uid}`, today); } catch { /* ignore */ }

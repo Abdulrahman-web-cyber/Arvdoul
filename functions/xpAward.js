@@ -88,9 +88,18 @@ async function awardXp(uid, action, { count = 1, source = null } = {}) {
     }
     if (idempotencyKey) prunedAwards[idempotencyKey] = today;
 
+    const prunedCounters = {
+      [today]: { ...todayEntry, [action]: usedTodayXp + xpAwarded },
+    };
+    for (const staleDay of Object.keys(counters)) {
+      if (staleDay !== today) {
+        prunedCounters[staleDay] = admin.firestore.FieldValue.delete();
+      }
+    }
+
     tx.set(privateRef, {
       xpAwards: prunedAwards,
-      xpCounters: { [today]: { ...todayEntry, [action]: usedTodayXp + xpAwarded } },
+      xpCounters: prunedCounters,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 

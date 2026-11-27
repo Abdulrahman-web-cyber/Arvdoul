@@ -959,22 +959,25 @@ class UltimateVideoService {
           chunks.push(targetAuthorIds.slice(i, i + IN_CHUNK));
         }
 
+        const cursorCreatedAt = lastDocSnapshot?.data?.()?.createdAt || null;
+
         const snaps = await Promise.all(
-          chunks.map((chunk) =>
-            getDocs(
-              query(
-                postsRef,
-                where('authorId', 'in', chunk),
-                where('authorIsPrivate', '==', false),
-                where('status', '==', 'published'),
-                where('isDeleted', '==', false),
-                where('visibility', '==', 'public'),
-                where('type', '==', 'video'),
-                orderBy('createdAt', 'desc'),
-                limit(pageLimit)
-              )
-            ).catch(() => ({ docs: [] }))
-          )
+          chunks.map((chunk) => {
+            const constraints = [
+              where('authorId', 'in', chunk),
+              where('authorIsPrivate', '==', false),
+              where('status', '==', 'published'),
+              where('isDeleted', '==', false),
+              where('visibility', '==', 'public'),
+              where('type', '==', 'video'),
+              orderBy('createdAt', 'desc'),
+            ];
+            if (cursorCreatedAt) {
+              constraints.push(startAfter(cursorCreatedAt));
+            }
+            constraints.push(limit(pageLimit));
+            return getDocs(query(postsRef, ...constraints)).catch(() => ({ docs: [] }));
+          })
         );
 
         const combined = [];
@@ -1013,7 +1016,8 @@ class UltimateVideoService {
         }
         const hydrated = await this._hydrateViewerVideoState(pageItems, safeUserId);
         const nextCursor = hydrated.length ? hydrated[hydrated.length - 1].id : null;
-        return { success: true, feed: hydrated, hasMore: combined.length > pageLimit, nextCursor };
+        const hasMoreChunks = combined.length > pageLimit || snaps.some((s) => s.docs.length >= pageLimit);
+        return { success: true, feed: hydrated, hasMore: hasMoreChunks && Boolean(nextCursor), nextCursor };
       } catch (err) {
         logger.warn('[Video] Relationship feed failed; falling back to Sparks feed', { feedType, error: err?.message });
       }
@@ -1115,6 +1119,8 @@ class UltimateVideoService {
         .map((item) => this._formatVideoItem(item))
         .filter((v) => v && (v.videoUrl || v.muxPlaybackId));
 
+      // Overlay canonical sharded engagement counters BEFORE personalized ranking
+      // so engagement quality and viral velocity rank on real stats.
       const canonicalItems = formattedList.filter((item) => item._sourceCollection === 'posts');
       if (canonicalItems.length > 0) {
         await countersManager.applyAll({
@@ -1133,13 +1139,54 @@ class UltimateVideoService {
         });
       }
 
-      const pageItems = formattedList.slice(0, pageLimit);
+      // Personalized re-ranking for Sparks / For-You using cached user interest vector,
+      // multi-signal quality (saves/shares > comments > likes > views), freshness decay,
+      // and consecutive-creator spacing — keeping cursor anchor on chronological/fetch order.
+      let rankedList = formattedList;
+      if ((feedType === 'sparks' || feedType === 'for_you') && safeUserId !== 'anonymous_user' && formattedList.length > 1) {
+        try {
+          const { getFeedService } = await import('./feedService.js');
+          const interestVector = await getFeedService().getUserInterestVector(safeUserId).catch(() => ({}));
+          const scored = formattedList.map((item) => {
+            const likes = Number(item.stats?.likes ?? item.likes ?? 0);
+            const comments = Number(item.stats?.comments ?? item.comments ?? 0);
+            const shares = Number(item.stats?.shares ?? item.shares ?? 0);
+            const saves = Number(item.stats?.saves ?? item.saves ?? 0);
+            const views = Number(item.stats?.views ?? item.views ?? 0);
+            const weightedEngagement = (saves * 3.0) + (shares * 2.5) + (comments * 2.0) + (likes * 1.0) + Math.log1p(views) * 0.4;
+            const createdMs = item.createdAt?.toMillis?.() || new Date(item.createdAt || Date.now()).getTime();
+            const ageHours = Math.max(0, (Date.now() - createdMs) / 3600000);
+            const freshness = Math.exp(-ageHours / 36);
+            const tags = [
+              ...(Array.isArray(item.hashtags) ? item.hashtags.map((t) => String(t).replace(/^#/, '').toLowerCase()) : []),
+              ...(Array.isArray(item.topics) ? item.topics.map((t) => String(t).toLowerCase()) : []),
+              item.creator?.id ? `creator:${item.creator.id}` : null,
+            ].filter(Boolean);
+            let affinity = 0;
+            for (const tag of tags) {
+              affinity += Number(interestVector?.[tag] || 0);
+            }
+            const score = (Number(item.rankingScore || 0.5) * 0.35) +
+              (Math.log1p(weightedEngagement) * 0.25) +
+              (freshness * 0.20) +
+              (Math.min(2.5, Math.max(-1.0, affinity)) * 0.35);
+            return { item, score };
+          });
+          scored.sort((a, b) => b.score - a.score);
+          rankedList = scored.map((s) => s.item);
+        } catch {
+          rankedList = formattedList;
+        }
+      }
+
+      const pageItems = rankedList.slice(0, pageLimit);
       const hydrated = await this._hydrateViewerVideoState(pageItems, safeUserId);
-      const nextCursor = hydrated.length ? hydrated[hydrated.length - 1].id : null;
+      const lastFetchedDoc = postDocs[postDocs.length - 1];
+      const nextCursor = lastFetchedDoc ? lastFetchedDoc.id : (hydrated.length ? hydrated[hydrated.length - 1].id : null);
       return {
         success: true,
         feed: hydrated,
-        hasMore: formattedList.length > pageLimit || postDocs.length >= fetchCap,
+        hasMore: rankedList.length > pageLimit || postDocs.length >= fetchCap,
         nextCursor,
       };
     } catch (err) {

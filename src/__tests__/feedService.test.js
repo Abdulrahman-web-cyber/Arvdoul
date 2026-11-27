@@ -283,6 +283,77 @@ describe('feedService - getFollowSuggestions delegates to the safety-filtered sp
   });
 });
 
+describe('feedService - interest vector & personalized ranking', () => {
+  beforeEach(() => {
+    svc().interestVectorCache.clear();
+  });
+
+  test('updateUserInterestVector extracts post signals, applies positive/negative weights, and caps size', async () => {
+    svc().offlineMode = true;
+    const v1 = await svc().updateUserInterestVector('iv-user-1', {
+      topics: ['music', 'synth'],
+      category: 'Audio',
+      type: 'video',
+      authorId: 'creator-a',
+    }, 'watch_complete');
+    expect(v1.music).toBeGreaterThan(0.2);
+    expect(v1['creator:creator-a']).toBeGreaterThan(0.25);
+
+    const v2 = await svc().updateUserInterestVector('iv-user-1', ['music'], 'not_interested');
+    expect(v2.music).toBeLessThan(v1.music);
+
+    // Bounding: writing 100 distinct topics keeps at most 80 keys
+    const many = Array.from({ length: 100 }, (_, i) => `topic_${i}`);
+    const v3 = await svc().updateUserInterestVector('iv-user-2', many, 'view');
+    expect(Object.keys(v3).length).toBeLessThanOrEqual(80);
+  });
+
+  test('_scoreAndRankPostsOptimized boosts aligned topics/followed creators and dampens not-interested topics', () => {
+    const now = new Date();
+    const sources = {
+      for_you: [
+        {
+          id: 'p-mismatch',
+          authorId: 'c-other',
+          topics: ['sports'],
+          createdAt: now,
+          stats: { likes: 20, comments: 5, shares: 2, saves: 1, views: 200 },
+        },
+        {
+          id: 'p-aligned',
+          authorId: 'c-fav',
+          topics: ['music'],
+          createdAt: now,
+          stats: { likes: 20, comments: 5, shares: 2, saves: 1, views: 200 },
+        },
+        {
+          id: 'p-disliked',
+          authorId: 'c-third',
+          topics: ['gossip'],
+          createdAt: now,
+          stats: { likes: 20, comments: 5, shares: 2, saves: 1, views: 200 },
+        },
+      ],
+    };
+    const ranked = svc()._scoreAndRankPostsOptimized(
+      sources,
+      'rank-user',
+      { for_you: 0.5 },
+      0.25,
+      new Set(),
+      new Set(),
+      {
+        targetLimit: 10,
+        interestVector: { music: 4.5, 'creator:c-fav': 3.0, gossip: -3.0 },
+        followingSet: new Set(['c-fav']),
+        notInterestedPosts: new Set(['topic_gossip']),
+      }
+    );
+    expect(ranked[0].id).toBe('p-aligned');
+    expect(ranked[ranked.length - 1].id).toBe('p-disliked');
+  });
+});
+
 afterAll(() => {
   svc().destroy();
   jest.clearAllTimers();
