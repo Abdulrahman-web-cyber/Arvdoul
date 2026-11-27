@@ -299,6 +299,11 @@ export function reducer(state, action) {
         draft.isDirty = true;
         pushHistory = true;
         break;
+      case 'SEED_POLL_OPTIONS':
+        if (!Array.isArray(draft.typeData.poll.options) || draft.typeData.poll.options.length === 0) {
+          draft.typeData.poll.options = Array.isArray(action.payload) ? action.payload : ['', ''];
+        }
+        break;
       case 'SET_POLL_OPTIONS':
         draft.typeData.poll.options = Array.isArray(action.payload) ? action.payload : [];
         draft.isDirty = true;

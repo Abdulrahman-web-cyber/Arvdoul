@@ -124,7 +124,14 @@ export default function SettingsScreen() {
   const isDark = typeof resolvedIsDark === 'boolean' ? resolvedIsDark : theme !== 'light';
   const uid = user?.uid;
 
-  const [settings, setSettings] = useState(null); // null = loading
+  const [settings, setSettings] = useState(() => {
+    if (typeof settingsService?.getCachedSettings === 'function') {
+      return settingsService.getCachedSettings(uid);
+    }
+    return typeof mergeSettings === 'function'
+      ? mergeSettings(null)
+      : JSON.parse(JSON.stringify(DEFAULT_SETTINGS || {}));
+  });
   const [loadError, setLoadError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [levelInfo, setLevelInfo] = useState(null);
@@ -544,16 +551,7 @@ export default function SettingsScreen() {
   }
 
   if (!settings) {
-    return (
-      <div className={cn('min-h-screen pb-24 transition-colors duration-200', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900')}>
-        <div className="max-w-3xl mx-auto px-4 pt-8 space-y-6">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-40 w-full rounded-3xl" />
-          <Skeleton className="h-72 w-full rounded-3xl" />
-          <Skeleton className="h-52 w-full rounded-3xl" />
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (

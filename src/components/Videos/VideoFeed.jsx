@@ -9,9 +9,7 @@ import { useVideoStore } from '../../store/videoStore';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import VideoCard from './VideoCard';
-import VideoComments from './VideoComments';
-import VideoBottomSheet from './VideoBottomSheet';
-import VideoGiftModal from './VideoGiftModal';
+import SparkModals from './SparkModals.jsx';
 import VideoTopBar from './VideoTopBar';
 import videoService from '../../services/videoService';
 import settingsService from '../../services/settingsService';
@@ -23,6 +21,7 @@ import {
   useSparkCreatorFollowMap,
   toggleSparkLike,
   toggleSparkSave,
+  adjustSparkCounter,
 } from '../../hooks/useSparkInteractions.js';
 
 /**
@@ -268,15 +267,19 @@ const VideoFeed = memo(({
 
   const adjustCounter = useCallback((target, field, delta) => {
     if (!target?.id) return;
-    const cur = typeof target[field] === 'number' ? target[field] : target.stats?.[field];
-    if (typeof cur === 'number') {
-      const nextVal = Math.max(0, cur + delta);
-      updateVideo(target.id, {
-        [field]: nextVal,
-        stats: { ...(target.stats || {}), [field]: nextVal },
-      });
-    }
+    const patch = adjustSparkCounter(target, field, delta);
+    if (patch) updateVideo(target.id, patch);
   }, [updateVideo]);
+
+  const [showEmptySkeleton, setShowEmptySkeleton] = useState(false);
+  useEffect(() => {
+    if (!loading || videos.length > 0) {
+      setShowEmptySkeleton(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setShowEmptySkeleton(true), 160);
+    return () => clearTimeout(timer);
+  }, [loading, videos.length]);
 
   return (
     <div
@@ -343,9 +346,9 @@ const VideoFeed = memo(({
         )}
       </div>
 
-      {/* Loading Skeleton State */}
+      {/* Loading Skeleton State (delayed so warm/fast loads never flash) */}
       <AnimatePresence>
-        {loading && videos.length === 0 && (
+        {loading && videos.length === 0 && showEmptySkeleton && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -422,55 +425,31 @@ const VideoFeed = memo(({
         )}
       </AnimatePresence>
 
-      <VideoComments
-        isOpen={showComments}
-        onClose={() => setShowComments(false)}
+      <SparkModals
         video={activeModalVideo}
-        onCommentAdded={() => adjustCounter(activeModalVideo, 'comments', 1)}
-        onCommentDeleted={() => adjustCounter(activeModalVideo, 'comments', -1)}
-      />
-
-      <VideoBottomSheet
-        isOpen={showShareSheet}
-        onClose={() => setShowShareSheet(false)}
-        video={activeModalVideo}
-        onShared={(sharedVideo) => adjustCounter(sharedVideo, 'shares', 1)}
+        showComments={showComments}
+        onCloseComments={() => setShowComments(false)}
+        showShare={showShareSheet}
+        onCloseShare={() => setShowShareSheet(false)}
+        showReport={showReportSheet}
+        onCloseReport={() => setShowReportSheet(false)}
+        showGift={showGiftModal}
+        onCloseGift={() => setShowGiftModal(false)}
+        onAdjustCounter={adjustCounter}
         onSaveStateChange={(vidId, nextSaved) => {
           const v = videos.find((item) => item.id === vidId);
           if (!v) return;
-          const knownSaves = typeof v.saves === 'number' ? v.saves : (typeof v.stats?.saves === 'number' ? v.stats.saves : null);
           const delta = nextSaved === Boolean(v.isSaved) ? 0 : (nextSaved ? 1 : -1);
-          const nextSaves = knownSaves === null ? null : Math.max(0, knownSaves + delta);
+          const counterPatch = adjustSparkCounter(v, 'saves', delta);
           updateVideo(vidId, {
             isSaved: nextSaved,
-            saves: nextSaves,
-            stats: { ...(v.stats || {}), saves: nextSaves },
+            ...(counterPatch || {}),
           });
         }}
         onDeleted={(deletedId) => {
           removeVideo(deletedId);
           setSelectedVideo(null);
         }}
-      />
-
-      <VideoBottomSheet
-        isOpen={showReportSheet}
-        onClose={() => setShowReportSheet(false)}
-        video={activeModalVideo}
-        initialView="report"
-        onShared={(sharedVideo) => adjustCounter(sharedVideo, 'shares', 1)}
-        onDeleted={(deletedId) => {
-          removeVideo(deletedId);
-          setSelectedVideo(null);
-        }}
-      />
-
-      <VideoGiftModal
-        isOpen={showGiftModal}
-        onClose={() => setShowGiftModal(false)}
-        creator={activeModalVideo?.creator}
-        video={activeModalVideo}
-        onGiftSent={() => adjustCounter(activeModalVideo, 'gifts', 1)}
       />
     </div>
   );

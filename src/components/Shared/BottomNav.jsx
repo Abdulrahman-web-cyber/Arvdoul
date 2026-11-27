@@ -12,7 +12,7 @@ import QuickAccessPanel from "./QuickAccessPanel";
 import { BRAND_GRADIENT, brandRgba, tokens } from "../../design-system/tokens.js";
 import { LazyImage } from '../../components/Shared/LazyImage';
 import GoldCoinsIcon from '../UI/GoldCoinsIcon.jsx';
-import { prefetchCreatePost } from "../../utils/routePrefetcher.js";
+import { prefetchCreatePostAll, prefetchRoute } from "../../utils/routePrefetcher.js";
 
 /* ==========================================================================
    ARVDOUL BOTTOM NAVIGATION
@@ -465,10 +465,17 @@ const NavigationItem = memo(function NavigationItem({
   const userAvatar = isProfile && user ? getSafeAvatarUrl(user.photoURL, user.displayName || user.username || 'You', user.id || user.uid) : null;
   const labelText = item.label;
 
+  const handlePrefetch = useCallback(() => {
+    prefetchRoute(item.path);
+  }, [item.path]);
+
   return (
     <motion.button
       type="button"
       onClick={handleClick}
+      onPointerEnter={handlePrefetch}
+      onTouchStart={handlePrefetch}
+      onFocus={handlePrefetch}
       aria-label={item.label}
       aria-current={active ? "page" : undefined}
       whileTap={reducedMotion ? undefined : { scale: 0.96 }}
@@ -619,9 +626,9 @@ const CreateControl = memo(function CreateControl({ dark, reducedMotion, onCreat
         type="button"
         aria-label="Create post"
         onClick={onCreate}
-        onPointerEnter={() => prefetchCreatePost()}
-        onTouchStart={() => prefetchCreatePost()}
-        onFocus={() => prefetchCreatePost()}
+        onPointerEnter={() => prefetchCreatePostAll()}
+        onTouchStart={() => prefetchCreatePostAll()}
+        onFocus={() => prefetchCreatePostAll()}
         className="absolute left-1/2 z-30 flex -translate-x-1/2 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/90 origin-center"
         style={{
           width: `${buttonSize}px`,

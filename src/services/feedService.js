@@ -1347,11 +1347,11 @@ class UltimateFeedService {
     let hiddenPosts = new Set(sessionState.hiddenPosts || []);
     let notInterestedPosts = new Set(sessionState.notInterested || []);
     let topicStreaks = sessionState.topicStreaks || {};
+    const seenKey = `${userId}:${feedType}`;
     if (feedType === 'for_you' || feedType === 'foryou') {
-      this._mergeSeenPosts(userId, sessionState.seenPosts);
+      this._mergeSeenPosts(seenKey, sessionState.seenPosts);
     }
     this.notInterestedPosts.set(userId, notInterestedPosts);
-    const seenKey = `${userId}:${feedType}`;
     const seenPostIds = this._getSeenSet(seenKey);
     const expGroup = await this._getUserExperimentGroup(userId);
     let dynamicWeights = weightsRes.status === 'fulfilled' && weightsRes.value

@@ -23,7 +23,7 @@ import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '@context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
-import { prefetchCreatePost } from '../../utils/routePrefetcher.js';
+import { prefetchRoute, prefetchCreatePostAll } from '../../utils/routePrefetcher.js';
 import { useNavBadges } from '../../hooks/useNavBadges';
 import { fetchAdminStatus } from '../../services/callableService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
@@ -144,6 +144,8 @@ export default function DesktopNavRail() {
               key={item.path}
               type="button"
               onClick={() => navigate(item.path)}
+              onPointerEnter={() => prefetchRoute(item.path)}
+              onFocus={() => prefetchRoute(item.path)}
               aria-current={active ? 'page' : undefined}
               className={cn(
                 'w-full min-h-[40px] flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-[13px] font-semibold transition-colors whitespace-nowrap shrink-0 focus:outline-none focus:ring-2 focus:ring-arvdoul-purple',
@@ -193,9 +195,9 @@ export default function DesktopNavRail() {
         <button
           type="button"
           onClick={() => navigate('/create-post')}
-          onPointerEnter={() => prefetchCreatePost()}
-          onTouchStart={() => prefetchCreatePost()}
-          onFocus={() => prefetchCreatePost()}
+          onPointerEnter={() => prefetchCreatePostAll()}
+          onTouchStart={() => prefetchCreatePostAll()}
+          onFocus={() => prefetchCreatePostAll()}
           className="w-full py-2.5 px-4 rounded-xl bg-arvdoul-gradient text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-sm hover:opacity-95 transition-opacity focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
         >
           <Plus className="w-4 h-4" aria-hidden="true" />

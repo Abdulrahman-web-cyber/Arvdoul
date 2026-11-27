@@ -1,6 +1,6 @@
 // src/screens/CreatePost/EditPostLoader.jsx
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import * as Icons from 'lucide-react';
 import { useCreatePostState } from './CreatePostContext.jsx';
 import { POST_TYPES } from './createPostConstants.js';
@@ -13,6 +13,7 @@ export default function EditPostLoader() {
   const editId = searchParams.get('edit') || routePostId || null;
   const quoteSnippet = searchParams.get('quote');
   const location = useLocation();
+  const navigate = useNavigate();
 
   const lastLocationKeyRef = useRef(null);
   const lastEditIdRef = useRef(null);
@@ -203,10 +204,13 @@ export default function EditPostLoader() {
     if (loadedTypeKeyRef.current === typeKey) return;
     if (!POST_TYPES.some((t) => t.id === requestedType)) return;
     loadedTypeKeyRef.current = typeKey;
-    if (requestedType === 'vibe') return;
+    if (requestedType === 'vibe') {
+      navigate('/create-story', { replace: true });
+      return;
+    }
     dispatch({ type: 'SET_POST_TYPE', payload: requestedType });
     dispatch({ type: 'SET_STEP', payload: 2 });
-  }, [searchParams, location.key, editId, dispatch]);
+  }, [searchParams, location.key, editId, dispatch, navigate]);
 
   // Load existing post for /edit/:postId or ?edit=<id> across all 8 types
   const fetchPostForEdit = useCallback(async () => {

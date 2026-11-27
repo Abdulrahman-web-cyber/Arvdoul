@@ -10,8 +10,8 @@ import metricsService from "../services/metricsService.js";
 
 import BrandBootCanvas from "../components/Shared/BrandBootCanvas.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
+import MainLayout from "../layouts/MainLayout.jsx";
 
-const MainLayout = lazyWithRetry(() => import("../layouts/MainLayout.jsx"), "MainLayout");
 const IntroScreen = lazyWithRetry(() => import("../screens/IntroScreen.jsx"), "IntroScreen");
 const LoginScreen = lazyWithRetry(() => import("../screens/LoginScreen.jsx"), "LoginScreen");
 const HomeScreen = lazyWithRetry(() => import("../screens/HomeScreen.jsx"), "HomeScreen");
@@ -183,32 +183,35 @@ import {
 import { RouteProgressBar } from "../components/Navigation/RouteProgressBar.jsx";
 import FeatureGate from "../components/Shared/FeatureGate.jsx";
 
-// In-app route fallback inside MainLayout (no duplicate splash wordmark)
+// In-app route fallback inside MainLayout (no duplicate splash wordmark).
+// Delays skeleton box reveal by 180ms so prefetched/fast route chunks swap
+// instantaneously with only the subtle top progress bar and zero skeleton flash.
 const RouteLoadingFallback = () => {
+  const [showSkeleton, setShowSkeleton] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSkeleton(true), 180);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div
-      className="relative w-full min-h-[65dvh] px-4 py-6 max-w-2xl mx-auto animate-pulse"
+      className="relative w-full min-h-[65dvh] px-4 py-6 max-w-2xl mx-auto"
       aria-busy="true"
       aria-label="Loading page"
     >
       <RouteProgressBar isAnimating={true} />
-      <div className="h-28 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] mb-4" />
-      <div className="h-44 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] mb-4" />
-      <div className="h-36 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04]" />
+      {showSkeleton && (
+        <div className="animate-pulse transition-opacity duration-150">
+          <div className="h-28 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] mb-4" />
+          <div className="h-44 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] mb-4" />
+          <div className="h-36 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04]" />
+        </div>
+      )}
     </div>
   );
 };
 const RouteFallback = RouteLoadingFallback;
-
-// Shell bootstrap fallback while MainLayout itself is fetched once per session
-const AppShellFallback = () => {
-  const { isDark } = useTheme();
-  return (
-    <BrandBootCanvas isDark={isDark} label="Loading workspace">
-      <RouteProgressBar isAnimating={true} />
-    </BrandBootCanvas>
-  );
-};
 
 // Layoutless routes (Intro, Login, Signup, Join Group) need the full themed
 // Arvdoul lockup while lazy chunks resolve so users never see an unstyled flash.
@@ -233,9 +236,7 @@ const PublicRoute = ({ children }) => {
 const ProtectedRoute = ({ children }) => {
   return (
     <AppStateGuard>
-      <Suspense fallback={<AppShellFallback />}>
-        <MainLayout>{children}</MainLayout>
-      </Suspense>
+      <MainLayout>{children}</MainLayout>
     </AppStateGuard>
   );
 };

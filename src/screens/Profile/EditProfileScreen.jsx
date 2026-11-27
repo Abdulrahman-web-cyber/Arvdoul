@@ -640,12 +640,21 @@ export default function EditProfileScreen() {
         },
       }));
 
-      // Authoritative backend sync
+      // Authoritative backend sync (avoid duplicate Firestore photoURL rewrite if
+      // uploadAvatar already saved it directly to users/{uid}; AuthContext updateUserProfile
+      // still receives the full payload when available to update auth.currentUser).
+      const firestoreUpdates = uploadedAvatarUrl && !updateUserProfile
+        ? (() => {
+            const { photoURL: _alreadySaved, ...rest } = sanitizedUpdates;
+            return rest;
+          })()
+        : sanitizedUpdates;
+
       try {
         if (updateUserProfile) {
           await updateUserProfile(sanitizedUpdates, { silent: true });
-        } else if (userService?.updateUserProfile && currentUid) {
-          await userService.updateUserProfile(currentUid, sanitizedUpdates);
+        } else if (userService?.updateUserProfile && currentUid && Object.keys(firestoreUpdates).length > 0) {
+          await userService.updateUserProfile(currentUid, firestoreUpdates);
         }
 
         const appUser = useAppStore.getState().currentUser;

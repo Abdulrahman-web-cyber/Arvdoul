@@ -213,11 +213,38 @@ export async function executePostPublish({
   if (effectiveType === 'video' && mediaCount === 0 && !effectiveText) {
     throw new Error('Please add a video or caption.');
   }
-  if (
-    effectiveType === 'poll' &&
-    (current.typeData?.poll?.options || []).filter((o) => o && o.trim()).length < 2
-  ) {
-    throw new Error('Please add at least 2 poll options.');
+  if (effectiveType === 'question' && !effectiveText) {
+    throw new Error('Please enter your question before publishing.');
+  }
+  if (effectiveType === 'audio') {
+    const hasAudioTrack = Boolean(
+      current.typeData?.audio?.file ||
+      current.typeData?.audio?.url ||
+      mediaCount > 0
+    );
+    if (!hasAudioTrack) {
+      throw new Error('Please upload or record an audio track before publishing.');
+    }
+  }
+  if (effectiveType === 'poll') {
+    if (!effectiveText) {
+      throw new Error('Please enter your poll question before publishing.');
+    }
+    const cleanPollOptions = (current.typeData?.poll?.options || [])
+      .map((o) => (typeof o === 'string' ? o.trim() : ''))
+      .filter(Boolean);
+    if (cleanPollOptions.length < 2) {
+      throw new Error('Please add at least 2 poll options.');
+    }
+    const normalizedOptions = cleanPollOptions.map((o) =>
+      o.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim()
+    );
+    if (new Set(normalizedOptions).size !== normalizedOptions.length) {
+      throw new Error('Poll options must be unique.');
+    }
+    if (current.pollClosesAt && new Date(current.pollClosesAt) <= new Date()) {
+      throw new Error('Poll closing time must be in the future.');
+    }
   }
   if (
     effectiveType === 'event' &&

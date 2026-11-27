@@ -14,9 +14,7 @@ import videoService from '../services/videoService';
 import useHlsVideo from '../hooks/useHlsVideo.js';
 import VideoCreatorInfo from '../components/Videos/VideoCreatorInfo';
 import VideoActionRail from '../components/Videos/VideoActionRail';
-import VideoComments from '../components/Videos/VideoComments';
-import VideoBottomSheet from '../components/Videos/VideoBottomSheet';
-import VideoGiftModal from '../components/Videos/VideoGiftModal';
+import SparkModals from '../components/Videos/SparkModals.jsx';
 import { cn } from '../lib/utils';
 import { formatDuration } from '../utils/videoUtils';
 import { ArrowLeft, Volume2, VolumeX, Loader2, Play, Trash2, Clock } from 'lucide-react';
@@ -28,6 +26,7 @@ import {
   toggleSparkLike,
   toggleSparkSave,
   shareSpark,
+  adjustSparkCounter,
 } from '../hooks/useSparkInteractions.js';
 
 export default function VideoDetailScreen() {
@@ -545,67 +544,25 @@ export default function VideoDetailScreen() {
               </div>
             )}
 
-            <VideoComments
-              isOpen={showComments}
-              onClose={() => setShowComments(false)}
+            <SparkModals
               video={video}
-              onCommentAdded={() => setVideo((prev) => {
-                if (!prev) return prev;
-                const current = prev.stats?.comments ?? prev.comments;
-                if (typeof current !== 'number') return prev;
-                return {
-                  ...prev,
-                  comments: current + 1,
-                  stats: prev.stats ? { ...prev.stats, comments: current + 1 } : prev.stats,
-                };
-              })}
-              onCommentDeleted={() => setVideo((prev) => {
-                if (!prev) return prev;
-                const current = prev.stats?.comments ?? prev.comments;
-                if (typeof current !== 'number') return prev;
-                const next = Math.max(0, current - 1);
-                return {
-                  ...prev,
-                  comments: next,
-                  stats: prev.stats ? { ...prev.stats, comments: next } : prev.stats,
-                };
-              })}
-            />
-
-            <VideoBottomSheet
-              isOpen={showMoreMenu}
-              onClose={() => setShowMoreMenu(false)}
-              video={video}
-              initialView="report"
-              onSaveStateChange={(_id, nextSaved) => setSaved(Boolean(nextSaved))}
-              onShared={() => setVideo((prev) => {
-                if (!prev) return prev;
-                const current = prev.stats?.shares ?? prev.shares;
-                if (typeof current !== 'number') return prev;
-                return {
-                  ...prev,
-                  shares: current + 1,
-                  stats: prev.stats ? { ...prev.stats, shares: current + 1 } : prev.stats,
-                };
-              })}
-              onDeleted={() => navigate('/sparks')}
-            />
-
-            <VideoGiftModal
-              isOpen={showGiftModal && Boolean(video)}
-              onClose={() => setShowGiftModal(false)}
               creator={creator}
-              video={video}
-              onGiftSent={() => setVideo((prev) => {
-                if (!prev) return prev;
-                const current = prev.stats?.gifts ?? prev.gifts;
-                const next = typeof current === 'number' ? current + 1 : 1;
-                return {
-                  ...prev,
-                  gifts: next,
-                  stats: prev.stats ? { ...prev.stats, gifts: next } : { gifts: next },
-                };
-              })}
+              showComments={showComments}
+              onCloseComments={() => setShowComments(false)}
+              showReport={showMoreMenu}
+              onCloseReport={() => setShowMoreMenu(false)}
+              showGift={showGiftModal}
+              onCloseGift={() => setShowGiftModal(false)}
+              onAdjustCounter={(_target, field, delta) => {
+                setVideo((prev) => {
+                  const patch = adjustSparkCounter(prev, field, delta, {
+                    seedIfUnknown: field === 'gifts',
+                  });
+                  return patch ? { ...prev, ...patch } : prev;
+                });
+              }}
+              onSaveStateChange={(_id, nextSaved) => setSaved(Boolean(nextSaved))}
+              onDeleted={() => navigate('/sparks')}
             />
           </div>
         )}

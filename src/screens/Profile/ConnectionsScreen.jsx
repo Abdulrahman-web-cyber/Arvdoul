@@ -55,7 +55,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const targetUserId = !rawRouteParam || rawRouteParam.toLowerCase() === 'me'
     ? currentUserId
     : rawRouteParam.replace(/^@/, '').trim();
-  const isOwner = Boolean(currentUserId && targetUserId === currentUserId);
+  const routeIsOwner = Boolean(currentUserId && targetUserId === currentUserId);
   const targetKeyRef = useRef(targetUserId);
   useEffect(() => {
     targetKeyRef.current = targetUserId;
@@ -65,6 +65,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   }, [targetUserId]);
 
   const [targetProfile, setTargetProfile] = useState(null);
+  const resolvedTargetUid = targetProfile?.id || targetProfile?.uid || targetUserId;
+  const isOwner = Boolean(currentUserId && (resolvedTargetUid === currentUserId || targetUserId === currentUserId));
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshNonce, setRefreshNonce] = useState(0);
 
@@ -86,6 +88,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const [loading, setLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [tabErrors, setTabErrors] = useState({ followers: null, following: null, friends: null });
   // Capability map resolved once from the engine. Each tab has its own scope
   // (`followersList` / `followingList` / `friendsList`), so a viewer denied one
   // list must not reach another through a shared screen-level gate.
@@ -168,6 +171,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       setLoading(true);
       setPermissionDenied(false);
       setLoadError(null);
+      setTabErrors({ followers: null, following: null, friends: null });
       // Route changes must not display the previous target's social graph
       // while the next profile and its permissions are being resolved.
       setTargetProfile(null);
@@ -264,11 +268,40 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           followRequestsPromise,
         ]);
         if (!isMounted) return;
-        if ([followersRes, followingRes, friendsRes].some((result) => result.status === 'rejected')) {
-          if (resolvedIsOwner) {
-            setLoadError('Could not load your connection lists right now. Please try again.');
-          } else {
+
+        const enabledTabs = [
+          canViewFollowers && { key: 'followers', res: followersRes },
+          canViewFollowing && { key: 'following', res: followingRes },
+          canViewFriends && { key: 'friends', res: friendsRes },
+        ].filter(Boolean);
+
+        const nextTabErrors = {
+          followers: canViewFollowers && followersRes.status === 'rejected'
+            ? (followersRes.reason?.message || 'Could not load followers.')
+            : null,
+          following: canViewFollowing && followingRes.status === 'rejected'
+            ? (followingRes.reason?.message || 'Could not load following.')
+            : null,
+          friends: canViewFriends && friendsRes.status === 'rejected'
+            ? (friendsRes.reason?.message || 'Could not load friends.')
+            : null,
+        };
+        setTabErrors(nextTabErrors);
+
+        const rejectedEnabled = enabledTabs.filter((entry) => entry.res.status === 'rejected');
+        if (enabledTabs.length > 0 && rejectedEnabled.length === enabledTabs.length) {
+          const allDenied = rejectedEnabled.every((entry) => {
+            const code = entry.res.reason?.code || '';
+            return code === 'permission-denied' || code === 'functions/permission-denied';
+          });
+          if (!resolvedIsOwner && allDenied) {
             setPermissionDenied(true);
+          } else {
+            setLoadError(
+              resolvedIsOwner
+                ? 'Could not load your connection lists right now. Please try again.'
+                : 'Could not load connection lists right now. Please try again.'
+            );
           }
           return;
         }
@@ -319,10 +352,12 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
               followStates = await userService.getFollowStates(currentUserId, allIds);
             } catch (e) {
               console.warn('Follow-state hydration failed:', e?.message);
-              if (isOwner) {
+              if (resolvedIsOwner) {
                 setLoadError('Could not load connection statuses right now. Please try again.');
               } else {
-                setPermissionDenied(true);
+                const denied = e?.code === 'permission-denied' || e?.code === 'functions/permission-denied';
+                if (denied) setPermissionDenied(true);
+                else setLoadError('Could not load connection statuses right now. Please try again.');
               }
               return;
             }
@@ -354,7 +389,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         // Profile or safety-relationship failure must never be interpreted as
         // a public/empty graph and then used to enable social actions.
         if (isMounted) {
-          if (isOwner) {
+          const denied = err?.code === 'permission-denied' || err?.code === 'functions/permission-denied';
+          if (routeIsOwner || !denied) {
             setLoadError(err?.message || 'Unable to load connections. Please try again.');
           } else {
             setPermissionDenied(true);
@@ -369,7 +405,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     return () => {
       isMounted = false;
     };
-  }, [targetUserId, currentUserId, isOwner, currentUser, refreshNonce, authInitialized]);
+  }, [targetUserId, currentUserId, routeIsOwner, currentUser, refreshNonce, authInitialized]);
 
   // Cursor-based Load More for active list tab
   const handleLoadMore = useCallback(async () => {
@@ -923,6 +959,33 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                 )}
               >
                 Return to Profile
+              </button>
+            </div>
+          </div>
+        ) : tabErrors[activeTab] ? (
+          <div role="alert" className={cn(
+            "rounded-3xl p-8 text-center border space-y-4 my-4",
+            isDark ? "bg-white/[0.025] backdrop-blur-2xl border-white/[0.08]" : "bg-white border-slate-200"
+          )}>
+            <div className={cn(
+              "w-12 h-12 mx-auto rounded-2xl flex items-center justify-center border",
+              isDark ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-rose-50 text-rose-700 border-rose-200"
+            )}>
+              <Users className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-sm sm:text-base font-bold">Could not load {activeTabLabel.toLowerCase()}</h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                {tabErrors[activeTab]}
+              </p>
+            </div>
+            <div>
+              <button
+                type="button"
+                onClick={() => setRefreshNonce((n) => n + 1)}
+                className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-xs text-white bg-arvdoul-gradient whitespace-nowrap shrink-0 transition-opacity hover:opacity-90 cursor-pointer"
+              >
+                Retry
               </button>
             </div>
           </div>

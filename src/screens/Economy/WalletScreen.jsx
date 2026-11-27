@@ -9,7 +9,7 @@ import { useTheme } from '../../context/ThemeContext';
 import walletService from '../../services/walletService';
 import { getMonetizationService } from '../../services/monetizationService';
 import PaymentModal from '../../components/Shared/PaymentModal';
-import { Coins, ArrowUpRight, ArrowDownLeft, AlertCircle, Plus, Building, RefreshCw, Loader2 } from "lucide-react";
+import { Coins, ArrowUpRight, ArrowDownLeft, AlertCircle, Plus, Building, RefreshCw } from "lucide-react";
 import { toast } from 'sonner';
 import { MIN_WITHDRAWAL_COINS, coinsToUsd, formatCoinsAsUsd, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, LEVEL_GATES, getCreatorCapabilities } from '../../shared/levelConfig.cjs';
 import { unknownNumber } from '../../lib/unknownNumber';
@@ -64,6 +64,7 @@ export default function WalletScreen() {
   const isDark = theme === 'dark' || theme === 'midnight';
 
   const [loading, setLoading] = useState(true);
+  const [showLoadingShell, setShowLoadingShell] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -72,6 +73,15 @@ export default function WalletScreen() {
   const [purchasing, setPurchasing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
+
+  useEffect(() => {
+    if (!loading || wallet) {
+      setShowLoadingShell(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setShowLoadingShell(true), 150);
+    return () => clearTimeout(timer);
+  }, [loading, wallet]);
 
   const loadWallet = useCallback(async () => {
     if (!user?.uid) return;
@@ -167,11 +177,32 @@ export default function WalletScreen() {
 
   if (loading && !wallet) {
     return (
-      <div className={cn(
-        'min-h-screen pb-24 flex items-center justify-center',
-        isDark ? 'bg-[#03071B] text-slate-100' : 'bg-[#F6F8FC] text-slate-900'
-      )}>
-        <Loader2 className="w-8 h-8 animate-spin text-purple-500" aria-label="Loading wallet" />
+      <div
+        aria-busy="true"
+        aria-label="Loading wallet"
+        className={cn(
+          'min-h-screen pb-24 transition-colors',
+          isDark ? 'bg-[#03071B] text-slate-100' : 'bg-[#F6F8FC] text-slate-900'
+        )}
+      >
+        {showLoadingShell && (
+          <main className="max-w-3xl mx-auto px-4 py-4 space-y-6 animate-pulse">
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-1.5">
+                <div className={cn('h-5 w-32 rounded-lg', isDark ? 'bg-white/10' : 'bg-slate-200')} />
+                <div className={cn('h-3 w-48 rounded-lg', isDark ? 'bg-white/[0.06]' : 'bg-slate-200/80')} />
+              </div>
+              <div className={cn('h-10 w-10 rounded-xl', isDark ? 'bg-white/10' : 'bg-slate-200')} />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[0, 1, 2].map((idx) => (
+                <div key={idx} className={cn('h-14 rounded-2xl', isDark ? 'bg-white/[0.06]' : 'bg-slate-200/80')} />
+              ))}
+            </div>
+            <div className={cn('h-44 rounded-3xl', isDark ? 'bg-white/[0.05]' : 'bg-white border border-slate-200')} />
+            <div className={cn('h-56 rounded-3xl', isDark ? 'bg-white/[0.04]' : 'bg-white border border-slate-200')} />
+          </main>
+        )}
       </div>
     );
   }

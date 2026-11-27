@@ -35,13 +35,12 @@ import {
 } from "lucide-react";
 import videoService from '../services/videoService';
 import useHlsVideo from '../hooks/useHlsVideo.js';
-import { useSparkViewTracking } from '../hooks/useSparkInteractions.js';
+import { useSparkViewTracking, adjustSparkCounter } from '../hooks/useSparkInteractions.js';
 import { useSparksFeed, normalizeSparkItem } from '../hooks/useSparksFeed.js';
+import { formatDuration } from '../utils/videoUtils.js';
 import { getUserService } from '../services/userService';
 import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar';
-import VideoBottomSheet from '../components/Videos/VideoBottomSheet';
-import VideoComments from '../components/Videos/VideoComments';
-import VideoGiftModal from '../components/Videos/VideoGiftModal';
+import SparkModals from '../components/Videos/SparkModals.jsx';
 import { ArvdoulEmblem } from '../components/Shared/ArvdoulLogo';
 import { LazyImage } from '../components/Shared/LazyImage';
 
@@ -51,13 +50,6 @@ export default function ReelsScreen() {
   const targetReelId = searchParams.get('reelId');
   const { user } = useAuth();
 
-const formatDuration = (seconds) => {
-  const secs = Math.max(0, Math.round(Number(seconds) || 0));
-  const m = Math.floor(secs / 60);
-  const s2 = String(secs % 60).padStart(2, '0');
-  return `${m}:${s2}`;
-};
-
   const { isDark } = useTheme();
   const { hasTopAppBar } = useLayoutChrome();
 
@@ -65,7 +57,7 @@ const formatDuration = (seconds) => {
   const [currentReelIndex, setCurrentReelIndex] = useState(0);
   const [feedNonce, setFeedNonce] = useState(0);
 
-  // Keep absent stats unknown (null, never fabricated 0) using canonical Spark normalizer.
+  // Thin adapter preserving null (never fabricated 0) for explicit source-guard parity.
   const mapVideoToReel = useCallback((v) => {
     const normalized = normalizeSparkItem(v);
     if (!normalized) return null;
@@ -356,6 +348,16 @@ const formatDuration = (seconds) => {
   ), []);
   useSparkViewTracking(activeReelId, user?.uid, recordReelView, 'Reels');
 
+  const [showFeedSkeleton, setShowFeedSkeleton] = useState(false);
+  useEffect(() => {
+    if (!feedLoading || reels.length > 0) {
+      setShowFeedSkeleton(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setShowFeedSkeleton(true), 160);
+    return () => clearTimeout(timer);
+  }, [feedLoading, reels.length]);
+
   if (feedLoading && reels.length === 0) {
     return (
       <div className={cn(
@@ -363,42 +365,44 @@ const formatDuration = (seconds) => {
         isDark ? "bg-[#03071B]" : "bg-[#F6F8FC]"
       )}>
         <TopAppLoadingBanner isAnimating={true} label="Loading sparks..." />
-        <div
-          aria-hidden="true"
-          className={cn(
-            "relative h-full w-full lg:max-w-[430px] lg:aspect-[9/16] lg:max-h-[calc(100dvh-2rem)] lg:rounded-[28px] lg:border overflow-hidden flex flex-col justify-between p-5 animate-pulse",
-            isDark
-              ? "lg:border-white/10 bg-[#080E27]"
-              : "lg:border-slate-200/90 bg-white lg:shadow-[0_24px_70px_rgba(15,23,42,0.14)]"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <div className={cn("w-11 h-11 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
-            <div className="flex gap-4">
-              <div className={cn("w-16 h-5 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
-              <div className={cn("w-16 h-5 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
-            </div>
-            <div className="flex gap-2">
+        {showFeedSkeleton && (
+          <div
+            aria-hidden="true"
+            className={cn(
+              "relative h-full w-full lg:max-w-[430px] lg:aspect-[9/16] lg:max-h-[calc(100dvh-2rem)] lg:rounded-[28px] lg:border overflow-hidden flex flex-col justify-between p-5 animate-pulse",
+              isDark
+                ? "lg:border-white/10 bg-[#080E27]"
+                : "lg:border-slate-200/90 bg-white lg:shadow-[0_24px_70px_rgba(15,23,42,0.14)]"
+            )}
+          >
+            <div className="flex items-center justify-between">
               <div className={cn("w-11 h-11 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
-              <div className={cn("w-11 h-11 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
-            </div>
-          </div>
-          <div className="flex items-end justify-between gap-4 pb-[90px] lg:pb-0">
-            <div className="flex-1 space-y-2.5">
-              <div className="flex items-center gap-2.5">
-                <div className={cn("w-9 h-9 rounded-full", isDark ? "bg-white/15" : "bg-slate-300")} />
-                <div className={cn("h-3.5 w-28 rounded-full", isDark ? "bg-white/15" : "bg-slate-300")} />
+              <div className="flex gap-4">
+                <div className={cn("w-16 h-5 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
+                <div className={cn("w-16 h-5 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
               </div>
-              <div className={cn("h-3 w-4/5 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
-              <div className={cn("h-3 w-3/5 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
+              <div className="flex gap-2">
+                <div className={cn("w-11 h-11 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
+                <div className={cn("w-11 h-11 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
+              </div>
             </div>
-            <div className="flex flex-col gap-3">
-              {[0, 1, 2, 3].map((idx) => (
-                <div key={idx} className={cn("w-11 h-11 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
-              ))}
+            <div className="flex items-end justify-between gap-4 pb-[90px] lg:pb-0">
+              <div className="flex-1 space-y-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className={cn("w-9 h-9 rounded-full", isDark ? "bg-white/15" : "bg-slate-300")} />
+                  <div className={cn("h-3.5 w-28 rounded-full", isDark ? "bg-white/15" : "bg-slate-300")} />
+                </div>
+                <div className={cn("h-3 w-4/5 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
+                <div className={cn("h-3 w-3/5 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
+              </div>
+              <div className="flex flex-col gap-3">
+                {[0, 1, 2, 3].map((idx) => (
+                  <div key={idx} className={cn("w-11 h-11 rounded-full", isDark ? "bg-white/10" : "bg-slate-200")} />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }
@@ -1072,83 +1076,34 @@ const formatDuration = (seconds) => {
           </div>
         </div>
 
-        {/* Gift Modal — themed double-entry coin transfer */}
-        <VideoGiftModal
-          isOpen={giftModal && Boolean(currentReel)}
-          onClose={() => setGiftModal(false)}
-          creator={currentReel?.creator}
+        <SparkModals
           video={currentReel}
-          onGiftSent={() => {
-            if (!currentReel) return;
-            patchReel(currentReel.id, {
-              stats: {
-                ...currentReel.stats,
-                gifts: (currentReel.stats?.gifts ?? 0) + 1,
-              },
+          showComments={sheetView === 'comments'}
+          onCloseComments={() => setSheetView(null)}
+          showShare={sheetView === 'share'}
+          onCloseShare={() => setSheetView(null)}
+          showReport={sheetView === 'report'}
+          onCloseReport={() => setSheetView(null)}
+          showGift={giftModal}
+          onCloseGift={() => setGiftModal(false)}
+          onAdjustCounter={(target, field, delta) => {
+            if (!target?.id) return;
+            const patch = adjustSparkCounter(target, field, delta, {
+              seedIfUnknown: field === 'gifts' || (field === 'comments' && delta > 0),
             });
+            if (patch) patchReel(target.id, patch);
           }}
-        />
-
-        {/* Comments sheet for the active reel */}
-        <VideoComments
-          isOpen={sheetView === 'comments' && Boolean(currentReel)}
-          onClose={() => setSheetView(null)}
-          video={currentReel}
-          onCommentAdded={() => {
-            if (!currentReel) return;
-            patchReel(currentReel.id, {
-              stats: {
-                ...currentReel.stats,
-                comments: (currentReel.stats?.comments ?? 0) + 1,
-              },
-            });
-          }}
-          onCommentDeleted={() => {
-            if (!currentReel) return;
-            patchReel(currentReel.id, {
-              stats: {
-                ...currentReel.stats,
-                comments: currentReel.stats?.comments == null
-                  ? null
-                  : Math.max(0, currentReel.stats.comments - 1),
-              },
-            });
-          }}
-        />
-
-        {/* Share / Report sheet for the active reel */}
-        <VideoBottomSheet
-          isOpen={(sheetView === 'share' || sheetView === 'report') && Boolean(currentReel)}
-          onClose={() => setSheetView(null)}
-          initialView={sheetView === 'report' ? 'report' : 'share'}
-          video={currentReel}
           onSaveStateChange={(vidId, nextSaved) => {
-            setReels((prev) => prev.map((r) => (
-              r.id === vidId
-                ? {
-                  ...r,
-                  isSaved: nextSaved,
-                  stats: {
-                    ...r.stats,
-                    saves: r.stats?.saves == null ? null : Math.max(0, r.stats.saves + (nextSaved ? 1 : -1)),
-                  },
-                }
-                : r
-            )));
-          }}
-          onShared={(sharedReel) => {
-            if (!sharedReel?.id) return;
-            setReels((prev) => prev.map((r) => (
-              r.id === sharedReel.id
-                ? {
-                  ...r,
-                  stats: {
-                    ...r.stats,
-                    shares: r.stats?.shares == null ? null : r.stats.shares + 1,
-                  },
-                }
-                : r
-            )));
+            setReels((prev) => prev.map((r) => {
+              if (r.id !== vidId) return r;
+              const delta = nextSaved === Boolean(r.isSaved) ? 0 : (nextSaved ? 1 : -1);
+              const counterPatch = adjustSparkCounter(r, 'saves', delta);
+              return {
+                ...r,
+                isSaved: nextSaved,
+                ...(counterPatch || {}),
+              };
+            }));
           }}
           onNotInterested={(hiddenId) => {
             const nextLen = Math.max(0, reels.length - 1);

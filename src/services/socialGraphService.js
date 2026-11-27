@@ -346,7 +346,19 @@ class SocialGraphService {
     }
     if (uncachedOthers.length === 0) return result;
 
+    const currentAuthUid = this.auth?.currentUser?.uid || null;
+    // Only query `follow_requests` for the signed-in viewer, because Firestore rules
+    // scope `follow_requests` reads to `fromUserId == request.auth.uid`.
+    const allowRequestRead = options.includeRequests !== false && (!currentAuthUid || currentAuthUid === viewerId);
     const needFollow = include.includes('follow');
+    const pendingRequestSpec = needFollow && allowRequestRead
+      ? {
+          collection: 'follow_requests',
+          actorField: 'fromUserId',
+          otherField: 'toUserId',
+          equals: { status: 'pending' },
+        }
+      : null;
     const needBlock = include.includes('block');
     const needMute = include.includes('mute');
     const needRestrict = include.includes('restrict');
@@ -355,9 +367,6 @@ class SocialGraphService {
     try {
       await this._ensureInitialized();
 
-      // Run all enabled actor-scoped reads in a single Promise.all so latency scales
-      // as 1 round-trip instead of sequential waterfalls, and filter follow_requests
-      // to `status == 'pending'` so cancelled/declined rows never appear pending.
       const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut, pendingOut] = await Promise.all([
         needFollow ? this._actorScopedIds(viewerId, uncachedOthers, EDGE_ACTOR_SPECS.follow.out) : Promise.resolve(new Set()),
         needFollow ? this._actorScopedIds(viewerId, uncachedOthers, EDGE_ACTOR_SPECS.follow.in) : Promise.resolve(new Set()),
@@ -365,13 +374,8 @@ class SocialGraphService {
         needBlock ? this._actorScopedIds(viewerId, uncachedOthers, EDGE_ACTOR_SPECS.block.in) : Promise.resolve(new Set()),
         needMute ? this._actorScopedIds(viewerId, uncachedOthers, EDGE_ACTOR_SPECS.mute.out) : Promise.resolve(new Set()),
         needRestrict ? this._actorScopedIds(viewerId, uncachedOthers, EDGE_ACTOR_SPECS.restrict.out) : Promise.resolve(new Set()),
-        include.includes('follow')
-          ? this._actorScopedIds(viewerId, uncachedOthers, {
-              collection: 'follow_requests',
-              actorField: 'fromUserId',
-              otherField: 'toUserId',
-              equals: { status: 'pending' },
-            })
+        pendingRequestSpec
+          ? this._actorScopedIds(viewerId, uncachedOthers, pendingRequestSpec)
           : Promise.resolve(new Set()),
       ]);
 
@@ -632,7 +636,10 @@ class SocialGraphService {
     while (mutualIds.length < size && pages < MUTUAL_SCAN_PAGES) {
       const page = await this.listEdges(userId, 'following', { limit: size, cursor: pageCursor });
       if (page.ids.length === 0) { hasMore = false; break; }
-      const edgeMap = await this.getEdgeSet(userId, page.ids, { include: ['follow'] });
+      const edgeMap = await this.getEdgeSet(userId, page.ids, {
+        include: ['follow'],
+        includeRequests: false,
+      });
       for (const id of page.ids) {
         if (mutualIds.length >= size) break;
         if (edgeMap.get(id)?.isMutualFriend) mutualIds.push(id);
@@ -769,9 +776,10 @@ class SocialGraphService {
     const mySet = new Set(mine.ids);
     const sample = mine.ids.slice(0, 10);
     const candidateCounts = new Map();
-    const pages = await Promise.all(sample.map((fid) => this.listEdges(fid, 'following', { limit: 30 })));
-    for (const page of pages) {
-      for (const candId of page.ids) {
+    const pages = await Promise.allSettled(sample.map((fid) => this.listEdges(fid, 'following', { limit: 30 })));
+    for (const res of pages) {
+      if (res.status !== 'fulfilled' || !Array.isArray(res.value?.ids)) continue;
+      for (const candId of res.value.ids) {
         if (isHidden(candId) || mySet.has(candId)) continue;
         candidateCounts.set(candId, (candidateCounts.get(candId) || 0) + 1);
       }

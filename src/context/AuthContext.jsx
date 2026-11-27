@@ -22,6 +22,8 @@ import { useUserSettings } from "../hooks/useUserSettings.js";
 import { useMessagingStore } from "../store/messagingStore";
 
 const AuthContext = createContext(null);
+const _attemptedDailyLogin = new Set();
+const _attemptedDeviceReg = new Set();
 
 function getOrCreateDeviceId() {
   try {
@@ -570,7 +572,8 @@ export function AuthProvider({ children }) {
 
             if (isFirstSnapshot) {
               const today = new Date().toISOString().slice(0, 10);
-              let shouldCreditDailyLogin = profile.lastActiveDay !== today;
+              const dailyKey = `${uid}:${today}`;
+              let shouldCreditDailyLogin = profile.lastActiveDay !== today && !_attemptedDailyLogin.has(dailyKey);
               if (shouldCreditDailyLogin) {
                 try {
                   if (localStorage.getItem(`arvdoul_daily_login_${uid}`) === today) {
@@ -579,6 +582,7 @@ export function AuthProvider({ children }) {
                 } catch { /* storage restricted */ }
               }
               if (shouldCreditDailyLogin) {
+                _attemptedDailyLogin.add(dailyKey);
                 import('../services/levelSystemService.js')
                   .then(({ levelSystemService }) =>
                     levelSystemService.recordActiveDay({ userId: uid })
@@ -593,13 +597,17 @@ export function AuthProvider({ children }) {
                   console.warn('[Auth] last-active update failed', err?.message));
               }
               const deviceId = getOrCreateDeviceId();
-              let shouldRegisterDevice = true;
-              try {
-                if (sessionStorage.getItem(`arvdoul_device_reg_${uid}:${deviceId}`) === '1') {
-                  shouldRegisterDevice = false;
-                }
-              } catch { /* storage restricted */ }
+              const deviceKey = `${uid}:${deviceId}`;
+              let shouldRegisterDevice = !_attemptedDeviceReg.has(deviceKey);
               if (shouldRegisterDevice) {
+                try {
+                  if (sessionStorage.getItem(`arvdoul_device_reg_${deviceKey}`) === '1') {
+                    shouldRegisterDevice = false;
+                  }
+                } catch { /* storage restricted */ }
+              }
+              if (shouldRegisterDevice) {
+                _attemptedDeviceReg.add(deviceKey);
                 import('../services/callableService.js')
                   .then(({ callFunction, FUNCTIONS }) =>
                     callFunction(FUNCTIONS.REGISTER_DEVICE_SESSION, {
@@ -609,7 +617,7 @@ export function AuthProvider({ children }) {
                     })
                   )
                   .then(() => {
-                    try { sessionStorage.setItem(`arvdoul_device_reg_${uid}:${deviceId}`, '1'); } catch { /* ignore */ }
+                    try { sessionStorage.setItem(`arvdoul_device_reg_${deviceKey}`, '1'); } catch { /* ignore */ }
                   })
                   .catch((err) => console.warn('[Auth] device session registration skipped', err?.message));
               }

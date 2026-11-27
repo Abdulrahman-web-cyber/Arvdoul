@@ -754,7 +754,7 @@ export default function HomeScreen() {
   }, [feedState.order.length]);
 
   const [activeFeedTab, setActiveFeedTab] = useState('foryou');
-  const [status, setStatus] = useState(STATUS.LOADING);
+  const [status, setStatus] = useState(() => (feedState.order.length > 0 ? STATUS.SUCCESS : STATUS.LOADING));
   const [error, setError] = useState(null);
   const [fallbackMode, setFallbackMode] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -1079,7 +1079,7 @@ export default function HomeScreen() {
         setError(null);
         setFallbackMode(false);
         nextCursorRef.current = null;
-        setStatus(STATUS.LOADING);
+        setStatus(feedRef.current.length > 0 ? STATUS.REFRESHING : STATUS.LOADING);
       } else if (!isPreload && !reset) {
         setStatus(STATUS.LOADING_MORE);
         loadMoreLockRef.current = true;
@@ -1552,6 +1552,7 @@ export default function HomeScreen() {
             <AnimatePresence>
               {status === STATUS.REFRESHING && (
                 <motion.div
+                  key="feed-refreshing-banner"
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
@@ -1562,6 +1563,7 @@ export default function HomeScreen() {
               )}
               {newPostsCount > 0 && (
                 <motion.button
+                  key="feed-new-posts-banner"
                   type="button"
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1573,6 +1575,7 @@ export default function HomeScreen() {
                 </motion.button>
               )}
               <motion.button
+                key="feed-manual-refresh-btn"
                 type="button"
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1737,6 +1740,7 @@ export default function HomeScreen() {
                         <AnimatePresence>
                           {isFilterShelfOpen && (
                             <motion.div
+                              key="feed-filter-shelf"
                               initial={{ opacity: 0, height: 0, y: -6 }}
                               animate={{ opacity: 1, height: 'auto', y: 0 }}
                               exit={{ opacity: 0, height: 0, y: -6 }}
@@ -1882,6 +1886,7 @@ export default function HomeScreen() {
         <AnimatePresence>
           {isRewardAdOpen && (
             <motion.div
+              key="reward-ad-backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}

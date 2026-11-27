@@ -6,6 +6,23 @@
 import { getFunctionsInstance } from '../firebase/firebase.js';
 import { logger } from '../utils/Logger.js';
 
+export function isCallableUnavailableError(error) {
+  const code = String(error?.code || '').toLowerCase();
+  const msg = String(error?.message || '').toLowerCase();
+  return (
+    code === 'functions/internal' ||
+    code === 'functions/unavailable' ||
+    code === 'functions/not-found' ||
+    code === 'internal' ||
+    code === 'unavailable' ||
+    code === 'not-found' ||
+    msg === 'internal' ||
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('load failed')
+  );
+}
+
 export const FUNCTIONS = {
   GET_ADMIN_STATUS: 'getAdminStatus',
   BOOTSTRAP_OWNER: 'bootstrapOwner',
@@ -260,7 +277,14 @@ export async function callFunction(functionName, data = {}) {
     const result = await callable(data);
     return result?.data;
   } catch (error) {
-    logger.error(`[callableService] Error calling ${functionName}`, { error: error?.message });
+    if (isCallableUnavailableError(error)) {
+      logger.warn(`[callableService] Function ${functionName} unavailable`, {
+        code: error?.code || null,
+        error: error?.message,
+      });
+    } else {
+      logger.error(`[callableService] Error calling ${functionName}`, { error: error?.message });
+    }
     throw error;
   }
 }
@@ -276,19 +300,47 @@ export function makeCallable(functionName) {
   return async (data = {}) => ({ data: await callFunction(functionName, data) });
 }
 
+const ADMIN_STATUS_CACHE_TTL_MS = 60_000;
+let _adminStatusCache = { uid: null, value: false, expiresAt: 0 };
+let _adminStatusInFlight = { uid: null, promise: null };
+
 /**
- * Query current user's admin status from the server
+ * Query current user's admin status from the server (deduplicated per uid)
  * @returns {Promise<boolean>}
  */
 export async function fetchAdminStatus() {
-  try {
-    const res = await callFunction(FUNCTIONS.GET_ADMIN_STATUS);
-    return Boolean(res?.isAdmin);
-  } catch (err) {
-    // If not configured or unauthenticated, default to false without crashing
-    logger.warn('[callableService] fetchAdminStatus fallback: false', { error: err?.message });
-    return false;
+  const browserAuth = typeof window !== 'undefined' ? window._arvdoul_auth : null;
+  if (browserAuth && !browserAuth.currentUser?.uid) return false;
+  const uid = browserAuth?.currentUser?.uid || '__default__';
+
+  const now = Date.now();
+  if (_adminStatusCache.uid === uid && now < _adminStatusCache.expiresAt) {
+    return _adminStatusCache.value;
   }
+  if (_adminStatusInFlight.uid === uid && _adminStatusInFlight.promise) {
+    return _adminStatusInFlight.promise;
+  }
+
+  const promise = (async () => {
+    try {
+      const res = await callFunction(FUNCTIONS.GET_ADMIN_STATUS);
+      const isAdmin = Boolean(res?.isAdmin);
+      _adminStatusCache = { uid, value: isAdmin, expiresAt: Date.now() + ADMIN_STATUS_CACHE_TTL_MS };
+      return isAdmin;
+    } catch (err) {
+      // If not configured or unauthenticated, default to false without crashing
+      logger.warn('[callableService] fetchAdminStatus fallback: false', { error: err?.message });
+      _adminStatusCache = { uid, value: false, expiresAt: Date.now() + 15_000 };
+      return false;
+    } finally {
+      if (_adminStatusInFlight.uid === uid) {
+        _adminStatusInFlight = { uid: null, promise: null };
+      }
+    }
+  })();
+
+  _adminStatusInFlight = { uid, promise };
+  return promise;
 }
 
 /**

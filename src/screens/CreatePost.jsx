@@ -116,7 +116,25 @@ const LazyVirtuoso = lazy(() =>
 const CreatorInsightsDrawer = lazy(() => import('./CreatePost/CreatorInsightsDrawer.jsx'));
 const ComposerControlCenter = lazy(() => import('./CreatePost/sections/ComposerControlCenter.jsx'));
 
+function DelayedEditorFallback() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), 160);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      {visible ? <LoadingSpinner size="lg" /> : null}
+    </div>
+  );
+}
+
 function CreatePostProvider({ children }) {
+  useEffect(() => {
+    import('../utils/routePrefetcher.js')
+      .then((m) => m.prefetchCreatePostAll?.())
+      .catch(() => {});
+  }, []);
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -1538,6 +1556,7 @@ const LauncherGrid = React.memo(() => {
                   key={type.id}
                   type="button"
                   onClick={() => selectPostType(type.id)}
+                  onPointerDown={() => preloadEditor(type.id)}
                   onPointerEnter={() => preloadEditor(type.id)}
                   onFocus={() => preloadEditor(type.id)}
                   className={`${SURFACE_GLASS_CLASS} group relative flex flex-col items-start justify-between p-3 sm:p-5 min-h-[116px] sm:min-h-[136px] text-left hover:border-arvdoul-purple/50 active:scale-[0.98] transition-all focus-visible:ring-2 focus-visible:ring-arvdoul-purple`}
@@ -1937,13 +1956,7 @@ function CreatePostContent() {
   }
 
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-[60vh] flex items-center justify-center">
-          <LoadingSpinner size="lg" />
-        </div>
-      }
-    >
+    <Suspense fallback={<DelayedEditorFallback />}>
       <ErrorBoundary fallback={<div className="p-4 text-rose-500">Failed to load editor.</div>}>
         <CreatorShell>
           <CreatePostShell>

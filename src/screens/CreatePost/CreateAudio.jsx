@@ -54,57 +54,77 @@ export default function CreateAudio() {
   const persistedAudioUrl = state.typeData?.audio?.url || '';
   const hasAudio = Boolean(audioFile || previewUrl || persistedAudioUrl);
 
-  // Sync audio state into parent reducer without overwriting persisted url
+  // Sync audio state into parent reducer only when changed (prevents false isDirty/undo entries on mount)
   useEffect(() => {
-    dispatch({
-      type: 'SET_TYPE_DATA',
-      payload: {
-        audio: {
-          file: audioFile,
-          url: audioFile ? '' : persistedAudioUrl,
-          previewUrl,
-          coverUrl,
-          coverFile,
-          title: trackTitle,
-          artist: artistName,
-          genre: selectedGenre,
+    const curAudio = state.typeData?.audio || {};
+    const nextUrl = audioFile ? '' : persistedAudioUrl;
+    const audioChanged =
+      (curAudio.file || null) !== (audioFile || null) ||
+      (curAudio.url || '') !== nextUrl ||
+      (curAudio.previewUrl || null) !== (previewUrl || null) ||
+      (curAudio.coverUrl || null) !== (coverUrl || null) ||
+      (curAudio.coverFile || null) !== (coverFile || null) ||
+      (curAudio.title || '') !== trackTitle ||
+      (curAudio.artist || '') !== artistName ||
+      (curAudio.genre || 'Original') !== selectedGenre;
+
+    if (audioChanged) {
+      dispatch({
+        type: 'SET_TYPE_DATA',
+        payload: {
+          audio: {
+            file: audioFile,
+            url: nextUrl,
+            previewUrl,
+            coverUrl,
+            coverFile,
+            title: trackTitle,
+            artist: artistName,
+            genre: selectedGenre,
+          },
         },
-      },
-    });
+      });
+    }
 
-    dispatch({
-      type: 'SET_MEDIA_ITEMS',
-      payload: audioFile
-        ? [
-            {
-              id: 'audio-main',
-              type: 'audio',
-              file: audioFile,
-              preview: previewUrl,
-              url: '',
-              name: trackTitle || audioFile.name || 'audio',
-              alt: trackTitle || 'Audio track',
-            },
-          ]
-        : persistedAudioUrl
-        ? [
-            {
-              id: 'audio-main',
-              type: 'audio',
-              file: null,
-              url: persistedAudioUrl,
-              preview: previewUrl || persistedAudioUrl,
-              name: trackTitle || 'audio',
-              alt: trackTitle || 'Audio track',
-            },
-          ]
-        : [],
-    });
+    const expectedHasMedia = Boolean(audioFile || persistedAudioUrl);
+    const curHasMedia = Array.isArray(state.mediaItems) && state.mediaItems.length > 0;
+    if (audioChanged && (expectedHasMedia || curHasMedia)) {
+      dispatch({
+        type: 'SET_MEDIA_ITEMS',
+        payload: audioFile
+          ? [
+              {
+                id: 'audio-main',
+                type: 'audio',
+                file: audioFile,
+                preview: previewUrl,
+                url: '',
+                name: trackTitle || audioFile.name || 'audio',
+                alt: trackTitle || 'Audio track',
+              },
+            ]
+          : persistedAudioUrl
+          ? [
+              {
+                id: 'audio-main',
+                type: 'audio',
+                file: null,
+                url: persistedAudioUrl,
+                preview: previewUrl || persistedAudioUrl,
+                name: trackTitle || 'audio',
+                alt: trackTitle || 'Audio track',
+              },
+            ]
+          : [],
+      });
+    }
 
-    dispatch({
-      type: 'SET_CONTENT_READY',
-      payload: Boolean(audioFile || persistedAudioUrl),
-    });
+    if (Boolean(state.isContentReady) !== expectedHasMedia) {
+      dispatch({
+        type: 'SET_CONTENT_READY',
+        payload: expectedHasMedia,
+      });
+    }
   }, [
     audioFile,
     previewUrl,
@@ -114,6 +134,9 @@ export default function CreateAudio() {
     artistName,
     selectedGenre,
     persistedAudioUrl,
+    state.typeData?.audio,
+    state.mediaItems,
+    state.isContentReady,
     dispatch,
   ]);
 

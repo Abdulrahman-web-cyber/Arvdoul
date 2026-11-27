@@ -411,8 +411,9 @@ class UltimateNotificationsService {
         // Cloud Functions — all through the canonical callableService. `cf`
         // re-wraps the data-returning helper in the `{ data }` envelope the
         // call sites below destructure.
-        const { makeCallable, FUNCTIONS } = await import('./callableService.js');
+        const { makeCallable, FUNCTIONS, isCallableUnavailableError } = await import('./callableService.js');
         const cf = makeCallable;
+        this._isCallableUnavailableError = isCallableUnavailableError;
         this.cfSendNotification = cf(FUNCTIONS.SEND_NOTIFICATION);
         this.cfMarkRead = cf(FUNCTIONS.MARK_NOTIFICATION_READ);
         this.cfMarkAllRead = cf(FUNCTIONS.MARK_ALL_NOTIFICATIONS_READ);
@@ -580,8 +581,20 @@ class UltimateNotificationsService {
 
   async getNotificationStats(userId) {
     await this.ensureInitialized();
-    const result = await this.cfGetNotificationStats({ userId });
-    return result.data;
+    try {
+      const result = await this.cfGetNotificationStats({ userId });
+      return result.data;
+    } catch (err) {
+      if (this._isCallableUnavailableError?.(err)) {
+        const unread = await this._getTotalUnreadCount(userId).catch(() => 0);
+        return {
+          success: true,
+          stats: { total: null, read: null, unread, openRate: 0 },
+          fromShards: true,
+        };
+      }
+      throw err;
+    }
   }
 
   async createBulkNotificationJob(jobData) {
@@ -942,11 +955,17 @@ class UltimateNotificationsService {
 
   async _getTotalUnreadCount(userId) {
     const shardCount = NOTIFICATIONS_CONFIG.PERFORMANCE.NOTIFICATION_SHARDS;
-    let total = 0;
+    const reads = [];
     for (let i = 0; i < shardCount; i++) {
       const ref = this.fs.doc(this.firestore, 'notification_counters', `${userId}_shard_${i}`);
-      const snap = await this.fs.getDoc(ref);
-      if (snap.exists()) total += snap.data().count || 0;
+      reads.push(this.fs.getDoc(ref));
+    }
+    const snaps = await Promise.allSettled(reads);
+    let total = 0;
+    for (const res of snaps) {
+      if (res.status === 'fulfilled' && res.value.exists()) {
+        total += Number(res.value.data()?.count || 0);
+      }
     }
     return total;
   }

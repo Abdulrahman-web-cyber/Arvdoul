@@ -157,9 +157,9 @@ export function useSparksFeed({
   const items = useMemo(() => {
     const blocked = new Set(store.notInterestedIds || []);
     return rawItems
-      .map(normalizeSparkItem)
+      .map(normalize)
       .filter((item) => item && !blocked.has(item.id));
-  }, [rawItems, store.notInterestedIds]);
+  }, [rawItems, store.notInterestedIds, normalize]);
 
   const creatorIds = useMemo(
     () => items.map((r) => r.creator?.id).filter(Boolean),

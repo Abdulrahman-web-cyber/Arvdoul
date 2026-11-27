@@ -88,7 +88,22 @@ export default function ProfilePublicScreen() {
   const storeStories = useProfileStore((state) => state.stories);
   const storeStoriesLoading = useProfileStore((state) => state.storiesLoading);
 
-  const [localLoading, setLocalLoading] = useState(true);
+  const [localLoading, setLocalLoading] = useState(() => {
+    if (!routeUserId) return false;
+    const normalized = routeUserId.toLowerCase();
+    const state = useProfileStore.getState();
+    const p = state.profile;
+    const matched = Boolean(
+      p &&
+      !state.error &&
+      (
+        String(p.id || '').toLowerCase() === normalized ||
+        String(p.uid || '').toLowerCase() === normalized ||
+        (p.username && String(p.username).replace(/^@/, '').toLowerCase() === normalized)
+      )
+    );
+    return !matched;
+  });
   const [friendshipStatus, setFriendshipStatus] = useState('none'); // 'none' | 'pending' | 'received' | 'friends'
   const [pendingRequestId, setPendingRequestId] = useState(null);
   const [friendRequestLoading, setFriendRequestLoading] = useState(false);

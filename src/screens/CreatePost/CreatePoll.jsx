@@ -70,10 +70,10 @@ export default function CreatePoll() {
   const pollClosesAt = state.pollClosesAt;
   const rawOptions = useMemo(() => (Array.isArray(poll.options) ? poll.options : []), [poll.options]);
 
-  // Seed default 2 blank options once if entering a fresh poll
+  // Seed default 2 blank options once if entering a fresh poll (without dirtying draft/history)
   useEffect(() => {
     if (rawOptions.length === 0) {
-      dispatch({ type: 'SET_POLL_OPTIONS', payload: ['', ''] });
+      dispatch({ type: 'SEED_POLL_OPTIONS', payload: ['', ''] });
     }
   }, [rawOptions.length, dispatch]);
 

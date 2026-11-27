@@ -21,6 +21,31 @@ function resolveCreatorHandle(label) {
 }
 
 /**
+ * Safely computes a patched counter payload (`[field]` and `stats[field]`)
+ * without fabricating 0s for unknown (`null`/`undefined`) server counts.
+ */
+export function adjustSparkCounter(item, field, delta, { seedIfUnknown = false } = {}) {
+  if (!item || !field) return null;
+  const current =
+    typeof item.stats?.[field] === 'number'
+      ? item.stats[field]
+      : (typeof item[field] === 'number' ? item[field] : null);
+  if (typeof current !== 'number') {
+    if (!seedIfUnknown || delta <= 0) return null;
+    const seeded = Math.max(0, delta);
+    return {
+      [field]: seeded,
+      stats: { ...(item.stats || {}), [field]: seeded },
+    };
+  }
+  const nextVal = Math.max(0, current + delta);
+  return {
+    [field]: nextVal,
+    stats: { ...(item.stats || {}), [field]: nextVal },
+  };
+}
+
+/**
  * Flush real elapsed watch duration for an active Spark/Reel/Video on
  * video switch, pagehide, or unmount.
  */
