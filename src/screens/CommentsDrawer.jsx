@@ -758,9 +758,12 @@ const EditHistoryModal = ({ comment, onClose }) => {
         <h3 className="text-lg font-bold mb-3">Edit History</h3>
         {loading && <LoadingSpinner size="sm" color="purple" />}
         {history.map((edit, idx) => (
-          <div key={idx} className="mb-3 p-2 border-l-2 border-purple-500">
-            <div className="text-xs text-gray-500 mb-1">Version {edit.version} - {formatDistanceToNow(new Date(edit.editedAt), { addSuffix: true, locale: enUS })}</div>
-            <div className="text-sm whitespace-pre-wrap">{edit.content}</div>
+          <div key={edit.id || idx} className="mb-3 p-2 border-l-2 border-purple-500">
+            <div className="text-xs text-gray-500 mb-1">
+              Version {edit.version ?? (history.length - idx)}
+              {edit.editedAt ? ` - ${formatDistanceToNow(new Date(edit.editedAt), { addSuffix: true, locale: enUS })}` : ''}
+            </div>
+            <div className="text-sm whitespace-pre-wrap">{edit.previousContent ?? edit.content ?? ''}</div>
           </div>
         ))}
         <button onClick={onClose} className="mt-4 w-full py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors">Close</button>
@@ -887,6 +890,9 @@ const CommentItem = memo(({
 
   const isVoice = comment.type === 'voice';
   const likedByArray = comment.likesBy ?? [];
+  const isCommentLiked = comment.userLiked !== undefined
+    ? Boolean(comment.userLiked)
+    : likedByArray.includes(currentUser?.uid);
 
   const handleSaveEdit = async () => { await onEdit(commentId, editContent); setIsEditing(false); };
   const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
@@ -1000,7 +1006,7 @@ const CommentItem = memo(({
                 );
               })}
             <button type="button" onClick={() => onLike(commentId)} className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors" aria-label="Like comment">
-              <Heart className={`w-3.5 h-3.5 ${likedByArray.includes(currentUser?.uid) ? 'fill-red-500 text-red-500' : ''}`} />
+              <Heart className={`w-3.5 h-3.5 ${isCommentLiked ? 'fill-red-500 text-red-500' : ''}`} />
               <span>{formatCount(comment.likes)}</span>
             </button>
             <button type="button" onClick={() => onReply(comment)} className="flex items-center gap-1 text-gray-500 hover:text-purple-500 transition-colors"><Reply className="w-3.5 h-3.5" /> Reply</button>
@@ -1562,13 +1568,15 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     triggerHaptic('light');
     const comment = useCommentsStore.getState().getPostState(postId).byId[commentId];
     if (!comment) { pendingLikes.current.delete(commentId); return; }
-    const wasLiked = (comment.likesBy ?? []).includes(currentUser.uid);
+    const wasLiked = comment.userLiked !== undefined
+      ? Boolean(comment.userLiked)
+      : (comment.likesBy ?? []).includes(currentUser.uid);
     const currentLikes = typeof comment.likes === 'number' ? comment.likes : 0;
     const newLikes = wasLiked ? Math.max(0, currentLikes - 1) : currentLikes + 1;
     const newLikedBy = wasLiked
       ? (comment.likesBy ?? []).filter(id => id !== currentUser.uid)
       : [...(comment.likesBy ?? []), currentUser.uid];
-    updateComment(postId, commentId, { likes: newLikes, likesBy: newLikedBy });
+    updateComment(postId, commentId, { likes: newLikes, likesBy: newLikedBy, userLiked: !wasLiked });
     try {
       if (!wasLiked) await commentService.likeComment(commentId, currentUser.uid);
       else await commentService.removeLikeDislike(commentId, currentUser.uid);
@@ -1578,12 +1586,14 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         updateComment(postId, commentId, {
           likes: currentLikes,
           likesBy: [...new Set([...(comment.likesBy ?? []), currentUser.uid])],
+          userLiked: true,
         });
       } else {
         toast.error('Like failed');
         updateComment(postId, commentId, {
           likes: comment.likes,
           likesBy: comment.likesBy,
+          userLiked: comment.userLiked,
         });
       }
     } finally {

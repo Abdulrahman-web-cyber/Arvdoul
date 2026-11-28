@@ -52,7 +52,7 @@ import { v4 as uuidv4 } from 'uuid';
 import FocusTrap from 'focus-trap-react';
 import clamp from 'lodash-es/clamp';
 import useMediaQuery from '../../hooks/useMediaQuery';
-import { loadImage, createCanvas, cleanupImage } from './imageEffects';
+import { loadImage, createCanvas, cleanupImage, pointNearLine } from './imageEffects';
 import AdjustTool from '../../components/Shared/AdjustTool';
 import FilterTool from '../../components/Shared/FilterTool';
 import CropTool from '../../components/Shared/CropTool';
@@ -509,6 +509,42 @@ const FILTER_FNS = {
     const t = (0.299 * r + 0.587 * g + 0.114 * b) / 255 - 0.5;
     o[0] = (r - 128) * 1.1 + 128 + t * 34; o[1] = (g - 128) * 1.1 + 128 + t * 6; o[2] = (b - 128) * 1.1 + 128 - t * 34;
   },
+  bright: (r, g, b, o) => { o[0] = r * 1.32 + 12; o[1] = g * 1.32 + 12; o[2] = b * 1.32 + 12; },
+  soft: (r, g, b, o) => { o[0] = (r - 128) * 0.9 + 136; o[1] = (g - 128) * 0.9 + 136; o[2] = (b - 128) * 0.9 + 136; },
+  lomo: (r, g, b, o) => {
+    const y = 0.299 * r + 0.587 * g + 0.114 * b;
+    o[0] = (y + (r - y) * 1.45 - 128) * 1.18 + 122;
+    o[1] = (y + (g - y) * 1.45 - 128) * 1.18 + 120;
+    o[2] = (y + (b - y) * 1.45 - 128) * 1.18 + 114;
+  },
+  moody: (r, g, b, o) => {
+    const y = 0.299 * r + 0.587 * g + 0.114 * b;
+    o[0] = (y + (r - y) * 0.8 - 128) * 1.2 + 116;
+    o[1] = (y + (g - y) * 0.8 - 128) * 1.2 + 116;
+    o[2] = (y + (b - y) * 0.8 - 128) * 1.2 + 122;
+  },
+  nature: (r, g, b, o) => {
+    const y = 0.299 * r + 0.587 * g + 0.114 * b;
+    o[0] = y + (r - y) * 1.22 + 4; o[1] = y + (g - y) * 1.3 + 8; o[2] = y + (b - y) * 1.2 - 4;
+  },
+  portrait: (r, g, b, o) => {
+    const y = 0.299 * r + 0.587 * g + 0.114 * b;
+    o[0] = (y + (r - y) * 0.92 - 128) * 1.05 + 134;
+    o[1] = (y + (g - y) * 0.92 - 128) * 1.05 + 132;
+    o[2] = (y + (b - y) * 0.92 - 128) * 1.05 + 130;
+  },
+  food: (r, g, b, o) => {
+    const y = 0.299 * r + 0.587 * g + 0.114 * b;
+    o[0] = (y + (r - y) * 1.38 - 128) * 1.06 + 136;
+    o[1] = (y + (g - y) * 1.38 - 128) * 1.06 + 134;
+    o[2] = (y + (b - y) * 1.38 - 128) * 1.06 + 126;
+  },
+  urban: (r, g, b, o) => {
+    const y = 0.299 * r + 0.587 * g + 0.114 * b;
+    o[0] = (y + (r - y) * 1.08 - 128) * 1.28 + 122;
+    o[1] = (y + (g - y) * 1.08 - 128) * 1.28 + 124;
+    o[2] = (y + (b - y) * 1.08 - 128) * 1.28 + 128;
+  },
   sunset: (r, g, b, o) => {
     const y = 0.299 * r + 0.587 * g + 0.114 * b;
     o[0] = y + (r - y) * 1.12 + 26; o[1] = y + (g - y) * 1.12 + 6; o[2] = y + (b - y) * 1.12 - 22;
@@ -520,12 +556,56 @@ const FILTER_ALIASES = {
   greyscale: 'grayscale', gray: 'grayscale', grey: 'grayscale', retro: 'vintage', old: 'vintage', sunny: 'warm',
   cold: 'cool', vibrant: 'vivid', pop: 'vivid', matte: 'fade', moody: 'dramatic', film: 'cinematic', cinema: 'cinematic',
   sunrise: 'sunset', negative: 'invert',
+  // Direct CSS filter value mappings from FilterTool presets
+  blurpx: 'soft', brightness: 'bright', huerotatedegsaturate: 'warm',
+  sepiacontrastbrightness: 'vintage', grayscalecontrast: 'noir', contrastsaturate: 'dramatic',
+  blurpxbrightnesscontrast: 'soft', saturatecontrastbrightness: 'lomo',
+  contrastsaturatebrightnesshuerotatedeg: 'cinematic', contrastbrightnesssaturate: 'fade',
+  saturatecontrast: 'vivid', contrastbrightnesssaturatehuerotate: 'moody',
+  saturatebrightnesshuerotatedeg: 'nature', brightnesssaturatecontrast: 'portrait',
+};
+
+const TOOL_FILTER_MAP = {
+  'none': 'none',
+  'grayscale(100%)': 'grayscale',
+  'sepia(80%)': 'sepia',
+  'blur(4px)': 'soft',
+  'brightness(1.5)': 'bright',
+  'hue-rotate(90deg) saturate(1.2)': 'cool',
+  'hue-rotate(-30deg) saturate(1.3)': 'warm',
+  'sepia(60%) contrast(1.1) brightness(0.9)': 'vintage',
+  'grayscale(100%) contrast(1.3)': 'noir',
+  'contrast(1.5) saturate(1.5)': 'dramatic',
+  'blur(1px) brightness(1.1) contrast(0.9)': 'soft',
+  'saturate(1.5) contrast(1.2) brightness(0.9)': 'lomo',
+  'contrast(1.25) saturate(1.2) brightness(0.9) hue-rotate(5deg)': 'cinematic',
+  'contrast(0.9) brightness(1.1) saturate(0.8)': 'fade',
+  'saturate(1.8) contrast(1.1)': 'vivid',
+  'contrast(1.2) saturate(0.8) brightness(0.9)': 'moody',
+  'saturate(1.3) brightness(1.05) hue-rotate(-10deg)': 'nature',
+  'brightness(1.05) saturate(0.9) contrast(1.05)': 'portrait',
+  'saturate(1.4) brightness(1.1) contrast(1.05)': 'food',
+  'contrast(1.3) brightness(0.95) saturate(1.1)': 'urban',
+};
+
+const DOC_FILTER_TO_TOOL_VALUE = Object.entries(TOOL_FILTER_MAP).reduce((acc, [cssVal, id]) => {
+  if (!acc[id]) acc[id] = cssVal;
+  return acc;
+}, {});
+
+const normalizeFilterId = (v) => {
+  if (!v || v === 'none') return 'none';
+  if (TOOL_FILTER_MAP[v]) return TOOL_FILTER_MAP[v];
+  const key = String(v).toLowerCase().replace(/[^a-z]/g, '');
+  if (FILTER_FNS[key]) return key;
+  if (FILTER_ALIASES[key]) return FILTER_ALIASES[key];
+  return 'none';
 };
 
 const getFilterFn = (id) => {
   if (!id || id === 'none') return null;
-  const key = String(id).toLowerCase().replace(/[^a-z]/g, '');
-  return FILTER_FNS[key] || FILTER_FNS[FILTER_ALIASES[key]] || null;
+  const normalized = normalizeFilterId(id);
+  return FILTER_FNS[normalized] || null;
 };
 
 const natW = (img) => img.naturalWidth || img.width || 1;
@@ -981,7 +1061,8 @@ const Range = memo(function Range({ id, label, value, min, max, step = 1, onChan
         <label htmlFor={id}>{label}</label>
         <span>{format ? format(value) : value}</span>
       </div>
-      <input aria-label="return ("
+      <input
+        aria-label={label}
         id={id}
         type="range"
         className="ie-range"
@@ -1281,8 +1362,9 @@ const guessFormat = (media) => {
  * Editor
  * ──────────────────────────────────────────────────────────────────────────── */
 
-const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, additionalMedia = [] }, ref) {
-  const { isDark, toggleTheme, theme } = useTheme();
+const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, additionalMedia = [], isDark: isDarkProp, offline = false }, ref) {
+  const { isDark: ctxDark, toggleTheme, theme } = useTheme();
+  const isDark = isDarkProp ?? ctxDark;
   const rootVars = isDark ? THEMES.dark : THEMES.light;
   const isMobile = useMediaQuery('(max-width: 768px)');
 
@@ -1314,7 +1396,9 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
   const [brushKind, setBrushKind] = useState('pen');
   const [shapeStyle, setShapeStyle] = useState({ fill: tokens.color.brand.violet, stroke: '#FFFFFF', strokeWidth: 0 });
   const [stickerSet, setStickerSet] = useState('Smileys');
-  const [cropRotation, setCropRotation] = useState(0);
+  const [cropBaseRotation, setCropBaseRotation] = useState(0);
+  const [cropStraighten, setCropStraighten] = useState(0);
+  const cropRotation = cropBaseRotation + cropStraighten;
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -1601,15 +1685,16 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
 
   const baseUnit = () => Math.min(docRef.current.imageDimensions.width, docRef.current.imageDimensions.height);
 
-  const addTextAt = useCallback((x, y) => {
+  const addTextAt = useCallback((x, y, initialText = 'Text') => {
     const base = baseUnit();
     const fontSize = Math.round(base * 0.08);
     const width = Math.round(base * 0.45);
+    const textValue = typeof initialText === 'string' && initialText.trim() ? initialText.trim() : 'Text';
     const id = addObj('text', {
-      name: 'Text', x: x - width / 2, y: y - fontSize / 2, text: 'Text', fontSize, fontFamily: 'Inter', fill: '#FFFFFF',
+      name: textValue.slice(0, 22), x: x - width / 2, y: y - fontSize / 2, text: textValue, fontSize, fontFamily: 'Inter', fill: '#FFFFFF',
       width, align: 'center', shadowColor: 'rgba(0,0,0,0.45)', shadowBlur: Math.round(base * 0.008), shadowOpacity: 1,
     }, 'Add text');
-    setPendingEdit(id);
+    if (textValue === 'Text') setPendingEdit(id);
     return id;
   }, [addObj]);
 
@@ -1715,7 +1800,8 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
   /* ── tools ─────────────────────────────────────────────────────────────── */
   const initCrop = useCallback(() => {
     dispatchDoc({ type: 'RESET_CROP' });
-    setCropRotation(0);
+    setCropBaseRotation(0);
+    setCropStraighten(0);
     setHandMode(false);
     selectObject(null);
     setTool('crop');
@@ -1786,7 +1872,8 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
       });
 
       dispatchDoc({ type: 'APPLY_CROP', payload: { newImage: newImg, objects, width: outW, height: outH } });
-      setCropRotation(0);
+      setCropBaseRotation(0);
+      setCropStraighten(0);
       setTool('select');
       toast.success('Crop applied');
     } catch (err) {
@@ -1875,7 +1962,6 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
   const saveToPost = useCallback(async (opts) => {
     const out = await exportImage(opts);
     const url = URL.createObjectURL(out.blob);
-    objectUrlsRef.current.push(url);
     const file = new File([out.blob], `${fileBase}-edited.${EXT[out.format]}`, { type: out.blob.type });
     onSave?.({ blob: out.blob, url, file, edited: true, width: out.width, height: out.height, format: out.format });
     toast.success(`Saved ${out.format.toUpperCase()} ${out.width}×${out.height}`);
@@ -1963,6 +2049,22 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
   const strokeSize = drawBrushSize * brushScale * (brushKind === 'highlighter' ? 3 : 1);
   const strokeOpacity = brushKind === 'highlighter' ? 0.4 : 1;
 
+  const eraseDrawingAt = useCallback((worldPt) => {
+    if (!worldPt) return;
+    const hitThr = Math.max(12, strokeSize * 1.4);
+    const drawings = docRef.current.objects.filter((o) => o.type === 'drawing' && o.visible !== false && !o.locked);
+    for (const d of drawings) {
+      const pts = d.points || [];
+      if (pts.length < 2) continue;
+      for (let i = 0; i < pts.length - 2; i += 2) {
+        if (pointNearLine(worldPt, { x: pts[i], y: pts[i + 1] }, { x: pts[i + 2], y: pts[i + 3] }, hitThr + (d.brushSize || 5) * 0.5)) {
+          dispatchDoc({ type: 'DELETE_OBJECT', payload: { id: d.id }, meta: { label: 'Erase drawing' } });
+          return;
+        }
+      }
+    }
+  }, [strokeSize, dispatchDoc]);
+
   const onStageDown = useCallback((e) => {
     if (pointersRef.current.size > 1) return;
     if (e.evt && e.evt.button > 0) return;
@@ -1972,16 +2074,24 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
     const p = getWorldPoint();
     if (!p) return;
     isDrawingRef.current = true;
+    if (brushKind === 'eraser') {
+      eraseDrawingAt(p);
+      return;
+    }
     drawingPointsRef.current = [p.x, p.y];
     const line = drawingLineRef.current;
     if (line) { line.points([p.x, p.y]); line.getLayer()?.batchDraw(); }
-  }, [selectMode, tool, panActive, getWorldPoint, selectObject]);
+  }, [selectMode, tool, panActive, getWorldPoint, selectObject, brushKind, eraseDrawingAt]);
 
   const onStageMove = useCallback(() => {
     if (!isDrawingRef.current || tool !== 'draw') return;
     if (pointersRef.current.size > 1) { cancelStroke(); return; }
     const p = getWorldPoint();
     if (!p) return;
+    if (brushKind === 'eraser') {
+      eraseDrawingAt(p);
+      return;
+    }
     const pts = drawingPointsRef.current;
     const lx = pts[pts.length - 2];
     const ly = pts[pts.length - 1];
@@ -1989,10 +2099,14 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
     pts.push(p.x, p.y);
     const line = drawingLineRef.current;
     if (line) { line.points(pts); line.getLayer()?.batchDraw(); }
-  }, [tool, getWorldPoint, effScale, cancelStroke]);
+  }, [tool, getWorldPoint, effScale, cancelStroke, brushKind, eraseDrawingAt]);
 
   const onStageUp = useCallback(() => {
     if (!isDrawingRef.current || tool !== 'draw') return;
+    if (brushKind === 'eraser') {
+      cancelStroke();
+      return;
+    }
     const pts = drawingPointsRef.current;
     if (pts.length === 2) pts.push(pts[0] + 0.01, pts[1]); // a tap draws a dot
     if (pts.length >= 4) {
@@ -2359,7 +2473,8 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
           </PanelShell>
         );
 
-      case 'filter':
+      case 'filter': {
+        const toolFilterValue = DOC_FILTER_TO_TOOL_VALUE[doc.filter] || doc.filter || 'none';
         return (
           <PanelShell title={PANEL_TITLES.filter} onClose={close}>
             <div className="ie-stack">
@@ -2394,17 +2509,90 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
               <div className="ie-divider" />
               <div className="ie-tool-host">
                 <FilterTool
-                  filter={doc.filter}
-                  setFilter={(v) => dispatchDoc({ type: 'SET_FILTER', payload: { filter: v } })}
-                  filterIntensity={doc.filterIntensity}
-                  setFilterIntensity={(v) => dispatchDoc({ type: 'SET_FILTER_INTENSITY', payload: { intensity: v } })}
+                  filter={toolFilterValue}
+                  setFilter={(v) => dispatchDoc({ type: 'SET_FILTER', payload: { filter: normalizeFilterId(v) } })}
+                  filterIntensity={Math.round((doc.filterIntensity ?? 1) * 100)}
+                  setFilterIntensity={(v) => dispatchDoc({ type: 'SET_FILTER_INTENSITY', payload: { intensity: clamp(v / 100, 0, 1) } })}
                 />
               </div>
             </div>
           </PanelShell>
         );
+      }
 
-      case 'text':
+      case 'text': {
+        const adaptedText = selectedText
+          ? {
+              ...selectedText,
+              color: selectedText.fill || '#FFFFFF',
+              textAlign: selectedText.align || 'left',
+              fontWeight: /bold/i.test(selectedText.fontStyle || '') ? 'bold' : 'normal',
+              fontStyle: [
+                /italic/i.test(selectedText.fontStyle || '') && 'italic',
+                /underline/i.test(selectedText.textDecoration || '') && 'underline',
+                /line-through/i.test(selectedText.textDecoration || '') && 'line-through',
+              ]
+                .filter(Boolean)
+                .join(' '),
+              opacity: Math.round((selectedText.opacity ?? 1) * 100),
+              rotation: ((selectedText.rotation || 0) * Math.PI) / 180,
+              shadowEnabled: (selectedText.shadowOpacity ?? 0) > 0,
+              shadowX: selectedText.shadowOffsetX ?? 2,
+              shadowY: selectedText.shadowOffsetY ?? 2,
+              shadowColor: selectedText.shadowColor || '#000000',
+              strokeColor: selectedText.stroke || '#000000',
+            }
+          : null;
+
+        const handleTextToolUpdate = (updates) => {
+          if (!selectedText || !updates) return;
+          const patch = {};
+          if (updates.text !== undefined) {
+            patch.text = updates.text;
+            patch.name = String(updates.text).replace(/\s+/g, ' ').slice(0, 22) || 'Text';
+          }
+          if (updates.fontFamily !== undefined) patch.fontFamily = updates.fontFamily;
+          if (updates.fontSize !== undefined) patch.fontSize = updates.fontSize;
+          if (updates.letterSpacing !== undefined) patch.letterSpacing = updates.letterSpacing;
+          if (updates.lineHeight !== undefined) patch.lineHeight = updates.lineHeight;
+          if (updates.color !== undefined) patch.fill = updates.color;
+          if (updates.textAlign !== undefined) patch.align = updates.textAlign;
+          if (updates.opacity !== undefined) patch.opacity = clamp(updates.opacity / 100, 0, 1);
+          if (updates.rotation !== undefined) patch.rotation = Math.round((updates.rotation * 180) / Math.PI);
+          if (updates.fontWeight !== undefined || updates.fontStyle !== undefined) {
+            const nextWeight = updates.fontWeight ?? (/bold/i.test(selectedText.fontStyle || '') ? 'bold' : 'normal');
+            const rawStyle = updates.fontStyle ?? (
+              (/italic/i.test(selectedText.fontStyle || '') ? 'italic ' : '') +
+              (/underline/i.test(selectedText.textDecoration || '') ? 'underline ' : '') +
+              (/line-through/i.test(selectedText.textDecoration || '') ? 'line-through' : '')
+            );
+            const konvaStyles = [];
+            if (nextWeight === 'bold') konvaStyles.push('bold');
+            if (/italic/i.test(rawStyle)) konvaStyles.push('italic');
+            patch.fontStyle = konvaStyles.length ? konvaStyles.join(' ') : 'normal';
+            const decs = [];
+            if (/underline/i.test(rawStyle)) decs.push('underline');
+            if (/line-through/i.test(rawStyle)) decs.push('line-through');
+            patch.textDecoration = decs.join(' ');
+          }
+          if (updates.shadowEnabled !== undefined) {
+            patch.shadowOpacity = updates.shadowEnabled ? 1 : 0;
+            if (updates.shadowEnabled && !selectedText.shadowColor) {
+              patch.shadowColor = 'rgba(0,0,0,0.6)';
+              patch.shadowBlur = selectedText.shadowBlur ?? 6;
+            }
+          }
+          if (updates.shadowX !== undefined) patch.shadowOffsetX = updates.shadowX;
+          if (updates.shadowY !== undefined) patch.shadowOffsetY = updates.shadowY;
+          if (updates.shadowBlur !== undefined) patch.shadowBlur = updates.shadowBlur;
+          if (updates.shadowColor !== undefined) patch.shadowColor = updates.shadowColor;
+          if (updates.strokeWidth !== undefined) patch.strokeWidth = updates.strokeWidth;
+          if (updates.strokeColor !== undefined) patch.stroke = updates.strokeColor;
+          if (Object.keys(patch).length > 0) {
+            updObj(selectedText.id, patch, { label: 'Edit text', coalesce: true });
+          }
+        };
+
         return (
           <PanelShell title={PANEL_TITLES.text} onClose={close}>
             <div className="ie-stack">
@@ -2439,15 +2627,16 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
               <div className="ie-divider" />
               <div className="ie-tool-host">
                 <TextTool
-                  selectedText={selectedText}
-                  updateSelectedText={(updates) => { if (selectedText) updObj(selectedText.id, updates, { label: 'Edit text', coalesce: true }); }}
+                  selectedText={adaptedText}
+                  updateSelectedText={handleTextToolUpdate}
                   handleDeleteText={() => { if (selectedText) delObj(selectedText.id); }}
-                  handleQuickAddText={() => { const c = viewCenterWorld(); addTextAt(c.x, c.y); }}
+                  handleQuickAddText={(txt) => { const c = viewCenterWorld(); addTextAt(c.x, c.y, txt); }}
                 />
               </div>
             </div>
           </PanelShell>
         );
+      }
 
       case 'draw':
         return (
@@ -2458,20 +2647,24 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
                 <div className="ie-seg" role="group" aria-label="Brush type">
                   <button type="button" aria-pressed={brushKind === 'pen'} onClick={() => setBrushKind('pen')}><IPencil size={15} /> Pen</button>
                   <button type="button" aria-pressed={brushKind === 'highlighter'} onClick={() => setBrushKind('highlighter')}><IWand size={15} /> Highlighter</button>
+                  <button type="button" aria-pressed={brushKind === 'eraser'} onClick={() => setBrushKind('eraser')}>Eraser</button>
                 </div>
               </div>
               <div className="ie-tool-host">
                 <DrawingTool
                   color={drawColor}
                   brushSize={drawBrushSize}
+                  mode={brushKind === 'eraser' ? 'erase' : 'draw'}
+                  onModeChange={(m) => setBrushKind(m === 'erase' ? 'eraser' : 'pen')}
                   onColorChange={setDrawColor}
                   onBrushSizeChange={setDrawBrushSize}
                   onUndo={undo}
                   onClear={() => dispatchDoc({ type: 'CLEAR_DRAWINGS' })}
                   theme={theme}
+                  isDark={isDark}
                 />
               </div>
-              <p className="ie-hint">Pinch with two fingers to zoom while you draw. Strokes become layers you can move or resize.</p>
+              <p className="ie-hint">Pinch with two fingers to zoom while you draw. Strokes become layers you can move, resize, or erase.</p>
             </div>
           </PanelShell>
         );
@@ -2736,25 +2929,34 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
           <PanelShell title={PANEL_TITLES.crop} onClose={close}>
             <div className="ie-stack">
               <div>
-                <span className="ie-label">Rotate</span>
+                <span className="ie-label">Rotate ({cropBaseRotation}°)</span>
                 <div className="ie-row">
-                  <button type="button" className="ie-btn-sec" onClick={() => setCropRotation((r) => ((r - 90 + 540) % 360) - 180 + 180 === 360 ? 0 : ((r - 90) % 360))}>
+                  <button type="button" className="ie-btn-sec" onClick={() => setCropBaseRotation((r) => (r + 270) % 360)}>
                     <IRotCCW size={16} /> 90° left
                   </button>
-                  <button type="button" className="ie-btn-sec" onClick={() => setCropRotation((r) => (r + 90) % 360)}>
+                  <button type="button" className="ie-btn-sec" onClick={() => setCropBaseRotation((r) => (r + 90) % 360)}>
                     <IRotCW size={16} /> 90° right
                   </button>
+                  {(cropBaseRotation !== 0 || cropStraighten !== 0) && (
+                    <button
+                      type="button"
+                      className="ie-btn-sec"
+                      onClick={() => { setCropBaseRotation(0); setCropStraighten(0); }}
+                    >
+                      Reset angle
+                    </button>
+                  )}
                 </div>
               </div>
               <Range
                 id="ie-crop-rot"
                 label="Straighten"
-                value={Math.max(-180, Math.min(180, cropRotation > 180 ? cropRotation - 360 : cropRotation))}
+                value={cropStraighten}
                 min={-45}
                 max={45}
                 step={0.5}
-                format={(v) => `${v}°`}
-                onChange={(v) => setCropRotation(v)}
+                format={(v) => `${v > 0 ? '+' : ''}${v}°`}
+                onChange={(v) => setCropStraighten(v)}
               />
               <div className="ie-tool-host">
                 <CropTool
@@ -2813,6 +3015,7 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
           type="file"
           accept="image/*"
           multiple
+          aria-label="Add image layer"
           hidden
           onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
         />
@@ -2823,7 +3026,7 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
             <button type="button" className="ie-iconbtn" onClick={requestClose} aria-label="Close editor"><IClose size={20} /></button>
             <div className="ie-titlewrap ie-hide-sm">
               <span className="ie-title">Image Studio</span>
-              <span className="ie-sub">{bgW} × {bgH} · {((bgW * bgH) / 1e6).toFixed(1)} MP</span>
+              <span className="ie-sub">{bgW} × {bgH} · {((bgW * bgH) / 1e6).toFixed(1)} MP{offline ? ' · Offline' : ''}</span>
             </div>
           </div>
 
@@ -2986,7 +3189,7 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
                   maxZoom={8}
                   onCropChange={(pos) => dispatchDoc({ type: 'SET_CROP', payload: { position: pos } })}
                   onZoomChange={(z) => dispatchDoc({ type: 'SET_CROP_ZOOM', payload: { zoom: z } })}
-                  onRotationChange={setCropRotation}
+                  onRotationChange={(rot) => setCropStraighten(clamp(rot - cropBaseRotation, -45, 45))}
                   onCropComplete={handleCropComplete}
                 />
                 <div className="ie-crop-actions">

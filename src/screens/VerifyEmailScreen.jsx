@@ -825,7 +825,15 @@ export default function EmailVerification() {
           console.warn('[VerifyEmail] account delete before re-signup failed', e?.message));
         await signOut();
       }
-      sessionStorage.clear();
+      try {
+        [
+          'pending_profile_creation',
+          'email_not_verified_user',
+          'arvdoul_google_redirect_pending',
+          'signup_data',
+          'verification_email',
+        ].forEach((k) => sessionStorage.removeItem(k));
+      } catch { /* ignore storage errors */ }
       toast.info("Please sign up again with your new email.");
       navigate("/signup/step2", { replace: true });
     } catch (err) {

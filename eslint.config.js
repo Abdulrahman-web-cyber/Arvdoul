@@ -33,7 +33,7 @@ export default [
     },
   },
   {
-    files: ['**/__tests__/**', '**/*.test.{js,jsx}', '**/*.spec.{js,jsx}'],
+    files: ['**/__tests__/**', '**/*.test.{js,jsx}', '**/*.spec.{js,jsx}', 'tests/**/*.{js,jsx}'],
     languageOptions: {
       globals: { ...globals.jest },
     },

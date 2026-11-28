@@ -18,6 +18,7 @@ import { Coins, Crown, Zap, Rocket, Star, CheckCircle, Shield, Gift, TrendingUp,
 import PaymentModal from '../components/Shared/PaymentModal';
 import CoinStackIcon from '../components/Shared/CoinStackIcon';
 import ErrorState from '../design-system/ErrorState.jsx';
+import { adMobService } from '../services/adMobService.js';
 // Presentation-only icon/accent, keyed by the canonical package id. Amounts and
 // prices come from COIN_PACKAGES in the shared levelConfig (same table the
 // server prices from), so the client can never advertise a price or coin amount
@@ -260,9 +261,21 @@ export default function CoinsScreen() {
     }
   };
 
-  const startWatchingAd = () => {
+  const startWatchingAd = async () => {
     if (!ad || adWatching) return;
     setAdWatching(true);
+    if (adMobService.isNativeAdMobConfigured()) {
+      const nativeRes = await adMobService.showNativeRewardedAd();
+      if (nativeRes.shown && nativeRes.rewarded) {
+        await completeAd();
+        return;
+      }
+      if (nativeRes.shown && !nativeRes.rewarded) {
+        setAdWatching(false);
+        toast.info('Watch the full ad to claim your coin reward.');
+        return;
+      }
+    }
     setAdTimer(30);
     adIntervalRef.current = setInterval(() => {
       setAdTimer((t) => {

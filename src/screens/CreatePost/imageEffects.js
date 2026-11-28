@@ -55,11 +55,19 @@ export function loadImage(source) {
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
+    let objectUrl = null;
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Failed to load image'));
+    img.onerror = () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
+      }
+      reject(new Error('Failed to load image'));
+    };
 
     if (source instanceof File || source instanceof Blob) {
-      img.src = URL.createObjectURL(source);
+      objectUrl = URL.createObjectURL(source);
+      img.src = objectUrl;
     } else if (typeof source === 'string') {
       img.src = source;
     } else {
@@ -181,47 +189,48 @@ export function applyAdjustmentsToCanvas(canvas, adjustments) {
   const exposure = ((adjustments.exposure ?? 0) + 100) / 100;
   const temperature = (adjustments.temperature ?? 0) / 100;
   const tint = (adjustments.tint ?? 0) / 100;
-  const gamma = 100 / (adjustments.gamma ?? 100);
-  
+  const gamma = 100 / Math.max(1, adjustments.gamma ?? 100);
+  const contrastDelta = Math.max(-255, Math.min(254, (contrast - 1) * 255));
+  const factor = (259 * (contrastDelta + 255)) / (255 * (259 - contrastDelta));
+
   for (let i = 0; i < data.length; i += 4) {
     let r = data[i];
     let g = data[i + 1];
     let b = data[i + 2];
-    
+
     // Apply exposure
     r *= exposure;
     g *= exposure;
     b *= exposure;
-    
+
     // Apply temperature (warm/cool)
     r += temperature * 30;
     b -= temperature * 30;
-    
+
     // Apply tint
     g += tint * 20;
-    
+
     // Apply brightness
     r *= brightness;
     g *= brightness;
     b *= brightness;
-    
+
     // Apply contrast
-    const factor = (259 * (contrast * 255 + 255)) / (255 * (259 - contrast * 255));
     r = factor * (r - 128) + 128;
     g = factor * (g - 128) + 128;
     b = factor * (b - 128) + 128;
-    
-    // Apply gamma
-    r = Math.pow(r / 255, gamma) * 255;
-    g = Math.pow(g / 255, gamma) * 255;
-    b = Math.pow(b / 255, gamma) * 255;
-    
+
+    // Apply gamma (clamp non-negative before Math.pow to avoid NaN)
+    r = Math.pow(Math.max(0, Math.min(255, r)) / 255, gamma) * 255;
+    g = Math.pow(Math.max(0, Math.min(255, g)) / 255, gamma) * 255;
+    b = Math.pow(Math.max(0, Math.min(255, b)) / 255, gamma) * 255;
+
     // Apply saturation
     const gray = 0.2989 * r + 0.5870 * g + 0.1140 * b;
     r = gray + saturation * (r - gray);
     g = gray + saturation * (g - gray);
     b = gray + saturation * (b - gray);
-    
+
     // Clamp values
     data[i] = Math.max(0, Math.min(255, r));
     data[i + 1] = Math.max(0, Math.min(255, g));
@@ -272,10 +281,13 @@ export function applyFilterToCanvas(canvas, filterStr) {
   const img = new Image();
   return new Promise((resolve) => {
     img.onload = () => {
-      filteredCtx.filter = filterStr;
+      if (typeof filteredCtx.filter !== 'undefined') {
+        filteredCtx.filter = filterStr;
+      }
       filteredCtx.drawImage(img, 0, 0);
       resolve(filteredCanvas);
     };
+    img.onerror = () => resolve(tempCanvas);
     img.src = canvasToDataURL(tempCanvas);
   });
 }
@@ -883,7 +895,10 @@ export function getImageDimensions(source) {
         URL.revokeObjectURL(url);
         resolve({ width: img.naturalWidth, height: img.naturalHeight });
       };
-      img.onerror = reject;
+      img.onerror = (err) => {
+        URL.revokeObjectURL(url);
+        reject(err);
+      };
       img.src = url;
       return;
     }

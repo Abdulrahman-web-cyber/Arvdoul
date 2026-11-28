@@ -903,17 +903,15 @@ class UltimateStoryService {
             photoURL: v.photoURL || null,
           },
         }));
-        if (viewers.length > 0 || options.skipLegacyFallback) {
-          return {
-            success: true,
-            viewers,
-            insights: insightsRes.insights,
-            reactors: insightsRes.reactors || [],
-            gifts: insightsRes.gifts || [],
-            showReactionDetails: insightsRes.showReactionDetails !== false,
-            hasMore: false,
-          };
-        }
+        return {
+          success: true,
+          viewers,
+          insights: insightsRes.insights,
+          reactors: insightsRes.reactors || [],
+          gifts: insightsRes.gifts || [],
+          showReactionDetails: insightsRes.showReactionDetails !== false,
+          hasMore: false,
+        };
       }
     } catch (insightsErr) {
       const code = String(insightsErr?.code || '');

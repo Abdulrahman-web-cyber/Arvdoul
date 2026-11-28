@@ -1604,9 +1604,15 @@ class EnterpriseFirestoreService {
     await this.ensureInitialized();
     const dailyStats = await this.getPostDailyViews(postId, days);
     if (!dailyStats.success) return { success: false, error: dailyStats.error };
-    const totalViews = dailyStats.dailyViews.reduce((sum, d) => sum + (unknownNumber(d.views) ?? 0), 0);
-    const post = await this.getPost(postId);
+    const dailyTotalViews = dailyStats.dailyViews.reduce((sum, d) => sum + (unknownNumber(d.views) ?? 0), 0);
+    const [post, shardedViews] = await Promise.all([
+      this.getPost(postId),
+      countersManager.get({ docPath: `posts/${postId}`, field: 'views', fallback: dailyTotalViews }).catch(() => dailyTotalViews),
+    ]);
     const stats = post.success ? post.post.stats : {};
+    const totalViews = dailyTotalViews > 0 || (typeof shardedViews === 'number' && shardedViews > 0)
+      ? Math.max(dailyTotalViews, typeof shardedViews === 'number' ? shardedViews : 0)
+      : dailyTotalViews;
     // An unread counter stays null (the panel renders '—'); coercing it to 0
     // fabricated "0 Likes" for a post whose stats were never loaded.
     return {
@@ -1646,12 +1652,31 @@ class EnterpriseFirestoreService {
   }
 
   // Engagement-only view of a post, for cards that render counts without the
-  // whole document. Reuses `subscribeToPost` (one listener per post) and maps
-  // the stats block to the shape the card reducer consumes.
+  // whole document. Reuses `subscribeToPost` (one listener per post) and overlays
+  // the sharded counters so document fields left at 0 never clobber real totals.
   subscribeToPostStats(postId, callback) {
-    return this.subscribeToPost(postId, (data) => {
-      if (!data) return callback(null);
-      const stats = data.stats || {};
+    let cancelled = false;
+    const unsubscribe = this.subscribeToPost(postId, async (data) => {
+      if (!data) {
+        if (!cancelled) callback(null);
+        return;
+      }
+      const overlaid = {
+        ...data,
+        stats: { ...(data.stats || {}) },
+      };
+      try {
+        await countersManager.apply({
+          data: overlaid,
+          docPath: `posts/${postId}`,
+          fields: ['likes', 'comments', 'saves', 'shares', 'gifts', 'giftValue', 'views'],
+          scope: 'stats',
+        });
+      } catch (err) {
+        logger.debug('subscribeToPostStats shard overlay failed', { postId, error: err?.message });
+      }
+      if (cancelled) return;
+      const stats = overlaid.stats || {};
       // A counter the post document never wrote is unknown, not a measured 0:
       // the card's reducer keeps its prior value for a null (`?? state.x`) and
       // renders '—' when nothing has ever been known.
@@ -1663,6 +1688,10 @@ class EnterpriseFirestoreService {
         views: unknownNumber(stats.views),
       });
     });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }
 
   async getAuthInstance() {

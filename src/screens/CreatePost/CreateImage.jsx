@@ -1055,6 +1055,11 @@ const FullscreenViewer = React.memo(({ items, selectedId, onSelect, onClose, onD
     [scale]
   );
 
+  const handleTouchEnd = useCallback(() => {
+    if (scale === 1) setPosition({ x: 0, y: 0 });
+    setIsDragging(false);
+  }, [scale]);
+
   useEffect(() => {
     if (!isDragging) return;
     window.addEventListener('mousemove', handleMouseMove);
@@ -1080,6 +1085,8 @@ const FullscreenViewer = React.memo(({ items, selectedId, onSelect, onClose, onD
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
       <div className="flex items-center justify-between p-4 bg-gradient-to-b from-black/70 to-transparent z-10">
         <button
@@ -1605,8 +1612,9 @@ export default function CreateImage() {
         }
       }
 
+      const { blob: _blob, ...cleanUpdates } = updatedData || {};
       const newPreview =
-        updatedData.preview || (updatedData.file ? URL.createObjectURL(updatedData.file) : item.preview);
+        cleanUpdates.preview || (cleanUpdates.file ? URL.createObjectURL(cleanUpdates.file) : item.preview);
       if (newPreview && newPreview.startsWith('blob:')) {
         objectUrlsRef.current.push(newPreview);
       }
@@ -1617,13 +1625,13 @@ export default function CreateImage() {
         payload: {
           id: editingId,
           updates: {
-            ...updatedData,
+            ...cleanUpdates,
             preview: newPreview,
-            url: updatedData.file ? null : item.url,
-            storagePath: updatedData.file ? null : item.storagePath,
+            url: cleanUpdates.file ? null : item.url,
+            storagePath: cleanUpdates.file ? null : item.storagePath,
             edited: true,
-            state: updatedData.file ? UPLOAD_STATES.QUEUED : UPLOAD_STATES.EDITED,
-            progress: updatedData.file ? 0 : 100,
+            state: cleanUpdates.file ? UPLOAD_STATES.QUEUED : UPLOAD_STATES.EDITED,
+            progress: cleanUpdates.file ? 0 : 100,
           },
         },
       });
@@ -1846,6 +1854,7 @@ export default function CreateImage() {
         type="file"
         multiple
         accept="image/*"
+        aria-label="Choose images to upload"
         className="hidden"
         onChange={handleFileInputChange}
       />
@@ -1871,6 +1880,7 @@ export default function CreateImage() {
           <ImageEditor
             key={editingMedia.id}
             media={editingMedia}
+            additionalMedia={mediaItems.filter((m) => m.id !== editingMedia.id)}
             onClose={() => setEditingId(null)}
             onSave={handleEditSave}
             offline={isOffline}

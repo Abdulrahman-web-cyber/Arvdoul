@@ -11,6 +11,7 @@ import { cn } from '../../lib/utils';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getMonetizationService } from '../../services/monetizationService';
+import { adMobService, getAdNetworkConfig } from '../../services/adMobService';
 import { AD_REWARD_COINS } from '../../shared/levelConfig.cjs';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
@@ -66,10 +67,22 @@ export default function SponsoredPostCard({
 
   const cardRef = useRef(null);
   const countdownIntervalRef = useRef(null);
+  const adSensePushedRef = useRef(false);
+
+  const webAdConfigured = adMobService.isWebAdSenseConfigured(placement);
+  const adNetCfg = webAdConfigured ? getAdNetworkConfig() : null;
+  const webAdSlot = webAdConfigured ? adMobService.getWebSlotId(placement) : '';
+
+  useEffect(() => () => {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+  }, []);
 
   // The ad is whatever the monetization service returns. There is no local
-  // advertiser catalogue: an empty inventory renders an empty state rather than
-  // a fabricated sponsor and a fake reward.
+  // advertiser catalogue: an empty inventory renders an AdSense unit only if
+  // configured, or renders nothing rather than a fabricated sponsor or placeholder box.
   useEffect(() => {
     if (adData) {
       setAd(normalizeAd(adData));
@@ -100,6 +113,26 @@ export default function SponsoredPostCard({
     })();
     return () => { isMounted = false; };
   }, [adData, placement, user?.uid]);
+
+  useEffect(() => {
+    if ((adState !== 'empty' && adState !== 'error') || !webAdConfigured || adSensePushedRef.current) {
+      return undefined;
+    }
+    let active = true;
+    adMobService.initialize().then((ready) => {
+      if (!active || !ready || adSensePushedRef.current) return;
+      try {
+        if (typeof window !== 'undefined') {
+          window.adsbygoogle = window.adsbygoogle || [];
+          window.adsbygoogle.push({});
+          adSensePushedRef.current = true;
+        }
+      } catch (e) {
+        console.warn('AdSense slot push skipped:', e?.message);
+      }
+    });
+    return () => { active = false; };
+  }, [adState, webAdConfigured]);
 
   // Real IntersectionObserver for impression logging
   useEffect(() => {
@@ -212,15 +245,35 @@ export default function SponsoredPostCard({
     }
   };
 
+  if (adState === 'loading') return null;
+
   if (adState !== 'ready' || !ad) {
-    return (
-      <div className={cn(
-        "w-full rounded-2xl border my-4 px-4 py-3 text-xs",
-        isDark ? "bg-[#060B24]/60 border-white/10 text-gray-400" : "bg-white border-gray-200 text-gray-500"
-      )}>
-        {adState === 'loading' ? 'Loading sponsor…' : 'No sponsored content available.'}
-      </div>
-    );
+    if (webAdConfigured && adNetCfg?.adSenseClientId && webAdSlot) {
+      return (
+        <div
+          className={cn(
+            "w-full rounded-2xl border my-4 overflow-hidden",
+            isDark ? "bg-[#060B24]/90 border-white/10 text-white" : "bg-white border-gray-200 text-gray-900"
+          )}
+        >
+          <div className="px-3.5 pt-2.5 pb-1 flex items-center justify-between text-[11px] text-gray-400">
+            <span className="font-semibold text-purple-400">Sponsored</span>
+            <span>Partner Network</span>
+          </div>
+          <div className="px-3 pb-3">
+            <ins
+              className="adsbygoogle block w-full"
+              style={{ display: 'block' }}
+              data-ad-client={adNetCfg.adSenseClientId}
+              data-ad-slot={webAdSlot}
+              data-ad-format="auto"
+              data-full-width-responsive="true"
+            />
+          </div>
+        </div>
+      );
+    }
+    return null;
   }
 
   return (

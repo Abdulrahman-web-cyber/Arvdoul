@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { X, Image as ImageIcon, Video, Music, Plus } from "lucide-react";
 import { STOCK_VIDEOS, STOCK_AUDIO } from '../constants';
 import { LazyImage } from '../../../components/Shared/LazyImage';
+import { useTheme } from '../../../context/ThemeContext';
 
 export default function MediaDrawer({
   isOpen,
@@ -13,6 +14,7 @@ export default function MediaDrawer({
   onAddMedia,
 }) {
   const [activeTab, setActiveTab] = useState('stock_videos');
+  const { isDark } = useTheme();
 
   if (!isOpen) return null;
 
@@ -22,20 +24,25 @@ export default function MediaDrawer({
         initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 50 }}
-        className="w-full max-w-2xl bg-gray-950/95 border-t sm:border border-white/15 rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 max-h-[85vh] flex flex-col"
+        className={`w-full max-w-2xl border-t sm:border rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 max-h-[85vh] flex flex-col ${
+          isDark ? 'bg-gray-950/95 border-white/15 text-white' : 'bg-white border-gray-200 text-gray-900'
+        }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-white/10">
+        <div className={`flex items-center justify-between pb-3 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-purple-600/30 text-purple-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-purple-600/20 text-purple-400 flex items-center justify-center">
               <ImageIcon className="w-4 h-4" />
             </div>
-            <h3 className="text-base font-bold text-white">Media Library & Stock Clips</h3>
+            <h3 className={`text-base font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Media Library & Stock Clips</h3>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close"
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white flex items-center justify-center"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+              isDark ? 'bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+            }`}
           >
             <X className="w-4 h-4" />
           </button>
@@ -44,11 +51,14 @@ export default function MediaDrawer({
         {/* Tab Buttons */}
         <div className="flex items-center gap-2 pt-3">
           <button
+            type="button"
             onClick={() => setActiveTab('stock_videos')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               activeTab === 'stock_videos'
                 ? 'bg-purple-600 text-white'
-                : 'bg-white/5 text-gray-400 hover:text-white'
+                : isDark
+                  ? 'bg-white/5 text-gray-400 hover:text-white'
+                  : 'bg-gray-100 text-gray-600 hover:text-gray-900'
             }`}
           >
             <Video className="w-3.5 h-3.5" />
@@ -56,11 +66,14 @@ export default function MediaDrawer({
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('stock_audio')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               activeTab === 'stock_audio'
                 ? 'bg-purple-600 text-white'
-                : 'bg-white/5 text-gray-400 hover:text-white'
+                : isDark
+                  ? 'bg-white/5 text-gray-400 hover:text-white'
+                  : 'bg-gray-100 text-gray-600 hover:text-gray-900'
             }`}
           >
             <Music className="w-3.5 h-3.5" />

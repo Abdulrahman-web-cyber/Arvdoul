@@ -755,12 +755,29 @@ class UltimateVideoService {
   _subscribeToVideoStats(videoId, userId, callback, collectionName = 'posts') {
     const colName = collectionName === 'videos' ? 'videos' : 'posts';
     const videoRef = doc(this.firestore, colName, videoId);
-    const unsubscribe = onSnapshot(videoRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        callback({ likes: data.stats?.likes, views: data.stats?.views, comments: data.stats?.comments });
+    let cancelled = false;
+    const rawUnsubscribe = onSnapshot(videoRef, async (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() || {};
+      const overlaid = { ...data, stats: { ...(data.stats || {}) } };
+      try {
+        await countersManager.apply({
+          data: overlaid,
+          docPath: `${colName}/${videoId}`,
+          fields: ['likes', 'views', 'comments'],
+          scope: 'stats',
+        });
+      } catch (err) {
+        logger.debug('[videoService] stats shard overlay failed', { videoId, error: err?.message });
       }
+      if (cancelled) return;
+      const s = overlaid.stats || {};
+      callback({ likes: s.likes, views: s.views, comments: s.comments });
     }, (err) => logger.warn('[videoService] subscription error', err));
+    const unsubscribe = () => {
+      cancelled = true;
+      rawUnsubscribe();
+    };
     const key = `stats_${videoId}_${userId}`;
     if (this.realtimeUnsubscribes.has(key)) this.realtimeUnsubscribes.get(key)();
     this.realtimeUnsubscribes.set(key, unsubscribe);

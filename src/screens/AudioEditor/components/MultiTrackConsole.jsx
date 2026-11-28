@@ -74,22 +74,27 @@ export default function MultiTrackConsole({
     setCurrentTime((x / rect.width) * totalDuration);
   };
 
-  const handleTimelineMouseDown = (e) => {
+  const handleTimelinePointerDown = (e) => {
+    if (e.target && typeof e.target.closest === 'function' && e.target.closest('[data-clip="true"]')) {
+      return;
+    }
     isDraggingPlayheadRef.current = true;
     handleSeek(e.clientX);
   };
 
   useEffect(() => {
-    const handleMouseMove = (e) => {
+    const handlePointerMove = (e) => {
       if (!isDraggingPlayheadRef.current) return;
       handleSeek(e.clientX);
     };
-    const handleMouseUp = () => { isDraggingPlayheadRef.current = false; };
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    const handlePointerUp = () => { isDraggingPlayheadRef.current = false; };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalDuration]);
@@ -107,10 +112,13 @@ export default function MultiTrackConsole({
   };
 
   const addTrack = () => {
+    const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? `track_${crypto.randomUUID()}`
+      : `track_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     setTracks((prev) => [
       ...prev,
       {
-        id: `track_${Date.now()}`,
+        id,
         name: `Track ${prev.length + 1}`,
         color: TRACK_COLORS[prev.length % TRACK_COLORS.length],
         volume: 0,
@@ -159,22 +167,34 @@ export default function MultiTrackConsole({
         <div className="flex items-center gap-2">
           <button
             onClick={() => setZoom((z) => Math.max(0.5, z - 0.2))}
-            className="p-1.5 rounded hover:bg-purple-500/20 text-gray-400 hover:text-white cursor-pointer"
+            aria-label="Zoom out"
+            className={cn(
+              "p-1.5 rounded cursor-pointer",
+              isDark ? "hover:bg-purple-500/20 text-gray-400 hover:text-white" : "hover:bg-purple-100 text-slate-600 hover:text-slate-900"
+            )}
             title="Zoom Out"
           >
             <ZoomOut className="w-4 h-4" />
           </button>
-          <span className="font-mono text-xs text-purple-400 font-bold">{Math.round(zoom * 100)}%</span>
+          <span className={cn("font-mono text-xs font-bold", isDark ? "text-purple-400" : "text-purple-700")}>{Math.round(zoom * 100)}%</span>
           <button
             onClick={() => setZoom((z) => Math.min(2.5, z + 0.2))}
-            className="p-1.5 rounded hover:bg-purple-500/20 text-gray-400 hover:text-white cursor-pointer"
+            aria-label="Zoom in"
+            className={cn(
+              "p-1.5 rounded cursor-pointer",
+              isDark ? "hover:bg-purple-500/20 text-gray-400 hover:text-white" : "hover:bg-purple-100 text-slate-600 hover:text-slate-900"
+            )}
             title="Zoom In"
           >
             <ZoomIn className="w-4 h-4" />
           </button>
           <button
             onClick={() => setZoom(1.0)}
-            className="p-1.5 rounded hover:bg-purple-500/20 text-gray-400 hover:text-white cursor-pointer"
+            aria-label="Fit to window"
+            className={cn(
+              "p-1.5 rounded cursor-pointer",
+              isDark ? "hover:bg-purple-500/20 text-gray-400 hover:text-white" : "hover:bg-purple-100 text-slate-600 hover:text-slate-900"
+            )}
             title="Fit to Window"
           >
             <Maximize2 className="w-4 h-4" />
@@ -213,14 +233,18 @@ export default function MultiTrackConsole({
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
                       <Icon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                      <span className="text-xs font-bold truncate text-gray-200 dark:text-white">{t.name}</span>
+                      <span className={cn("text-xs font-bold truncate", isDark ? "text-white" : "text-slate-900")}>{t.name}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => toggleField(t.id, 'muted')}
                         className={cn(
                           "w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center cursor-pointer transition",
-                          t.muted ? "bg-rose-500 text-white" : "bg-gray-700/40 text-gray-400 hover:text-white"
+                          t.muted
+                            ? "bg-rose-500 text-white"
+                            : isDark
+                            ? "bg-gray-700/40 text-gray-400 hover:text-white"
+                            : "bg-slate-200 text-slate-700 hover:bg-slate-300"
                         )}
                         title="Mute Track"
                       >
@@ -230,7 +254,11 @@ export default function MultiTrackConsole({
                         onClick={() => toggleField(t.id, 'solo')}
                         className={cn(
                           "w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center cursor-pointer transition",
-                          t.solo ? "bg-amber-500 text-white" : "bg-gray-700/40 text-gray-400 hover:text-white"
+                          t.solo
+                            ? "bg-amber-500 text-white"
+                            : isDark
+                            ? "bg-gray-700/40 text-gray-400 hover:text-white"
+                            : "bg-slate-200 text-slate-700 hover:bg-slate-300"
                         )}
                         title="Solo Track"
                       >
@@ -238,14 +266,14 @@ export default function MultiTrackConsole({
                       </button>
                       <button
                         onClick={() => toggleField(t.id, 'locked')}
-                        className="text-gray-400 hover:text-white cursor-pointer"
+                        className={cn("cursor-pointer", isDark ? "text-gray-400 hover:text-white" : "text-slate-500 hover:text-slate-900")}
                         title="Lock Track"
                       >
-                        {t.locked ? <Lock className="w-3 h-3 text-amber-400" /> : <Unlock className="w-3 h-3 opacity-40" />}
+                        {t.locked ? <Lock className="w-3 h-3 text-amber-400" /> : <Unlock className="w-3 h-3 opacity-50" />}
                       </button>
                       <button
                         onClick={() => removeTrack(t.id)}
-                        className="text-gray-500 hover:text-rose-400 cursor-pointer text-xs font-bold"
+                        className="text-gray-500 hover:text-rose-500 cursor-pointer text-xs font-bold"
                         title="Remove Track"
                       >
                         ×
@@ -288,7 +316,7 @@ export default function MultiTrackConsole({
           </div>
         </div>
 
-        <div className="flex-1 overflow-x-auto relative" ref={timelineRef} onMouseDown={handleTimelineMouseDown}>
+        <div className="flex-1 overflow-x-auto relative touch-none" ref={timelineRef} onPointerDown={handleTimelinePointerDown}>
           <div className={cn(
             "h-8 border-b border-inherit flex items-end relative select-none cursor-pointer",
             isDark ? "bg-[#060B24]" : "bg-gray-100/70"
@@ -296,10 +324,10 @@ export default function MultiTrackConsole({
             {rulerTicks.map((tick) => (
               <div
                 key={tick}
-                className="absolute bottom-0 border-l border-white/20 pl-1 pb-1"
+                className={cn("absolute bottom-0 border-l pl-1 pb-1", isDark ? "border-white/20" : "border-slate-300")}
                 style={{ left: `${(tick / duration) * 100}%` }}
               >
-                <span className="text-[10px] font-mono text-gray-400">{formatSeconds(tick)}</span>
+                <span className={cn("text-[10px] font-mono", isDark ? "text-gray-400" : "text-slate-600")}>{formatSeconds(tick)}</span>
               </div>
             ))}
 
@@ -339,12 +367,12 @@ export default function MultiTrackConsole({
               >
                 <div className="absolute inset-0 grid grid-cols-8 pointer-events-none opacity-10">
                   {Array.from({ length: 8 }).map((_, i) => (
-                    <div key={i} className="border-r border-white" />
+                    <div key={i} className={cn("border-r", isDark ? "border-white" : "border-slate-400")} />
                   ))}
                 </div>
 
                 {t.clips.length === 0 && (
-                  <span className="pl-3 text-[10px] text-gray-600">Empty track</span>
+                  <span className={cn("pl-3 text-[10px]", isDark ? "text-gray-600" : "text-slate-400")}>Empty track</span>
                 )}
 
                 {t.clips.map((clip) => {
@@ -356,23 +384,31 @@ export default function MultiTrackConsole({
                   return (
                     <div
                       key={clip.id}
+                      data-clip="true"
                       onClick={(e) => {
                         e.stopPropagation();
                         onSelectClip?.(clip);
                       }}
                       className={cn(
                         "absolute h-16 rounded-xl border p-1.5 flex flex-col justify-between shadow-md cursor-pointer transition-all overflow-hidden group",
-                        isSelected ? "ring-2 ring-white scale-[1.01]" : "hover:brightness-110"
+                        isSelected
+                          ? isDark
+                            ? "ring-2 ring-white scale-[1.01]"
+                            : "ring-2 ring-purple-600 scale-[1.01]"
+                          : "hover:brightness-110"
                       )}
                       style={{ left, width, backgroundColor: `${t.color}26`, borderColor: t.color }}
                     >
-                      <div className="flex items-center justify-between text-[10px] font-bold text-white z-10">
-                        <span className="truncate drop-shadow">{clip.name}</span>
-                        <span className="text-[9px] font-mono opacity-75">{clip.duration.toFixed(1)}s</span>
+                      <div className={cn(
+                        "flex items-center justify-between text-[10px] font-bold z-10",
+                        isDark ? "text-white" : "text-slate-900"
+                      )}>
+                        <span className="truncate">{clip.name}</span>
+                        <span className="text-[9px] font-mono opacity-80">{clip.duration.toFixed(1)}s</span>
                       </div>
 
                       {peaks ? (
-                        <div className="w-full h-8 flex items-center gap-px opacity-80">
+                        <div className="w-full h-8 flex items-center gap-px opacity-85">
                           {peaks.map((p, idx) => {
                             const height = Math.max(2, Math.abs(p.max - p.min) * 28);
                             return (
@@ -385,7 +421,7 @@ export default function MultiTrackConsole({
                           })}
                         </div>
                       ) : (
-                        <span className="text-[9px] text-gray-300/70 z-10">
+                        <span className={cn("text-[9px] z-10", isDark ? "text-gray-300/70" : "text-slate-600")}>
                           Waveform unavailable
                         </span>
                       )}

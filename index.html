@@ -28,7 +28,7 @@
 
     <!-- Security hardening: first-party + explicit Firebase/Google Auth script origins
          for OAuth popup/iframe & reCAPTCHA with a strict allowlist. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' blob: https://apis.google.com https://www.gstatic.com https://accounts.google.com https://www.google.com https://recaptcha.net https://arvdoul-8057b.firebaseapp.com https://js.stripe.com; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: http: ws: wss: data: blob:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' blob: https://apis.google.com https://www.gstatic.com https://accounts.google.com https://www.google.com https://recaptcha.net https://arvdoul-8057b.firebaseapp.com https://js.stripe.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: http: ws: wss: data: blob:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
     <meta http-equiv="Permissions-Policy" content="geolocation=(self), camera=(self), microphone=(self)" />

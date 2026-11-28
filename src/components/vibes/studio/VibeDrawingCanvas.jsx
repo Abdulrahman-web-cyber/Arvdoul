@@ -27,6 +27,7 @@ export function VibeDrawingStage({
 }) {
   const stageRef = useRef(null);
   const drawingRef = useRef(false);
+  const draftStrokeRef = useRef(null);
   const [draftStroke, setDraftStroke] = useState(null);
 
   const getNormalizedPoint = useCallback((clientX, clientY) => {
@@ -44,39 +45,41 @@ export function VibeDrawingStage({
     e.currentTarget.setPointerCapture?.(e.pointerId);
     drawingRef.current = true;
     const pt = getNormalizedPoint(e.clientX, e.clientY);
-    setDraftStroke({
+    const next = {
       id: `stroke_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       color: brushColor,
       size: brushSize,
       mode: brushMode,
       points: [pt],
-    });
+    };
+    draftStrokeRef.current = next;
+    setDraftStroke(next);
   };
 
   const handlePointerMove = (e) => {
     if (!active || !drawingRef.current) return;
     e.stopPropagation();
+    const prev = draftStrokeRef.current;
+    if (!prev || prev.points.length >= VIBE_LIMITS.MAX_DRAWING_POINTS_PER_PATH) return;
     const pt = getNormalizedPoint(e.clientX, e.clientY);
-    setDraftStroke((prev) => {
-      if (!prev) return prev;
-      if (prev.points.length >= VIBE_LIMITS.MAX_DRAWING_POINTS_PER_PATH) return prev;
-      const last = prev.points[prev.points.length - 1];
-      const dist = Math.hypot(pt.x - last.x, pt.y - last.y);
-      if (dist < 0.003) return prev;
-      return { ...prev, points: [...prev.points, pt] };
-    });
+    const last = prev.points[prev.points.length - 1];
+    const dist = Math.hypot(pt.x - last.x, pt.y - last.y);
+    if (dist < 0.003) return;
+    const next = { ...prev, points: [...prev.points, pt] };
+    draftStrokeRef.current = next;
+    setDraftStroke(next);
   };
 
   const finishStroke = (e) => {
     if (!active || !drawingRef.current) return;
     e.stopPropagation();
     drawingRef.current = false;
-    setDraftStroke((current) => {
-      if (current && current.points.length > 0) {
-        onPathsChange?.([...paths.slice(-(VIBE_LIMITS.MAX_DRAWING_PATHS - 1)), current]);
-      }
-      return null;
-    });
+    const finished = draftStrokeRef.current;
+    draftStrokeRef.current = null;
+    setDraftStroke(null);
+    if (finished && finished.points.length > 0) {
+      onPathsChange?.([...paths.slice(-(VIBE_LIMITS.MAX_DRAWING_PATHS - 1)), finished]);
+    }
   };
 
   const renderedPaths = draftStroke ? [...paths, draftStroke] : paths;

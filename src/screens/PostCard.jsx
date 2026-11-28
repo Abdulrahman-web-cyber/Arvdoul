@@ -15,7 +15,6 @@ import * as userService from '../services/userService';
 import * as monetizationService from '../services/monetizationService';
 import advertisingService from '../services/advertisingService';
 import creatorEarningsService from '../services/creatorEarningsService';
-import notificationService from '../services/notificationsService';
 import { triggerHaptic } from '../utils/haptics';
 import { formatDistanceToNow } from 'date-fns';
 import { resolveActorName } from '../services/profileReadModel.js';

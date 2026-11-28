@@ -197,6 +197,7 @@ export default function CreateStory() {
   const previewVideoRef = useRef(null);
   const fileInputRef = useRef(null);
   const timerRef = useRef(null);
+  const holdTimeoutRef = useRef(null);
   const recorderRef = useRef(null);
   const audioStreamRef = useRef(null);
   const chunksRef = useRef([]);
@@ -328,6 +329,7 @@ export default function CreateStory() {
       stopCameraStream();
       stopAudioStream();
       if (timerRef.current) clearInterval(timerRef.current);
+      if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current);
       if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrlRef.current);
       }
@@ -378,7 +380,13 @@ export default function CreateStory() {
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
+      recorder.onerror = () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        setIsRecording(false);
+        toast.error('Video recording encountered an error.');
+      };
       recorder.onstop = () => {
+        if (timerRef.current) clearInterval(timerRef.current);
         const finalType = mime || 'video/webm';
         const blob = new Blob(chunksRef.current, { type: finalType });
         const secs = Math.max(1, Math.min(VIBE_LIMITS.VIDEO_MAX_DURATION_SEC, recordedSecondsRef.current || 1));
@@ -400,6 +408,7 @@ export default function CreateStory() {
       recorder.start(250);
       setIsRecording(true);
       setRecordSeconds(0);
+      if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         setRecordSeconds((sec) => {
           const next = sec + 1;
@@ -474,7 +483,14 @@ export default function CreateStory() {
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
+      recorder.onerror = () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        stopAudioStream();
+        setIsRecording(false);
+        toast.error('Audio recording encountered an error.');
+      };
       recorder.onstop = () => {
+        if (timerRef.current) clearInterval(timerRef.current);
         stopAudioStream();
         const baseMime = (mime || recorder.mimeType || 'audio/webm').split(';')[0].trim();
         const ext = baseMime.includes('mp4') ? 'm4a' : baseMime.includes('ogg') ? 'ogg' : 'webm';
@@ -498,6 +514,7 @@ export default function CreateStory() {
       recorder.start(250);
       setIsRecording(true);
       setRecordSeconds(0);
+      if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         setRecordSeconds((sec) => {
           const next = sec + 1;
@@ -514,6 +531,7 @@ export default function CreateStory() {
         });
       }, 1000);
     } catch (err) {
+      stopAudioStream();
       const name = err?.name || '';
       if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
         setAudioPermission('denied');
@@ -614,16 +632,19 @@ export default function CreateStory() {
 
   const handleShutterHoldStart = () => {
     if (activeMode !== 'STORY' || capturedPreview || !cameraActive) return;
+    if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current);
     holdActiveRef.current = false;
-    timerRef.current = setTimeout(() => {
+    holdTimeoutRef.current = setTimeout(() => {
+      holdTimeoutRef.current = null;
       holdActiveRef.current = true;
       startVideoRecording();
     }, 280);
   };
 
   const handleShutterHoldEnd = () => {
-    if (!isRecording && timerRef.current && !holdActiveRef.current) {
-      clearTimeout(timerRef.current);
+    if (holdTimeoutRef.current) {
+      clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = null;
       return;
     }
     if (isRecording && activeMode === 'STORY') {
@@ -1423,6 +1444,21 @@ export default function CreateStory() {
                   loop
                   muted={Boolean(mediaEdits.muted)}
                   playsInline
+                  onLoadedMetadata={(e) => {
+                    const vid = e.currentTarget;
+                    const tStart = Math.max(0, Number(mediaEdits.trimStart || 0));
+                    if (tStart > 0 && vid.currentTime < tStart) {
+                      try { vid.currentTime = tStart; } catch { /* noop */ }
+                    }
+                  }}
+                  onTimeUpdate={(e) => {
+                    const vid = e.currentTarget;
+                    const tStart = Math.max(0, Number(mediaEdits.trimStart || 0));
+                    const tEnd = Number(mediaEdits.trimEnd || 0);
+                    if (tEnd > tStart && vid.currentTime >= tEnd) {
+                      vid.currentTime = tStart;
+                    }
+                  }}
                   className={cn('w-full h-full', mediaEdits.fitMode === 'cover' ? 'object-cover' : 'object-contain')}
                 />
               ) : mediaType === 'audio' ? (
@@ -2174,6 +2210,7 @@ export default function CreateStory() {
               </button>
               <input
                 ref={fileInputRef}
+                aria-label="Choose vibe media file"
                 type="file"
                 accept={isEventMode ? 'image/*' : 'image/*,video/*,audio/*,.mp3,.m4a,.aac,.wav,.ogg,.webm,.flac'}
                 onChange={handleFilePicked}

@@ -52,7 +52,8 @@ export default function StudioHeader({
       {/* Left: Close, Logo & Project Name */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/create-post'))}
+          aria-label="Exit studio"
           className={cn(
             "w-9 h-9 rounded-xl flex items-center justify-center border transition cursor-pointer",
             isDark ? "bg-white/5 border-white/10 hover:bg-white/10 text-gray-300" : "bg-gray-100 border-gray-200 hover:bg-gray-200 text-gray-700"
@@ -108,7 +109,11 @@ export default function StudioHeader({
         <button
           onClick={onUndo}
           disabled={!canUndo}
-          className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 cursor-pointer"
+          aria-label="Undo"
+          className={cn(
+            "p-2 rounded-xl disabled:opacity-30 cursor-pointer transition",
+            isDark ? "text-gray-400 hover:text-white hover:bg-white/5" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+          )}
           title="Undo (Ctrl+Z)"
         >
           <Undo2 className="w-4 h-4" />
@@ -116,7 +121,11 @@ export default function StudioHeader({
         <button
           onClick={onRedo}
           disabled={!canRedo}
-          className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 cursor-pointer"
+          aria-label="Redo"
+          className={cn(
+            "p-2 rounded-xl disabled:opacity-30 cursor-pointer transition",
+            isDark ? "text-gray-400 hover:text-white hover:bg-white/5" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+          )}
           title="Redo (Ctrl+Y)"
         >
           <Redo2 className="w-4 h-4" />

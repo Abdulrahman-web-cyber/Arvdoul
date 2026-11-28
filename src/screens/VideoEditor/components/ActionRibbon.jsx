@@ -5,6 +5,7 @@ import {
   Scissors, SplitSquareVertical, Layers, Palette, Sliders, Music,
   Type, Smile, PenTool, Sparkles, Gauge, Shield, Wand2, Grid
 } from 'lucide-react';
+import { useTheme } from '../../../context/ThemeContext';
 
 export const ACTION_TOOLS = [
   { id: 'trim', label: 'Trim', icon: Scissors },
@@ -27,6 +28,8 @@ export default function ActionRibbon({
   activeTool = 'trim',
   onSelectTool,
 }) {
+  const { isDark } = useTheme();
+
   return (
     <div className="w-full overflow-x-auto py-1 scrollbar-none">
       <div className="flex items-center gap-1.5 sm:gap-2 min-w-max px-1">
@@ -37,14 +40,26 @@ export default function ActionRibbon({
           return (
             <button
               key={tool.id}
+              type="button"
               onClick={() => onSelectTool?.(tool.id)}
-              className={`flex flex-col items-center justify-center min-w-[62px] sm:min-w-[70px] py-2 px-2.5 rounded-2xl transition-all duration-200 active:scale-95 select-none ${
+              aria-pressed={isActive}
+              className={`group flex flex-col items-center justify-center min-w-[62px] sm:min-w-[70px] py-2 px-2.5 rounded-2xl transition-all duration-200 active:scale-95 select-none border ${
                 isActive
-                  ? 'bg-gradient-to-b from-purple-600/90 to-indigo-700/90 text-white font-bold shadow-lg shadow-purple-600/30 border border-purple-400/60 ring-1 ring-purple-300/40'
-                  : 'bg-white/5 hover:bg-white/10 dark:bg-white/5 dark:hover:bg-white/10 light:bg-gray-100 light:hover:bg-gray-200 text-gray-300 dark:text-gray-300 light:text-gray-700 hover:text-white border border-white/5'
+                  ? 'bg-gradient-to-b from-purple-600/90 to-indigo-700/90 text-white font-bold shadow-lg shadow-purple-600/30 border-purple-400/60 ring-1 ring-purple-300/40'
+                  : isDark
+                    ? 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border-white/5'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-gray-900 border-gray-200/80'
               }`}
             >
-              <Icon className={`w-4 h-4 sm:w-5 sm:h-5 mb-1 ${isActive ? 'text-white' : 'text-gray-300 group-hover:text-white'}`} />
+              <Icon
+                className={`w-4 h-4 sm:w-5 sm:h-5 mb-1 ${
+                  isActive
+                    ? 'text-white'
+                    : isDark
+                      ? 'text-gray-300 group-hover:text-white'
+                      : 'text-gray-600 group-hover:text-gray-900'
+                }`}
+              />
               <span className="text-[11px] sm:text-xs tracking-tight">{tool.label}</span>
             </button>
           );

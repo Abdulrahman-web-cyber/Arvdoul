@@ -150,7 +150,7 @@ export default function VideoEditorScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const initialMediaLoaded = useRef(false);
-  const { theme, isDark } = useTheme();
+  const { isDark } = useTheme();
 
   // Project State — honest default: the editor opens empty. The user names
   // their own project; we never present a pre-made demo project.
@@ -222,6 +222,7 @@ export default function VideoEditorScreen() {
   const [isReverse, setIsReverse] = useState(false);
   const [isFreezeFrame, setIsFreezeFrame] = useState(false);
   const [snapMode, setSnapMode] = useState('Frame');
+  const [stabilizeMode, setStabilizeMode] = useState('off');
 
   // UI Drawer & Modal State
   const [isLayersPanelOpen, setIsLayersPanelOpen] = useState(false);
@@ -235,7 +236,7 @@ export default function VideoEditorScreen() {
   const [aiStatusMessage, setAiStatusMessage] = useState('');
 
   // Refs
-  const videoRef = useRef(null);
+  const ownedDiskUrlsRef = useRef([]);
   const animationFrameRef = useRef(null);
 
   // Compute Total Timeline Duration
@@ -262,23 +263,36 @@ export default function VideoEditorScreen() {
     .flatMap((t) => t.clips || [])
     .find((c) => c.id === selectedClipId) || null;
 
-  // Active video clip at current playhead time (the video element source).
-  const currentVideoClip = tracks
-    .find((t) => t.id === 'track-video')
-    ?.clips.find((c) => currentTime >= c.startTime && currentTime <= c.startTime + c.duration) ||
-    tracks.find((t) => t.id === 'track-video')?.clips[0] ||
+  // Active video clip at current playhead time (respecting track & clip visibility).
+  const visibleVideoClips = tracks
+    .filter((t) => (t.type === 'video' || t.id === 'track-video') && t.visible !== false)
+    .flatMap((t) => (t.clips || []).filter((c) => c.visible !== false));
+
+  const currentVideoClip =
+    visibleVideoClips.find((c) => currentTime >= c.startTime && currentTime <= c.startTime + (c.duration || 0)) ||
+    visibleVideoClips[0] ||
     null;
+
+  // Revoke any disk object URLs on unmount
+  useEffect(() => {
+    return () => {
+      ownedDiskUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      ownedDiskUrlsRef.current = [];
+    };
+  }, []);
 
   // Playback Loop Animation Frame
   useEffect(() => {
     let lastTime = performance.now();
 
     const updatePlayhead = (now) => {
-      if (isPlaying) {
+      if (isPlaying && !isFreezeFrame) {
         const delta = (now - lastTime) / 1000;
+        const activeSpeed = Number(currentVideoClip?.speed) > 0 ? Number(currentVideoClip.speed) : clipSpeed;
         setCurrentTime((prev) => {
-          const next = prev + delta * clipSpeed;
+          const next = prev + delta * activeSpeed;
           if (next >= totalDuration) {
+            if (isLooping) return 0;
             setIsPlaying(false);
             return totalDuration;
           }
@@ -291,26 +305,7 @@ export default function VideoEditorScreen() {
 
     animationFrameRef.current = requestAnimationFrame(updatePlayhead);
     return () => cancelAnimationFrame(animationFrameRef.current);
-  }, [isPlaying, clipSpeed, totalDuration]);
-
-  // Synchronize native video element if loaded
-  useEffect(() => {
-    if (videoRef.current && currentVideoClip) {
-      if (isPlaying && videoRef.current.paused) {
-        videoRef.current.play().catch((err) => {
-          console.warn('[VideoEditor] Preview play blocked:', err?.message);
-        });
-      } else if (!isPlaying && !videoRef.current.paused) {
-        videoRef.current.pause();
-      }
-    }
-  }, [isPlaying, currentVideoClip]);
-
-  // Apply the selected speed to the live preview element so what the user sees
-  // matches the timeline scrub rate.
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.playbackRate = clipSpeed;
-  }, [clipSpeed, currentVideoClip]);
+  }, [isPlaying, isFreezeFrame, isLooping, clipSpeed, currentVideoClip?.speed, totalDuration]);
 
   // Toggle Play / Pause
   const handleTogglePlay = () => {
@@ -519,6 +514,7 @@ export default function VideoEditorScreen() {
 
   const handleAddMediaFromDisk = async (file) => {
     const url = URL.createObjectURL(file);
+    ownedDiskUrlsRef.current.push(url);
     const isVideo = file.type.startsWith('video');
     const isAudio = file.type.startsWith('audio');
 
@@ -786,7 +782,6 @@ export default function VideoEditorScreen() {
   );
 
   const handleSelectLayer = (layerId) => {
-    const track = tracks.find((t) => (t.clips || []).some((c) => c.id === layerId));
     setSelectedClipId(layerId);
   };
 
@@ -794,6 +789,14 @@ export default function VideoEditorScreen() {
     const next = tracks.map((t) => ({
       ...t,
       clips: (t.clips || []).map((c) => (c.id === layerId ? { ...c, visible: c.visible === false } : c)),
+    }));
+    pushHistory(next);
+  };
+
+  const handleToggleLayerLock = (layerId) => {
+    const next = tracks.map((t) => ({
+      ...t,
+      clips: (t.clips || []).map((c) => (c.id === layerId ? { ...c, locked: !c.locked } : c)),
     }));
     pushHistory(next);
   };
@@ -883,6 +886,14 @@ export default function VideoEditorScreen() {
     setSelectedClipId(null);
     setCurrentTime(0);
     setIsPlaying(false);
+    setFilterId('none');
+    setActiveEffect('none');
+    setActiveTransition('fade');
+    setClipSpeed(1.0);
+    setIsReverse(false);
+    setIsFreezeFrame(false);
+    setStabilizeMode('off');
+    handleResetAdjustments();
   };
 
   const handleLoadProject = (project) => {
@@ -955,6 +966,8 @@ export default function VideoEditorScreen() {
             isMuted={isMuted}
             onToggleMute={() => setIsMuted((v) => !v)}
             onStepFrame={(dir) => setCurrentTime((t) => Math.max(0, Math.min(totalDuration, t + dir / 30)))}
+            stabilizeMode={stabilizeMode}
+            isFreezeFrame={isFreezeFrame}
           />
           <button
             type="button"
@@ -987,7 +1000,7 @@ export default function VideoEditorScreen() {
                 onSelectLayer={handleSelectLayer}
                 onAddLayer={handleAddTrack}
                 onToggleVisibility={handleToggleLayerVisibility}
-                onToggleLock={handleToggleTrackLock}
+                onToggleLock={handleToggleLayerLock}
                 onDeleteLayer={handleDeleteLayer}
                 onDuplicateLayer={handleDuplicateLayer}
                 onMoveLayer={handleMoveLayer}
@@ -1110,6 +1123,8 @@ export default function VideoEditorScreen() {
             onToggleReverse={() => setIsReverse(!isReverse)}
             selectedResolution={selectedResolution}
             onSelectResolution={setSelectedResolution}
+            stabilizeMode={stabilizeMode}
+            onSelectStabilizeMode={setStabilizeMode}
           />
         )}
       </div>
@@ -1139,6 +1154,12 @@ export default function VideoEditorScreen() {
         duration={totalDuration}
         currentResolution={selectedResolution}
         tracks={tracks}
+        filterId={filterId}
+        adjustments={adjustments}
+        activeEffect={activeEffect}
+        stabilizeMode={stabilizeMode}
+        isMuted={isMuted}
+        volume={volume}
       />
 
       <RecordVoiceModal

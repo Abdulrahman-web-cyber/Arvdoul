@@ -142,8 +142,10 @@ export default function CreateAudio() {
 
   const handleFile = useCallback(
     (file) => {
-      if (!file?.type?.startsWith('audio/')) {
-        toast.error('Please select a valid audio file (MP3, WAV, AAC, WebM)');
+      const hasAudioMime = Boolean(file?.type?.startsWith('audio/'));
+      const hasAudioExt = /\.(mp3|wav|m4a|aac|ogg|webm|flac|opus)$/i.test(file?.name || '');
+      if (!file || (!hasAudioMime && !hasAudioExt)) {
+        toast.error('Please select a valid audio file (MP3, WAV, M4A, AAC, WebM)');
         return;
       }
       if (file.size > MAX_FILE_SIZE_BYTES) {

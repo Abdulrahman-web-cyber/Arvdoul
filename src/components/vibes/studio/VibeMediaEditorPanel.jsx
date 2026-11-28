@@ -74,7 +74,11 @@ export async function bakeEditedImageFile(sourceFile, sourceUrl, edits = {}) {
           return;
         }
 
-        ctx.filter = `brightness(${brightness}%) contrast(${contrast}%)`;
+        const supportsCanvasFilter = typeof ctx.filter !== 'undefined';
+        if (supportsCanvasFilter) {
+          ctx.filter = `brightness(${brightness}%) contrast(${contrast}%)`;
+        }
+        ctx.save();
         ctx.translate(outW / 2, outH / 2);
         ctx.rotate(rad);
         ctx.drawImage(
@@ -84,6 +88,26 @@ export async function bakeEditedImageFile(sourceFile, sourceUrl, edits = {}) {
           img.naturalWidth * scaleDown,
           img.naturalHeight * scaleDown
         );
+        ctx.restore();
+
+        if (!supportsCanvasFilter && (brightness !== 100 || contrast !== 100)) {
+          const imageData = ctx.getImageData(0, 0, outW, outH);
+          const data = imageData.data;
+          const bFactor = brightness / 100;
+          const cFactor = contrast / 100;
+          for (let i = 0; i < data.length; i += 4) {
+            let r = data[i] * bFactor;
+            let g = data[i + 1] * bFactor;
+            let b = data[i + 2] * bFactor;
+            r = (r - 128) * cFactor + 128;
+            g = (g - 128) * cFactor + 128;
+            b = (b - 128) * cFactor + 128;
+            data[i] = Math.max(0, Math.min(255, r));
+            data[i + 1] = Math.max(0, Math.min(255, g));
+            data[i + 2] = Math.max(0, Math.min(255, b));
+          }
+          ctx.putImageData(imageData, 0, 0);
+        }
 
         canvas.toBlob(
           (blob) => {

@@ -87,7 +87,11 @@ export default function TransportBar({
       <div className="flex items-center gap-2 sm:gap-3">
         <button
           onClick={() => onSeek?.(0)}
-          className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
+          aria-label="Return to Zero"
+          className={cn(
+            "p-2 rounded-xl transition cursor-pointer",
+            isDark ? "text-gray-400 hover:text-white hover:bg-white/5" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+          )}
           title="Return to Zero"
         >
           <SkipBack className="w-4 h-4" />
@@ -96,6 +100,7 @@ export default function TransportBar({
         <button
           onClick={onPlayPause}
           disabled={!canPlay}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
           className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-[0_0_25px_rgba(139,30,243,0.5)] hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:hover:scale-100"
           style={{ background: BRAND_GRADIENT }}
           title={!canPlay ? 'Load audio to enable playback' : isPlaying ? 'Pause' : 'Play'}
@@ -105,7 +110,11 @@ export default function TransportBar({
 
         <button
           onClick={onStop}
-          className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
+          aria-label="Stop"
+          className={cn(
+            "p-2 rounded-xl transition cursor-pointer",
+            isDark ? "text-gray-400 hover:text-white hover:bg-white/5" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+          )}
           title="Stop"
         >
           <Square className="w-4 h-4" />
@@ -113,11 +122,16 @@ export default function TransportBar({
 
         <button
           onClick={() => setIsLooping?.(!isLooping)}
+          aria-label="Toggle Loop"
           className={cn(
             "p-2 rounded-xl transition cursor-pointer",
             isLooping
-              ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
-              : "text-gray-400 hover:text-white hover:bg-white/5"
+              ? isDark
+                ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                : "bg-purple-100 text-purple-700 border border-purple-300"
+              : isDark
+              ? "text-gray-400 hover:text-white hover:bg-white/5"
+              : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
           )}
           title="Toggle Loop"
         >
@@ -126,11 +140,16 @@ export default function TransportBar({
 
         <button
           onClick={() => setIsMetronome?.(!isMetronome)}
+          aria-label="Toggle Metronome"
           className={cn(
             "p-2 rounded-xl transition cursor-pointer",
             isMetronome
-              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-              : "text-gray-400 hover:text-white hover:bg-white/5"
+              ? isDark
+                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                : "bg-emerald-100 text-emerald-700 border border-emerald-300"
+              : isDark
+              ? "text-gray-400 hover:text-white hover:bg-white/5"
+              : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
           )}
           title="Toggle Metronome"
         >
@@ -144,14 +163,14 @@ export default function TransportBar({
             "px-2.5 py-1.5 rounded-lg border flex items-center gap-1",
             isDark ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"
           )}>
-            <span className="text-gray-400 font-sans font-medium">BPM:</span>
+            <span className={cn("font-sans font-medium", isDark ? "text-gray-400" : "text-slate-600")}>BPM:</span>
             <input
               type="number"
               min={30}
               max={300}
               value={tempo}
               onChange={(e) => setTempo?.(Math.max(30, Math.min(300, Number(e.target.value) || 120)))}
-              className="w-14 bg-transparent font-bold text-purple-400 outline-none"
+              className={cn("w-14 bg-transparent font-bold outline-none", isDark ? "text-purple-400" : "text-purple-700")}
               aria-label="Tempo in beats per minute"
             />
           </div>

@@ -2265,7 +2265,7 @@ describe('Action wiring - buttons call the real service signature', () => {
 
   test('username generation calls the service without a dead capability guard', () => {
     const s = read('src/screens/Profile/EditProfileScreen.jsx');
-    expect(s).toContain('userService.generateUniqueUsername(cleanBase, userProfile?.uid)');
+    expect(s).toContain('userService.generateUniqueUsername(base, uid)');
     expect(s).not.toContain('Username generation is unavailable right now.');
   });
 });
@@ -2557,11 +2557,11 @@ describe('Profile hero XP bar shows a consistent within-level fraction', () => {
 describe('Profile edit forms never reset on a whole-profile effect', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
-  test('EditProfileScreen keys its initialization on currentUid rather than resetting on snapshot changes', () => {
+  test('EditProfileScreen keys its editor on authUid and preserves local dirty fields on snapshot changes', () => {
     const s = read('src/screens/Profile/EditProfileScreen.jsx');
     expect(fs.existsSync(path.join(root, 'src/components/profile/ProfileQuickEditModal.jsx'))).toBe(false);
-    expect(s).toContain('initializedUidRef.current !== currentUid');
-    expect(s).toContain('initializedUidRef.current = currentUid');
+    expect(s).toContain('key={authUid}');
+    expect(s).toContain("if (!localDirty) { form[key] = remote[key];");
   });
 });
 
@@ -4647,7 +4647,7 @@ describe('N414 — username generator and identity copy do not assert unverified
     const s = read('src/screens/Profile/EditProfileScreen.jsx');
     expect(s).not.toContain('title="Generate a guaranteed unique username via userService"');
     expect(s).not.toContain("setFormData(prev => ({ ...prev, username: uniqueUser }));\n      setUsernameAvailability('available');");
-    expect(s).toContain('const res = await userService.checkUsernameAvailability(uniqueUser);');
+    expect(s).toContain('const res = await userService.checkUsernameAvailability(raw, uid);');
   });
 
   test('QR scanner / QR modal drop the "100% reliable"/"100% unique" claims', () => {
@@ -4997,7 +4997,7 @@ describe('N430 — royal standing resolves the stored title object, not a string
     expect(hero).toContain('resolveRoyalFlag(profile)');
     expect(hero).not.toMatch(/\.activeTitle\s*===/);
     const edit = read('src/screens/Profile/EditProfileScreen.jsx');
-    expect(edit).toContain('resolveRoyalFlag(userProfile)');
+    expect(edit).toContain('resolveRoyalFlag(profile)');
     expect(edit).not.toMatch(/\.activeTitle\s*===/);
   });
 

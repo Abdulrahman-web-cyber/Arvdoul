@@ -875,12 +875,7 @@ export function AuthProvider({ children }) {
     
     const setupAuthListener = async () => {
       try {
-        await Promise.race([
-          authService.initialize(),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Auth initialization timed out')), pendingGoogleRedirect ? 14000 : 3500)
-          ),
-        ]);
+        await authService.initialize();
         if (!isMounted.current || abortController.signal.aborted) return;
         if (authService.googleRedirectError) {
           const redirectMessage = authService.googleRedirectError.message || 'Google sign-in could not be completed.';
@@ -889,7 +884,11 @@ export function AuthProvider({ children }) {
 
         const firebaseAuth = await import('firebase/auth');
         const { onAuthStateChanged, onIdTokenChanged } = firebaseAuth;
-        const auth = authService.auth;
+        let auth = authService.auth;
+        if (!auth) {
+          const { getAuthInstance } = await import('../firebase/firebase.js');
+          auth = await getAuthInstance();
+        }
         if (!auth) throw new Error('Failed to get Firebase auth instance');
         
         unsubscribeAuthRef.current = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -1053,7 +1052,7 @@ export function AuthProvider({ children }) {
         // Token refresh listener
         unsubscribeIdTokenRef.current = onIdTokenChanged(auth, async (firebaseUser) => {
           if (!isMounted.current) return;
-          if (!firebaseUser && user) {
+          if (!firebaseUser && lastProfileUidRef.current) {
             try {
               const { getAuth } = firebaseAuth;
               const currentAuth = getAuth();
@@ -1578,6 +1577,11 @@ export function AuthProvider({ children }) {
     authState,
   }), [user, userProfile, authState, profileResolved, isSignupInProgress]);
 
+  const prewarmGoogleAuth = useCallback(
+    () => authService?.prewarmGoogleAuth?.() ?? Promise.resolve(false),
+    [authService]
+  );
+
   const contextValue = useMemo(() => ({
     user,
     userProfile,
@@ -1600,7 +1604,7 @@ export function AuthProvider({ children }) {
     verifyMFAAndSignIn,
     signUpWithEmailPassword,
     signInWithGoogle,
-    prewarmGoogleAuth: () => authService?.prewarmGoogleAuth?.() ?? Promise.resolve(false),
+    prewarmGoogleAuth,
     sendPhoneVerificationCode,
     verifyPhoneOTP,
     signOut,
@@ -1621,6 +1625,7 @@ export function AuthProvider({ children }) {
     profileResolved, needsOnboarding, isProfileComplete,
     securityChecks, authService, userService, authState,
     signInWithEmailPassword, verifyMFAAndSignIn, signUpWithEmailPassword, signInWithGoogle,
+    prewarmGoogleAuth,
     sendPhoneVerificationCode, verifyPhoneOTP, signOut, checkEmailVerification,
     resendEmailVerification, sendPasswordResetEmail, confirmPasswordReset,
     createRecaptchaVerifier, cleanupRecaptchaVerifier, createUserProfile,

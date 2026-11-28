@@ -1,9 +1,10 @@
 // src/screens/VideoEditor/components/ToolPanels.jsx
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import PropTypes from 'prop-types';
 import { Palette, Sliders, Type, Music, Smile, Layers, Sparkles, Wand2, Plus, Check, Play, Pause, RefreshCw, Zap, Scissors, Bot, Gauge, Shield, Grid, PenTool } from "lucide-react";
 import { FILTERS_LIST, TRANSITIONS_LIST, EFFECTS_LIST, FONT_LIST, STICKER_CATEGORIES, STOCK_AUDIO, RESOLUTION_PRESETS } from "../constants";
+import { useTheme } from '../../../context/ThemeContext';
 
 export default function ToolPanels({
   activeTool,
@@ -24,6 +25,8 @@ export default function ToolPanels({
   onSelectTransition,
   activeEffect = 'none',
   onSelectEffect,
+  stabilizeMode = 'off',
+  onSelectStabilizeMode,
   onAddTextClip,
   onAddStickerClip,
   onAddAudioClip,
@@ -37,6 +40,8 @@ export default function ToolPanels({
   selectedResolution,
   onSelectResolution,
 }) {
+  const { isDark } = useTheme();
+
   // Local state for text adder
   const [newText, setNewText] = useState('New Title');
   const [selectedFont, setSelectedFont] = useState('Plus Jakarta Sans');
@@ -49,37 +54,58 @@ export default function ToolPanels({
 
   // Audio preview playback
   const [previewingAudioId, setPreviewingAudioId] = useState(null);
-  const [audioEl, setAudioEl] = useState(null);
+  const audioElRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (audioElRef.current) {
+        audioElRef.current.pause();
+        audioElRef.current = null;
+      }
+    };
+  }, []);
 
   const togglePreviewAudio = (audio) => {
     if (previewingAudioId === audio.id) {
-      audioEl?.pause();
+      audioElRef.current?.pause();
       setPreviewingAudioId(null);
     } else {
-      audioEl?.pause();
+      audioElRef.current?.pause();
       const newAudio = new Audio(audio.url);
       newAudio.play().catch(() => {});
       newAudio.onended = () => setPreviewingAudioId(null);
-      setAudioEl(newAudio);
+      audioElRef.current = newAudio;
       setPreviewingAudioId(audio.id);
     }
   };
+
+  const containerClass = isDark
+    ? 'bg-gray-950/80 border-white/10 text-gray-200'
+    : 'bg-white/95 border-gray-200 text-gray-800';
+  const headingClass = isDark ? 'text-white' : 'text-gray-900';
+  const mutedBtnClass = isDark
+    ? 'text-gray-400 hover:text-white bg-white/5 hover:bg-white/10'
+    : 'text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200';
+  const cardInactiveClass = isDark
+    ? 'bg-white/5 hover:bg-white/10 border-white/5 text-gray-300'
+    : 'bg-gray-100/80 hover:bg-gray-200/80 border-gray-200 text-gray-700';
 
   // Render sub-panel depending on active ribbon tool
   switch (activeTool) {
     case 'filters':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Palette className="w-4 h-4 text-purple-400" />
-              <span className="text-xs sm:text-sm font-bold text-white dark:text-white light:text-gray-900">
+              <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>
                 Cinematic Color Presets & LUTs
               </span>
             </div>
             <button
+              type="button"
               onClick={() => onSelectFilter?.('none')}
-              className="text-[11px] text-gray-400 hover:text-white px-2 py-0.5 rounded-lg bg-white/5"
+              className={`text-[11px] px-2 py-0.5 rounded-lg transition-colors ${mutedBtnClass}`}
             >
               Reset Filter
             </button>
@@ -91,11 +117,12 @@ export default function ToolPanels({
               return (
                 <button
                   key={filter.id}
+                  type="button"
                   onClick={() => onSelectFilter?.(filter.id)}
-                  className={`group flex flex-col items-center p-1.5 rounded-xl transition-all ${
+                  className={`group flex flex-col items-center p-1.5 rounded-xl transition-all border ${
                     isSelected
-                      ? 'bg-purple-600/30 border border-purple-500 ring-2 ring-purple-400/50 scale-105'
-                      : 'bg-white/5 hover:bg-white/10 border border-white/5'
+                      ? 'bg-purple-600/25 border-purple-500 ring-2 ring-purple-400/50 scale-105'
+                      : cardInactiveClass
                   }`}
                 >
                   <div className={`w-full h-10 rounded-lg ${filter.thumbnail} shadow-inner flex items-center justify-center relative overflow-hidden`}>
@@ -105,7 +132,7 @@ export default function ToolPanels({
                       </div>
                     )}
                   </div>
-                  <span className="text-[11px] font-medium text-gray-200 truncate mt-1 w-full text-center">
+                  <span className={`text-[11px] font-medium truncate mt-1 w-full text-center ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
                     {filter.name}
                   </span>
                 </button>
@@ -117,17 +144,18 @@ export default function ToolPanels({
 
     case 'adjust':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Sliders className="w-4 h-4 text-cyan-400" />
-              <span className="text-xs sm:text-sm font-bold text-white dark:text-white light:text-gray-900">
+              <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>
                 Precision Color Adjustments
               </span>
             </div>
             <button
+              type="button"
               onClick={onResetAdjustments}
-              className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-white px-2 py-0.5 rounded-lg bg-white/5"
+              className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg transition-colors ${mutedBtnClass}`}
             >
               <RefreshCw className="w-3 h-3" />
               <span>Reset All</span>
@@ -143,20 +171,21 @@ export default function ToolPanels({
               { id: 'sepia', label: 'Sepia Warmth', min: 0, max: 100, unit: '%' },
               { id: 'hueRotate', label: 'Hue Rotate', min: 0, max: 360, unit: '°' },
             ].map((param) => (
-              <div key={param.id} className="bg-black/30 p-2 rounded-xl border border-white/5">
-                <div className="flex items-center justify-between text-xs text-gray-300 mb-1">
+              <div key={param.id} className={`p-2 rounded-xl border ${isDark ? 'bg-black/30 border-white/5' : 'bg-gray-100/80 border-gray-200'}`}>
+                <div className={`flex items-center justify-between text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                   <span className="font-semibold">{param.label}</span>
                   <span className="font-mono text-purple-400 font-bold">
                     {adjustments[param.id] ?? 100}{param.unit}
                   </span>
                 </div>
-                <input aria-label={`${param.label} adjustment`}
+                <input
+                  aria-label={`${param.label} adjustment`}
                   type="range"
                   min={param.min}
                   max={param.max}
                   value={adjustments[param.id] ?? 100}
                   onChange={(e) => onUpdateAdjustment?.(param.id, parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                  className={`w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-purple-500 ${isDark ? 'bg-white/20' : 'bg-gray-300'}`}
                 />
               </div>
             ))}
@@ -166,10 +195,10 @@ export default function ToolPanels({
 
     case 'transition':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center gap-2 mb-2">
             <Layers className="w-4 h-4 text-purple-400" />
-            <span className="text-xs sm:text-sm font-bold text-white">Clip Transitions</span>
+            <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>Clip Transitions</span>
           </div>
 
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2">
@@ -178,11 +207,12 @@ export default function ToolPanels({
               return (
                 <button
                   key={t.id}
+                  type="button"
                   onClick={() => onSelectTransition?.(t.id)}
-                  className={`flex flex-col items-center justify-center p-2 rounded-xl text-xs transition-all ${
+                  className={`flex flex-col items-center justify-center p-2 rounded-xl text-xs transition-all border ${
                     isSelected
-                      ? 'bg-purple-600/30 border border-purple-500 text-purple-300 ring-1 ring-purple-400'
-                      : 'bg-white/5 hover:bg-white/10 text-gray-300 border border-white/5'
+                      ? 'bg-purple-600/25 border-purple-500 text-purple-400 ring-1 ring-purple-400'
+                      : cardInactiveClass
                   }`}
                 >
                   <Sparkles className="w-4 h-4 mb-1 text-purple-400" />
@@ -196,13 +226,14 @@ export default function ToolPanels({
 
     case 'text':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Type className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs sm:text-sm font-bold text-white">Typography & Titles</span>
+              <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>Typography & Titles</span>
             </div>
             <button
+              type="button"
               onClick={() => {
                 if (newText.trim()) {
                   onAddTextClip?.({
@@ -223,23 +254,29 @@ export default function ToolPanels({
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="md:col-span-2">
-              <input aria-label="Add to Timeline"
+              <input
+                aria-label="Caption or title text"
                 type="text"
                 value={newText}
                 onChange={(e) => setNewText(e.target.value)}
                 placeholder="Enter caption or title..."
-                className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/15 text-white text-xs outline-none focus:border-emerald-500"
+                className={`w-full px-3 py-2 rounded-xl border text-xs outline-none focus:border-emerald-500 ${
+                  isDark ? 'bg-black/40 border-white/15 text-white' : 'bg-gray-100 border-gray-200 text-gray-900'
+                }`}
               />
             </div>
 
             <div>
-              <select aria-label="Font"
+              <select
+                aria-label="Font"
                 value={selectedFont}
                 onChange={(e) => setSelectedFont(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/15 text-white text-xs outline-none"
+                className={`w-full px-3 py-2 rounded-xl border text-xs outline-none ${
+                  isDark ? 'bg-black/40 border-white/15 text-white' : 'bg-gray-100 border-gray-200 text-gray-900'
+                }`}
               >
                 {FONT_LIST.map((f) => (
-                  <option key={f.id} value={f.id} className="bg-gray-900 text-white">
+                  <option key={f.id} value={f.id} className={isDark ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}>
                     {f.name}
                   </option>
                 ))}
@@ -269,13 +306,14 @@ export default function ToolPanels({
               </div>
               <div className="flex-1 flex items-center gap-1">
                 <span className="text-[10px] text-gray-400">Size</span>
-                <input aria-label="Size"
+                <input
+                  aria-label="Text font size"
                   type="range"
                   min="16"
                   max="64"
                   value={textFontSize}
                   onChange={(e) => setTextFontSize(parseInt(e.target.value, 10))}
-                  className="w-full h-1 bg-white/20 rounded accent-emerald-500"
+                  className={`w-full h-1 rounded accent-emerald-500 ${isDark ? 'bg-white/20' : 'bg-gray-300'}`}
                 />
               </div>
             </div>
@@ -285,23 +323,26 @@ export default function ToolPanels({
 
     case 'stickers':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Smile className="w-4 h-4 text-amber-400" />
-              <span className="text-xs sm:text-sm font-bold text-white">Stickers & Graphics</span>
+              <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>Stickers & Graphics</span>
             </div>
 
             {/* Category tabs */}
-            <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10">
+            <div className={`flex items-center gap-1 p-0.5 rounded-xl border ${isDark ? 'bg-black/40 border-white/10' : 'bg-gray-100 border-gray-200'}`}>
               {STICKER_CATEGORIES.map((cat) => (
                 <button
                   key={cat.id}
+                  type="button"
                   onClick={() => setStickerCategory(cat.id)}
                   className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold transition-all ${
                     stickerCategory === cat.id
                       ? 'bg-purple-600 text-white'
-                      : 'text-gray-400 hover:text-white'
+                      : isDark
+                        ? 'text-gray-400 hover:text-white'
+                        : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   {cat.name}
@@ -314,8 +355,11 @@ export default function ToolPanels({
             {STICKER_CATEGORIES.find((c) => c.id === stickerCategory)?.items.map((item, idx) => (
               <button
                 key={idx}
+                type="button"
                 onClick={() => onAddStickerClip?.(item)}
-                className="w-12 h-12 rounded-2xl bg-white/5 hover:bg-purple-600/20 border border-white/10 hover:border-purple-500 flex items-center justify-center text-2xl transition-all active:scale-95 shrink-0"
+                className={`w-12 h-12 rounded-2xl border hover:border-purple-500 flex items-center justify-center text-2xl transition-all active:scale-95 shrink-0 ${
+                  isDark ? 'bg-white/5 hover:bg-purple-600/20 border-white/10' : 'bg-gray-100 hover:bg-purple-50 border-gray-200'
+                }`}
               >
                 {item}
               </button>
@@ -326,18 +370,18 @@ export default function ToolPanels({
 
     case 'audio':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Music className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs sm:text-sm font-bold text-white">Royalty-Free Music Library</span>
+              <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>Royalty-Free Music Library</span>
             </div>
           </div>
 
           {STOCK_AUDIO.length === 0 && (
             <div className="flex flex-col items-center justify-center text-center py-6">
               <Music className="w-8 h-8 text-gray-500 mb-2" />
-              <p className="text-xs font-semibold text-white mb-1">No royalty-free tracks yet</p>
+              <p className={`text-xs font-semibold mb-1 ${headingClass}`}>No royalty-free tracks yet</p>
               <p className="text-[11px] text-gray-400">
                 The licensed music catalog will appear here once a provider is connected. Record a voiceover or add your own audio instead.
               </p>
@@ -346,28 +390,34 @@ export default function ToolPanels({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
             {STOCK_AUDIO.map((audio) => {
-              const isPlaying = previewingAudioId === audio.id;
+              const isPreviewPlaying = previewingAudioId === audio.id;
               return (
                 <div
                   key={audio.id}
-                  className="flex items-center justify-between p-2.5 rounded-xl bg-black/40 border border-white/10 hover:border-white/20 transition-colors"
+                  className={`flex items-center justify-between p-2.5 rounded-xl border transition-colors ${
+                    isDark ? 'bg-black/40 border-white/10 hover:border-white/20' : 'bg-gray-100 border-gray-200 hover:border-gray-300'
+                  }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <button
+                      type="button"
                       onClick={() => togglePreviewAudio(audio)}
+                      aria-label={isPreviewPlaying ? `Pause ${audio.title}` : `Play ${audio.title}`}
                       className="w-8 h-8 rounded-full bg-emerald-600/30 text-emerald-400 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-all shrink-0"
                     >
-                      {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+                      {isPreviewPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
                     </button>
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold text-white truncate">{audio.title}</div>
+                      <div className={`text-xs font-semibold truncate ${headingClass}`}>{audio.title}</div>
                       <div className="text-[10px] text-gray-400">{audio.genre} • {audio.duration}</div>
                     </div>
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => onAddAudioClip?.(audio)}
-                    className="p-1.5 rounded-lg bg-white/10 hover:bg-emerald-600 text-white transition-colors ml-2"
+                    aria-label={`Add ${audio.title} to timeline`}
+                    className={`p-1.5 rounded-lg transition-colors ml-2 ${isDark ? 'bg-white/10 hover:bg-emerald-600 text-white' : 'bg-white hover:bg-emerald-600 hover:text-white text-gray-700'}`}
                     title="Add track to timeline"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -381,15 +431,16 @@ export default function ToolPanels({
 
     case 'effects':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-400" />
-              <span className="text-xs sm:text-sm font-bold text-white">Visual FX & Shaders</span>
+              <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>Visual FX & Shaders</span>
             </div>
             <button
+              type="button"
               onClick={() => onSelectEffect?.('none')}
-              className="text-[11px] text-gray-400 hover:text-white px-2 py-0.5 rounded-lg bg-white/5"
+              className={`text-[11px] px-2 py-0.5 rounded-lg ${mutedBtnClass}`}
             >
               Clear Effects
             </button>
@@ -401,14 +452,15 @@ export default function ToolPanels({
               return (
                 <button
                   key={fx.id}
+                  type="button"
                   onClick={() => onSelectEffect?.(fx.id)}
-                  className={`flex flex-col p-2 rounded-xl text-left transition-all ${
+                  className={`flex flex-col p-2 rounded-xl text-left transition-all border ${
                     isSelected
-                      ? 'bg-purple-600/30 border border-purple-500 ring-1 ring-purple-400'
-                      : 'bg-white/5 hover:bg-white/10 border border-white/5'
+                      ? 'bg-purple-600/25 border-purple-500 ring-1 ring-purple-400'
+                      : cardInactiveClass
                   }`}
                 >
-                  <span className="text-xs font-semibold text-white">{fx.name}</span>
+                  <span className={`text-xs font-semibold ${headingClass}`}>{fx.name}</span>
                   <span className="text-[10px] text-gray-400 truncate mt-0.5">{fx.desc}</span>
                 </button>
               );
@@ -419,11 +471,11 @@ export default function ToolPanels({
 
     case 'ai':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Wand2 className="w-4 h-4 text-purple-400" />
-              <span className="text-xs sm:text-sm font-bold text-white">AI Studio Copilot</span>
+              <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>AI Studio Copilot</span>
             </div>
             {isProcessingAI && (
               <span className="text-xs text-purple-400 flex items-center gap-1.5 animate-pulse">
@@ -437,22 +489,27 @@ export default function ToolPanels({
             {[
               { id: 'captions', title: 'Auto Subtitles & Captions', desc: 'Generate synchronized speech-to-text', icon: Type },
               { id: 'smart_cut', title: 'Smart Silence Trimmer', desc: 'Remove pauses and dead air automatically', icon: Scissors },
-              { id: 'enhance', title: 'Studio Audio Enhancer', desc: 'Noise reduction & vocal warmth boost', icon: Zap },
+              { id: 'enhance', title: 'Auto Color & Tone Grade', desc: 'Calibrated brightness, contrast & color punch', icon: Zap },
               { id: 'bg_remove', title: 'Magic Background Remover', desc: 'AI rotoscoping cutout without green screen', icon: Wand2 },
             ].map((tool) => {
               const Icon = tool.icon;
               return (
                 <button
                   key={tool.id}
+                  type="button"
                   onClick={() => onApplyAITool?.(tool.id)}
                   disabled={isProcessingAI}
-                  className="flex items-start gap-2.5 p-3 rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] hover:from-purple-600/20 hover:to-indigo-600/10 border border-white/10 hover:border-purple-500/50 text-left transition-all group"
+                  className={`flex items-start gap-2.5 p-3 rounded-2xl border hover:border-purple-500/50 text-left transition-all group ${
+                    isDark
+                      ? 'bg-gradient-to-br from-white/5 to-white/[0.02] hover:from-purple-600/20 hover:to-indigo-600/10 border-white/10'
+                      : 'bg-gray-100/70 hover:bg-purple-50 border-gray-200'
+                  }`}
                 >
                   <div className="w-8 h-8 rounded-xl bg-purple-600/20 text-purple-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                     <Icon className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-white">{tool.title}</div>
+                    <div className={`text-xs font-semibold ${headingClass}`}>{tool.title}</div>
                     <div className="text-[10px] text-gray-400 leading-tight mt-0.5">{tool.desc}</div>
                   </div>
                 </button>
@@ -464,11 +521,11 @@ export default function ToolPanels({
 
     case 'speed':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Gauge className="w-4 h-4 text-purple-400" />
-              <span className="text-xs sm:text-sm font-bold text-white">Playback Speed & Curve</span>
+              <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>Playback Speed & Curve</span>
             </div>
             <span className="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
               {playbackSpeed}x
@@ -478,31 +535,33 @@ export default function ToolPanels({
             {[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 4.0].map((spd) => (
               <button
                 key={spd}
+                type="button"
                 onClick={() => onSpeedChange?.(spd)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   playbackSpeed === spd
                     ? 'bg-purple-600 text-white shadow-md shadow-purple-600/40 scale-105'
-                    : 'bg-white/5 hover:bg-white/10 text-gray-300'
+                    : cardInactiveClass
                 }`}
               >
                 {spd}x
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-4 pt-2 border-t border-white/10">
+          <div className={`flex items-center gap-4 pt-2 border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
             <button
+              type="button"
               onClick={() => onToggleReverse?.()}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
                 isReverse
                   ? 'bg-purple-600 text-white border-purple-400 shadow-md'
-                  : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+                  : cardInactiveClass
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isReverse ? 'animate-spin' : ''}`} />
               <span>Reverse Video</span>
             </button>
             <span className="text-[11px] text-gray-400">
-              Preserves audio pitch and maintains smooth frame pacing
+              Adjusts clip playback pace across timeline and export
             </span>
           </div>
         </div>
@@ -510,76 +569,101 @@ export default function ToolPanels({
 
     case 'stabilize':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4 text-purple-400" />
-              <span className="text-xs sm:text-sm font-bold text-white">Video Stabilization & Gyro Flow</span>
+              <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>Framing Overscan & Stabilization</span>
             </div>
-            <span className="text-[11px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-              Active
-            </span>
+            <button
+              type="button"
+              onClick={() => onSelectStabilizeMode?.(stabilizeMode === 'off' ? 'standard' : 'off')}
+              className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border transition-colors ${
+                stabilizeMode !== 'off'
+                  ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                  : isDark
+                    ? 'text-gray-400 bg-white/5 border-white/10'
+                    : 'text-gray-600 bg-gray-100 border-gray-200'
+              }`}
+            >
+              {stabilizeMode !== 'off' ? 'Active' : 'Off'}
+            </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {[
-              { id: 'standard', name: 'Standard Smooth', desc: 'Eliminates high-frequency handshake' },
-              { id: 'cinematic', name: 'Cinematic SteadyCam', desc: 'Simulates gimbal tracking movement' },
-              { id: 'action', name: 'Action Horizon Lock', desc: 'Locks orientation for high-speed motion' },
-            ].map((st, idx) => (
-              <div key={st.id} className="p-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-purple-500/40 transition-all">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white">{st.name}</span>
-                  {idx === 0 && <Check className="w-3.5 h-3.5 text-purple-400" />}
-                </div>
-                <p className="text-[10px] text-gray-400 mt-1">{st.desc}</p>
-              </div>
-            ))}
+              { id: 'standard', name: 'Standard Smooth (4% crop)', desc: 'Subtle edge crop to steady framing jitter' },
+              { id: 'cinematic', name: 'Cinematic SteadyCam (8% crop)', desc: 'Deeper overscan crop for tracking pans' },
+              { id: 'action', name: 'Action Horizon Lock (12% crop)', desc: 'Maximum overscan margin for fast motion' },
+            ].map((st) => {
+              const isSelected = stabilizeMode === st.id;
+              return (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => onSelectStabilizeMode?.(isSelected ? 'off' : st.id)}
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                    isSelected
+                      ? 'bg-purple-600/25 border-purple-500 ring-1 ring-purple-400'
+                      : cardInactiveClass
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-bold ${headingClass}`}>{st.name}</span>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1">{st.desc}</p>
+                </button>
+              );
+            })}
           </div>
         </div>
       );
 
     case 'draw':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <PenTool className="w-4 h-4 text-purple-400" />
-              <span className="text-xs sm:text-sm font-bold text-white">Draw & Annotate Video Frame</span>
+              <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>Draw & Annotate Video Frame</span>
             </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             {['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#ffffff'].map((c) => (
               <button
                 key={c}
-                onClick={() => onAddTextClip?.({ text: '✏️ Hand-drawn mark', color: c, fontSize: 24, fontFamily: 'Plus Jakarta Sans', bgColor: 'transparent' })}
+                type="button"
+                aria-label={`Mark in ${c}`}
+                onClick={() => onAddTextClip?.({ text: '✏️ Annotation', color: c, fontSize: 24, fontFamily: 'Plus Jakarta Sans', bgColor: 'transparent' })}
                 className="w-7 h-7 rounded-full ring-2 ring-white/20 hover:scale-110 transition-transform shadow-md"
                 style={{ backgroundColor: c }}
                 title={`Mark in ${c}`}
               />
             ))}
-            <span className="text-xs text-gray-400">Click a color to drop an interactive annotation on the playhead</span>
+            <span className="text-xs text-gray-400">Click a color to drop an annotation layer on the playhead</span>
           </div>
         </div>
       );
 
     case 'more':
       return (
-        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-md shadow-2xl ${containerClass}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Grid className="w-4 h-4 text-purple-400" />
-              <span className="text-xs sm:text-sm font-bold text-white">Format, Aspect Ratio & Canvas</span>
+              <span className={`text-xs sm:text-sm font-bold ${headingClass}`}>Format, Aspect Ratio & Canvas</span>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {RESOLUTION_PRESETS.map((res) => (
               <button
                 key={res.id}
+                type="button"
                 onClick={() => onSelectResolution?.(res)}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border ${
                   selectedResolution?.id === res.id
-                    ? 'bg-purple-600 text-white ring-2 ring-purple-400/50 shadow-lg shadow-purple-600/30'
-                    : 'bg-white/5 hover:bg-white/10 text-gray-300 border border-white/5'
+                    ? 'bg-purple-600 text-white border-purple-400 ring-2 ring-purple-400/50 shadow-lg shadow-purple-600/30'
+                    : cardInactiveClass
                 }`}
               >
                 <span>{res.aspect}</span>
@@ -606,10 +690,18 @@ ToolPanels.propTypes = {
   onSelectTransition: PropTypes.func,
   activeEffect: PropTypes.string,
   onSelectEffect: PropTypes.func,
+  stabilizeMode: PropTypes.string,
+  onSelectStabilizeMode: PropTypes.func,
   onAddTextClip: PropTypes.func,
   onAddStickerClip: PropTypes.func,
   onAddAudioClip: PropTypes.func,
   onApplyAITool: PropTypes.func,
   isProcessingAI: PropTypes.bool,
   aiStatusMessage: PropTypes.string,
+  playbackSpeed: PropTypes.number,
+  onSpeedChange: PropTypes.func,
+  isReverse: PropTypes.bool,
+  onToggleReverse: PropTypes.func,
+  selectedResolution: PropTypes.object,
+  onSelectResolution: PropTypes.func,
 };

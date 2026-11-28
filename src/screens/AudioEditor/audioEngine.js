@@ -25,6 +25,8 @@ class AudioStudioEngine {
     this.meterAnalyser = null;
     this.eqNodes = [];
     this.trackNodes = new Map();
+    this.clipNodes = new Map();
+    this._reversedCache = new WeakMap();
     this.activeSources = [];
     this.metronomeTimer = null;
     this.meterTimer = null;
@@ -86,6 +88,28 @@ class AudioStudioEngine {
     if (!this.isPlaying || !this.ctx) return this.pausePosition;
     const elapsed = this.ctx.currentTime - this.startedAtContextTime;
     return this.startedAtPosition + elapsed;
+  }
+
+  _getPlayableBuffer(clip, targetCtx) {
+    if (!clip?.buffer) return null;
+    if (!clip.reversed) return clip.buffer;
+
+    const cached = this._reversedCache.get(clip.buffer);
+    if (cached && cached.sampleRate === targetCtx.sampleRate) {
+      return cached;
+    }
+
+    const srcBuf = clip.buffer;
+    const revBuf = targetCtx.createBuffer(srcBuf.numberOfChannels, srcBuf.length, srcBuf.sampleRate);
+    for (let ch = 0; ch < srcBuf.numberOfChannels; ch += 1) {
+      const srcData = srcBuf.getChannelData(ch);
+      const dstData = revBuf.getChannelData(ch);
+      for (let i = 0, len = srcData.length; i < len; i += 1) {
+        dstData[i] = srcData[len - 1 - i];
+      }
+    }
+    this._reversedCache.set(clip.buffer, revBuf);
+    return revBuf;
   }
 
   // EQ chain
@@ -180,6 +204,70 @@ class AudioStudioEngine {
     this._startMeter();
   }
 
+  _scheduleClipNode(targetCtx, destinationNode, clip, trackStartPos, nowTime, isLive) {
+    const buffer = this._getPlayableBuffer(clip, targetCtx);
+    if (!buffer) return;
+
+    const clipStart = Math.max(0, Number(clip.start) || 0);
+    const trimStart = Math.max(0, Math.min(buffer.duration - 0.05, Number(clip.trimStart) || 0));
+    const maxAvail = Math.max(0.05, buffer.duration - trimStart);
+    const clipDuration = Math.max(0.05, Math.min(Number(clip.duration) || maxAvail, maxAvail));
+    const clipEnd = clipStart + clipDuration;
+
+    if (clipEnd <= trackStartPos) return;
+
+    const source = targetCtx.createBufferSource();
+    source.buffer = buffer;
+
+    const clipGain = targetCtx.createGain();
+    clipGain.gain.value = Math.pow(10, (Number(clip.volume) || 0) / 20);
+
+    const clipPanner = targetCtx.createStereoPanner();
+    clipPanner.pan.value = Math.max(-1, Math.min(1, (Number(clip.pan) || 0) / 50));
+
+    const envGain = targetCtx.createGain();
+
+    source.connect(envGain);
+    envGain.connect(clipGain);
+    clipGain.connect(clipPanner);
+    clipPanner.connect(destinationNode);
+
+    const offsetInClip = Math.max(0, trackStartPos - clipStart);
+    const bufferOffset = trimStart + offsetInClip;
+    const when = nowTime + Math.max(0, clipStart - trackStartPos);
+    const playDuration = Math.max(0.01, clipDuration - offsetInClip);
+
+    const fadeStart = Math.max(0, Math.min(clipDuration * 0.5, Number(clip.fadeStart) || 0));
+    const fadeEnd = Math.max(0, Math.min(clipDuration * 0.5, Number(clip.fadeEnd) || 0));
+
+    if (fadeStart > 0 && offsetInClip < fadeStart) {
+      const startGain = Math.max(0.0001, offsetInClip / fadeStart);
+      envGain.gain.setValueAtTime(startGain, when);
+      envGain.gain.linearRampToValueAtTime(1, when + (fadeStart - offsetInClip));
+    } else {
+      envGain.gain.setValueAtTime(1, when);
+    }
+
+    if (fadeEnd > 0) {
+      const fadeOutStartInClip = clipDuration - fadeEnd;
+      const absFadeOutStart = when + Math.max(0, fadeOutStartInClip - offsetInClip);
+      const absEnd = when + playDuration;
+      if (offsetInClip >= fadeOutStartInClip) {
+        const remainingRatio = Math.max(0.0001, (clipDuration - offsetInClip) / fadeEnd);
+        envGain.gain.setValueAtTime(remainingRatio, when);
+      } else {
+        envGain.gain.setValueAtTime(1, absFadeOutStart);
+      }
+      envGain.gain.linearRampToValueAtTime(0.0001, absEnd);
+    }
+
+    source.start(when, bufferOffset, playDuration);
+    if (isLive) {
+      this.activeSources.push(source);
+      this.clipNodes.set(clip.id, { gain: clipGain, panner: clipPanner, envGain });
+    }
+  }
+
   _scheduleTracks(tracks, position) {
     const anySolo = tracks.some((t) => t.solo);
     const now = this.ctx.currentTime;
@@ -199,20 +287,36 @@ class AudioStudioEngine {
       this.trackNodes.set(track.id, { gain, panner });
 
       (track.clips || []).forEach((clip) => {
-        if (!clip.buffer) return; // nothing decoded yet — the UI says so
-        const clipEnd = clip.start + clip.duration;
-        if (clipEnd <= position) return; // already behind the playhead
+        this._scheduleClipNode(this.ctx, gain, clip, position, now, true);
+      });
+    });
+  }
 
-        const source = this.ctx.createBufferSource();
-        source.buffer = clip.buffer;
-        source.connect(gain);
+  /**
+   * Updates live track and clip gain/pan/mute/solo without interrupting playback.
+   */
+  updateLiveMix(tracks = []) {
+    if (!this.ctx || !this.isPlaying) return;
+    const anySolo = tracks.some((t) => t.solo);
+    const now = this.ctx.currentTime;
 
-        const offsetInClip = Math.max(0, position - clip.start);
-        const when = now + Math.max(0, clip.start - position);
-        const playDuration = clip.duration - offsetInClip;
+    tracks.forEach((track) => {
+      const nodes = this.trackNodes.get(track.id);
+      if (nodes) {
+        const audible = !track.muted && (!anySolo || track.solo);
+        const targetGain = audible ? Math.pow(10, (track.volume ?? 0) / 20) : 0;
+        const targetPan = Math.max(-1, Math.min(1, (track.pan ?? 0) / 50));
+        nodes.gain.gain.setTargetAtTime(targetGain, now, 0.015);
+        nodes.panner.pan.setTargetAtTime(targetPan, now, 0.015);
+      }
 
-        source.start(when, offsetInClip, playDuration);
-        this.activeSources.push(source);
+      (track.clips || []).forEach((clip) => {
+        const cNodes = this.clipNodes.get(clip.id);
+        if (!cNodes) return;
+        const cGain = Math.pow(10, (Number(clip.volume) || 0) / 20);
+        const cPan = Math.max(-1, Math.min(1, (Number(clip.pan) || 0) / 50));
+        cNodes.gain.gain.setTargetAtTime(cGain, now, 0.015);
+        cNodes.panner.pan.setTargetAtTime(cPan, now, 0.015);
       });
     });
   }
@@ -280,6 +384,12 @@ class AudioStudioEngine {
       try { panner.disconnect(); } catch { /* already detached */ }
     });
     this.trackNodes.clear();
+    this.clipNodes.forEach(({ gain, panner, envGain }) => {
+      try { gain.disconnect(); } catch { /* already detached */ }
+      try { panner.disconnect(); } catch { /* already detached */ }
+      try { envGain.disconnect(); } catch { /* already detached */ }
+    });
+    this.clipNodes.clear();
   }
 
   setVolume(volume0to1) {
@@ -372,7 +482,7 @@ class AudioStudioEngine {
   }
 
   /**
-   * Renders the active multitrack mix (including track volume/pan/mute/solo + master EQ)
+   * Renders the active multitrack mix (including track/clip volume/pan/mute/solo, fades, reverse + master EQ)
    * into a stereo AudioBuffer using OfflineAudioContext.
    */
   async renderOfflineMix({
@@ -435,12 +545,7 @@ class AudioStudioEngine {
 
       (track.clips || []).forEach((clip) => {
         if (!clip.buffer) return;
-        const src = offline.createBufferSource();
-        src.buffer = clip.buffer;
-        src.connect(tGain);
-        const startAt = Math.max(0, Number(clip.start) || 0);
-        const playLen = Math.max(0.05, Math.min(clip.duration || clip.buffer.duration, clip.buffer.duration));
-        src.start(startAt, 0, playLen);
+        this._scheduleClipNode(offline, tGain, clip, 0, 0, false);
         scheduledCount += 1;
       });
     });

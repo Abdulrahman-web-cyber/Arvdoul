@@ -150,7 +150,7 @@ export default function EqualizerModule({
     });
   }, [bands, eqEnabled, activeBandIndex, isDark, freqToX, gainToY, xToFreq]);
 
-  const handleCanvasMouseDown = (e) => {
+  const handleCanvasPointerDown = (e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -158,7 +158,7 @@ export default function EqualizerModule({
     const y = ((e.clientY - rect.top) / rect.height) * canvas.height;
 
     let nearestIdx = -1;
-    let minDist = 24;
+    let minDist = 28;
     bands.forEach((b, idx) => {
       const dist = Math.hypot(x - freqToX(b.freq, canvas.width), y - gainToY(b.gain, canvas.height));
       if (dist < minDist) {
@@ -171,10 +171,11 @@ export default function EqualizerModule({
       isDraggingRef.current = true;
       dragBandIndexRef.current = nearestIdx;
       setActiveBandIndex(nearestIdx);
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     }
   };
 
-  const handleCanvasMouseMove = (e) => {
+  const handleCanvasPointerMove = (e) => {
     if (!isDraggingRef.current || dragBandIndexRef.current === null) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -197,7 +198,13 @@ export default function EqualizerModule({
     );
   };
 
-  const handleCanvasMouseUp = () => {
+  const handleCanvasPointerUp = (e) => {
+    const canvas = canvasRef.current;
+    if (canvas && e?.pointerId !== undefined) {
+      try {
+        if (canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      } catch { /* ignore */ }
+    }
     isDraggingRef.current = false;
     dragBandIndexRef.current = null;
   };
@@ -278,11 +285,11 @@ export default function EqualizerModule({
               ref={canvasRef}
               width={720}
               height={176}
-              onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseUp={handleCanvasMouseUp}
-              onMouseLeave={handleCanvasMouseUp}
-              className="w-full h-full cursor-crosshair"
+              onPointerDown={handleCanvasPointerDown}
+              onPointerMove={handleCanvasPointerMove}
+              onPointerUp={handleCanvasPointerUp}
+              onPointerCancel={handleCanvasPointerUp}
+              className="w-full h-full cursor-crosshair touch-none"
             />
           </div>
 
@@ -328,9 +335,9 @@ export default function EqualizerModule({
           isDark ? "bg-white/5 border-white/10" : "bg-gray-50 border-gray-200"
         )}>
           <div>
-            <div className="text-xs font-bold tracking-wider uppercase mb-1 text-gray-400">Master Loudness</div>
-            <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
-              <span>True Peak: <strong className="text-white">{peakLabel} dB</strong></span>
+            <div className="text-xs font-bold tracking-wider uppercase mb-1 text-gray-500">Master Loudness</div>
+            <div className={cn("flex items-center justify-between text-xs mb-3", isDark ? "text-gray-400" : "text-slate-600")}>
+              <span>True Peak: <strong className={isDark ? "text-white" : "text-slate-900"}>{peakLabel} dB</strong></span>
             </div>
 
             <div className="flex items-end justify-center gap-4 h-32 py-2">
@@ -343,14 +350,14 @@ export default function EqualizerModule({
                     style={{ height: `${Math.max(2, meterPercent)}%` }}
                   />
                 </div>
-                <span className="text-[10px] font-mono text-gray-400">Master</span>
-                <span className="text-[10px] font-mono font-bold text-white">{lufsLabel}</span>
+                <span className={cn("text-[10px] font-mono", isDark ? "text-gray-400" : "text-slate-600")}>Master</span>
+                <span className={cn("text-[10px] font-mono font-bold", isDark ? "text-white" : "text-slate-900")}>{lufsLabel}</span>
               </div>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-white/10 text-center">
-            <span className="text-[11px] font-semibold text-purple-400">Target: -14 LUFS (Online)</span>
+          <div className={cn("pt-2 border-t text-center", isDark ? "border-white/10" : "border-slate-200")}>
+            <span className={cn("text-[11px] font-semibold", isDark ? "text-purple-400" : "text-purple-700")}>Target: -14 LUFS (Online)</span>
           </div>
         </div>
       </div>

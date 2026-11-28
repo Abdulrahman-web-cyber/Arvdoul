@@ -9,6 +9,7 @@ import { AuthProvider } from '../context/AuthContext.jsx';
 import { Toaster } from 'sonner';
 import GlobalErrorBoundary from './GlobalErrorBoundary.jsx';
 import AppRoutes from '../routes/AppRoutes.jsx';
+import BrandBootCanvas from './BrandBootCanvas.jsx';
 import OfflineIndicator from '../components/UI/OfflineIndicator.jsx';
 import IncomingCallBanner from '../components/Shared/IncomingCallBanner.jsx';
 import ConfirmProvider from '../components/Shared/ConfirmProvider.jsx';
@@ -148,7 +149,7 @@ export default function AppBootstrap() {
                 {/* Global motion policy: every Framer Motion animation respects
                     prefers-reduced-motion (WCAG 2.2 2.3.3). */}
                 <MotionConfig reducedMotion="user">
-                  <Suspense fallback={null}>
+                  <Suspense fallback={<BrandBootCanvas />}>
                     <AppRoutes />
                   </Suspense>
                 </MotionConfig>

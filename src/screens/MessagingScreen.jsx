@@ -71,6 +71,9 @@ const ATTACHMENT_LABEL = {
   poll: 'Poll',
   link: 'Link',
   shared_content: 'Shared',
+  vibe: 'Vibe',
+  vibe_reply: 'Vibe reply',
+  vibe_share: 'Shared Vibe',
 };
 
 function mapServiceConversation(c, uid) {
@@ -172,7 +175,10 @@ function mapServiceConversation(c, uid) {
     ),
     verified: Boolean(other?.isVerified),
     preview: typeof lastMsg.text === 'string' ? lastMsg.text : '',
-    attachmentType: lastMsg.type && lastMsg.type !== 'text' ? lastMsg.type : null,
+    attachmentType:
+      lastMsg.attachment?.type === 'vibe'
+        ? (lastMsg.metadata?.type === 'vibe_reply' ? 'vibe_reply' : 'vibe')
+        : (lastMsg.type && lastMsg.type !== 'text' ? lastMsg.type : null),
     isOwnLastMessage,
     lastMessageRead,
     lastMessageDelivered,
@@ -1262,6 +1268,11 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                               {item.attachmentType === 'voice' && <Mic className="w-3.5 h-3.5" aria-hidden="true" />}
                               {item.attachmentType === 'view_once' && <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />}
                               {item.attachmentType === 'link' && <Link2 className="w-3.5 h-3.5" aria-hidden="true" />}
+                              {(item.attachmentType === 'vibe' ||
+                                item.attachmentType === 'vibe_reply' ||
+                                item.attachmentType === 'vibe_share') && (
+                                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                              )}
                               {(item.attachmentType === 'file' ||
                                 item.attachmentType === 'gif' ||
                                 item.attachmentType === 'location' ||

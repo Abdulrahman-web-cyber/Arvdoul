@@ -46,6 +46,7 @@ export default function VibeAudienceModal({
 
   const [closeCircleMembers, setCloseCircleMembers] = useState([]);
   const [circleLoading, setCircleLoading] = useState(false);
+  const [circleBusyId, setCircleBusyId] = useState(null);
   const [circleError, setCircleError] = useState(null);
   const [managingCircle, setManagingCircle] = useState(false);
 
@@ -160,17 +161,31 @@ export default function VibeAudienceModal({
   };
 
   const handleAddToCloseCircle = async (u) => {
-    if (!userId) return;
-    await getStoryService().addToCloseCircle(userId, u.id);
-    if (!closeCircleMembers.some((m) => m.id === u.id)) {
-      setCloseCircleMembers((prev) => [...prev, u]);
+    if (!userId || !u?.id || circleBusyId) return;
+    setCircleBusyId(u.id);
+    setCircleError(null);
+    try {
+      await getStoryService().addToCloseCircle(userId, u.id);
+      setCloseCircleMembers((prev) => (prev.some((m) => m.id === u.id) ? prev : [...prev, u]));
+    } catch (err) {
+      setCircleError(err?.message || 'Could not add member to Close Circle.');
+    } finally {
+      setCircleBusyId(null);
     }
   };
 
   const handleRemoveFromCloseCircle = async (memberId) => {
-    if (!userId) return;
-    await getStoryService().removeFromCloseCircle(userId, memberId);
-    setCloseCircleMembers((prev) => prev.filter((m) => m.id !== memberId));
+    if (!userId || !memberId || circleBusyId) return;
+    setCircleBusyId(memberId);
+    setCircleError(null);
+    try {
+      await getStoryService().removeFromCloseCircle(userId, memberId);
+      setCloseCircleMembers((prev) => prev.filter((m) => m.id !== memberId));
+    } catch (err) {
+      setCircleError(err?.message || 'Could not remove member from Close Circle.');
+    } finally {
+      setCircleBusyId(null);
+    }
   };
 
   const showUserPicker =
@@ -312,9 +327,10 @@ export default function VibeAudienceModal({
                           {managingCircle && (
                             <button
                               type="button"
+                              disabled={circleBusyId === m.id}
                               onClick={() => handleRemoveFromCloseCircle(m.id)}
                               aria-label={`Remove ${m.name} from Close Circle`}
-                              className="text-rose-400 hover:text-rose-300 cursor-pointer"
+                              className="text-rose-400 hover:text-rose-300 cursor-pointer disabled:opacity-40"
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -392,19 +408,20 @@ export default function VibeAudienceModal({
                           ? selectedUsers.some((s) => s.id === u.id)
                           : closeCircleMembers.some((m) => m.id === u.id);
                         return (
-                          <button
-                            type="button"
-                            key={u.id}
-                            onClick={() => {
-                              if (audience === VIBE_AUDIENCES.SELECTED) toggleSelectedUser(u);
-                              else if (isPicked) handleRemoveFromCloseCircle(u.id);
-                              else handleAddToCloseCircle(u);
-                            }}
-                            className={cn(
-                              'w-full flex items-center justify-between p-2 rounded-xl text-left text-xs transition-colors cursor-pointer',
-                              isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
-                            )}
-                          >
+                            <button
+                              type="button"
+                              key={u.id}
+                              disabled={circleBusyId === u.id}
+                              onClick={() => {
+                                if (audience === VIBE_AUDIENCES.SELECTED) toggleSelectedUser(u);
+                                else if (isPicked) handleRemoveFromCloseCircle(u.id);
+                                else handleAddToCloseCircle(u);
+                              }}
+                              className={cn(
+                                'w-full flex items-center justify-between p-2 rounded-xl text-left text-xs transition-colors cursor-pointer disabled:opacity-50',
+                                isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                              )}
+                            >
                             <div className="flex items-center gap-2.5 min-w-0">
                               <LazyImage src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover" />
                               <div className="min-w-0">

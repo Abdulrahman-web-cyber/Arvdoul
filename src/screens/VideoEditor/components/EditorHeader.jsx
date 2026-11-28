@@ -40,8 +40,7 @@ export default function EditorHeader({
   savedProjects = [],
   onLoadProject,
 }) {
-  const { theme, toggleTheme } = useTheme();
-  const isDark = theme === 'dark';
+  const { isDark, toggleTheme } = useTheme();
 
   const [showProjectsMenu, setShowProjectsMenu] = useState(false);
   const [showAspectMenu, setShowAspectMenu] = useState(false);
@@ -65,8 +64,8 @@ export default function EditorHeader({
         setShowAspectMenu(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
   }, []);
 
   const handleTitleSubmit = () => {
@@ -76,25 +75,41 @@ export default function EditorHeader({
     }
   };
 
+  const iconBtnClass = isDark
+    ? 'bg-white/10 hover:bg-white/20 text-gray-200'
+    : 'bg-gray-100 hover:bg-gray-200 text-gray-800';
+  const menuPanelClass = isDark
+    ? 'bg-gray-900/95 border-white/15 text-gray-200'
+    : 'bg-white/95 border-gray-200 text-gray-800';
+  const menuItemHover = isDark ? 'hover:bg-white/10 text-gray-200' : 'hover:bg-gray-100 text-gray-800';
+
   return (
-    <header className="relative z-30 flex items-center justify-between px-3 md:px-6 py-2.5 bg-gray-950/80 dark:bg-gray-950/90 light:bg-white/90 backdrop-blur-xl border-b border-white/10 dark:border-white/10 light:border-gray-200">
+    <header
+      className={`relative z-30 flex items-center justify-between px-3 md:px-6 py-2.5 backdrop-blur-xl border-b ${
+        isDark ? 'bg-gray-950/90 border-white/10' : 'bg-white/90 border-gray-200'
+      }`}
+    >
       {/* Left: Close Button */}
       <div className="flex items-center gap-2">
         <button
           id="editor-close-btn"
+          type="button"
           onClick={onClose}
           aria-label="Close Video Studio"
-          className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 dark:bg-white/10 dark:hover:bg-white/20 light:bg-gray-100 light:hover:bg-gray-200 text-white light:text-gray-800 flex items-center justify-center transition-all duration-200 active:scale-95 shadow-sm"
+          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 shadow-sm ${iconBtnClass}`}
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Theme Toggle */}
         <button
+          type="button"
           onClick={toggleTheme}
           aria-label="Toggle dark/light theme"
-          className="hidden sm:flex w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 dark:bg-white/5 dark:hover:bg-white/15 light:bg-gray-100 light:hover:bg-gray-200 text-gray-300 light:text-gray-700 items-center justify-center transition-all text-xs"
-          title={isDark ? "Switch to Light Studio" : "Switch to Dark Studio"}
+          className={`hidden sm:flex w-8 h-8 rounded-full items-center justify-center transition-all text-xs ${
+            isDark ? 'bg-white/5 hover:bg-white/15 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+          }`}
+          title={isDark ? 'Switch to Light Studio' : 'Switch to Dark Studio'}
         >
           {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
         </button>
@@ -102,7 +117,13 @@ export default function EditorHeader({
 
       {/* Center: Brand & Project Dropdown */}
       <div className="relative flex flex-col items-center justify-center" ref={menuRef}>
-        <button type="button" aria-label="Project menu" aria-expanded={showProjectsMenu} className="flex items-center gap-1.5 cursor-pointer select-none group" onClick={() => setShowProjectsMenu(!showProjectsMenu)}>
+        <button
+          type="button"
+          aria-label="Project menu"
+          aria-expanded={showProjectsMenu}
+          className="flex items-center gap-1.5 cursor-pointer select-none group"
+          onClick={() => setShowProjectsMenu(!showProjectsMenu)}
+        >
           <span className="text-sm sm:text-base font-black tracking-widest bg-gradient-to-r from-cyan-400 via-indigo-400 to-purple-500 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(139,92,246,0.35)]">
             ARVDOUL
           </span>
@@ -111,19 +132,25 @@ export default function EditorHeader({
 
         <div className="flex items-center gap-1">
           {isEditingTitle ? (
-            <input aria-label="ARVDOUL"
+            <input
+              aria-label="Project title"
               type="text"
               value={tempTitle}
               autoFocus
               onChange={(e) => setTempTitle(e.target.value)}
               onBlur={handleTitleSubmit}
               onKeyDown={(e) => e.key === 'Enter' && handleTitleSubmit()}
-              className="text-xs font-semibold bg-white/10 dark:bg-white/10 light:bg-gray-100 text-white light:text-gray-900 px-2 py-0.5 rounded outline-none border border-purple-500 text-center max-w-[140px]"
+              className={`text-xs font-semibold px-2 py-0.5 rounded outline-none border border-purple-500 text-center max-w-[140px] ${
+                isDark ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-900'
+              }`}
             />
           ) : (
             <button
+              type="button"
               onClick={() => setShowProjectsMenu(!showProjectsMenu)}
-              className="flex items-center gap-1 text-xs text-gray-300 dark:text-gray-300 light:text-gray-600 hover:text-white dark:hover:text-white light:hover:text-gray-900 transition-colors font-medium"
+              className={`flex items-center gap-1 text-xs transition-colors font-medium ${
+                isDark ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+              }`}
             >
               <span>{projectName || 'Video Studio'}</span>
               <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showProjectsMenu ? 'rotate-180 text-purple-400' : ''}`} />
@@ -138,34 +165,37 @@ export default function EditorHeader({
               initial={{ opacity: 0, y: 8, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.96 }}
-              className="absolute top-full mt-2 w-64 rounded-2xl bg-gray-900/95 dark:bg-gray-900/95 light:bg-white/95 backdrop-blur-2xl border border-white/15 dark:border-white/15 light:border-gray-200 shadow-2xl p-2 z-50"
+              className={`absolute top-full mt-2 w-64 rounded-2xl backdrop-blur-2xl border shadow-2xl p-2 z-50 ${menuPanelClass}`}
             >
               <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                 Studio Project
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setIsEditingTitle(true);
                   setShowProjectsMenu(false);
                 }}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-gray-200 dark:text-gray-200 light:text-gray-800 hover:bg-white/10 dark:hover:bg-white/10 light:hover:bg-gray-100 transition-colors text-left"
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors text-left ${menuItemHover}`}
               >
                 <span>Rename Project</span>
                 <span className="text-[10px] text-gray-500">Edit</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   onSaveProject?.();
                   setShowProjectsMenu(false);
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-200 dark:text-gray-200 light:text-gray-800 hover:bg-white/10 dark:hover:bg-white/10 light:hover:bg-gray-100 transition-colors"
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs transition-colors ${menuItemHover}`}
               >
                 <Save className="w-3.5 h-3.5 text-indigo-400" />
                 <span>Save Project Snapshot</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   onNewProject?.();
                   setShowProjectsMenu(false);
@@ -178,17 +208,20 @@ export default function EditorHeader({
 
               {savedProjects && savedProjects.length > 0 && (
                 <>
-                  <div className="my-1 border-t border-white/10 dark:border-white/10 light:border-gray-200" />
+                  <div className={`my-1 border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`} />
                   <div className="px-3 py-1 text-[10px] text-gray-400 uppercase font-semibold">Recent Projects</div>
                   <div className="max-h-36 overflow-y-auto space-y-0.5">
                     {savedProjects.map((p) => (
                       <button
                         key={p.id}
+                        type="button"
                         onClick={() => {
                           onLoadProject?.(p);
                           setShowProjectsMenu(false);
                         }}
-                        className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-gray-300 dark:text-gray-300 light:text-gray-700 hover:bg-white/10 dark:hover:bg-white/10 light:hover:bg-gray-100 text-left"
+                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-left ${
+                          isDark ? 'text-gray-300 hover:bg-white/10' : 'text-gray-700 hover:bg-gray-100'
+                        }`}
                       >
                         <div className="flex items-center gap-2 truncate">
                           <FolderOpen className="w-3 h-3 text-cyan-400 shrink-0" />
@@ -210,13 +243,15 @@ export default function EditorHeader({
         {/* Undo */}
         <button
           id="editor-undo-btn"
+          type="button"
           onClick={onUndo}
           disabled={!canUndo}
+          aria-label="Undo"
           title="Undo (Ctrl+Z)"
           className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
             canUndo
-              ? 'text-gray-200 dark:text-gray-200 light:text-gray-800 bg-white/10 hover:bg-white/20 dark:bg-white/10 dark:hover:bg-white/20 light:bg-gray-100 light:hover:bg-gray-200 active:scale-95'
-              : 'text-gray-600 dark:text-gray-600 light:text-gray-400 bg-transparent cursor-not-allowed opacity-50'
+              ? `${iconBtnClass} active:scale-95`
+              : `${isDark ? 'text-gray-600' : 'text-gray-400'} bg-transparent cursor-not-allowed opacity-50`
           }`}
         >
           <Undo2 className="w-4 h-4" />
@@ -225,13 +260,15 @@ export default function EditorHeader({
         {/* Redo */}
         <button
           id="editor-redo-btn"
+          type="button"
           onClick={onRedo}
           disabled={!canRedo}
-          title="Redo (Ctrl+Y)"
+          aria-label="Redo"
+          title="Redo (Ctrl+Shift+Z)"
           className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
             canRedo
-              ? 'text-gray-200 dark:text-gray-200 light:text-gray-800 bg-white/10 hover:bg-white/20 dark:bg-white/10 dark:hover:bg-white/20 light:bg-gray-100 light:hover:bg-gray-200 active:scale-95'
-              : 'text-gray-600 dark:text-gray-600 light:text-gray-400 bg-transparent cursor-not-allowed opacity-50'
+              ? `${iconBtnClass} active:scale-95`
+              : `${isDark ? 'text-gray-600' : 'text-gray-400'} bg-transparent cursor-not-allowed opacity-50`
           }`}
         >
           <Redo2 className="w-4 h-4" />
@@ -241,9 +278,11 @@ export default function EditorHeader({
         <div className="relative" ref={aspectRef}>
           <button
             id="editor-aspect-btn"
+            type="button"
             onClick={() => setShowAspectMenu(!showAspectMenu)}
+            aria-label="Canvas aspect ratio"
             title="Aspect Ratio & Framing"
-            className="w-8 h-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 dark:bg-white/10 dark:hover:bg-white/20 light:bg-gray-100 light:hover:bg-gray-200 text-gray-200 dark:text-gray-200 light:text-gray-800 transition-all active:scale-95"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 ${iconBtnClass}`}
           >
             <Crop className="w-4 h-4" />
           </button>
@@ -254,7 +293,7 @@ export default function EditorHeader({
                 initial={{ opacity: 0, y: 8, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                className="absolute right-0 top-full mt-2 w-56 rounded-2xl bg-gray-900/95 dark:bg-gray-900/95 light:bg-white/95 backdrop-blur-2xl border border-white/15 dark:border-white/15 light:border-gray-200 shadow-2xl p-2 z-50"
+                className={`absolute right-0 top-full mt-2 w-56 rounded-2xl backdrop-blur-2xl border shadow-2xl p-2 z-50 ${menuPanelClass}`}
               >
                 <div className="px-3 py-1 text-[11px] font-semibold text-gray-400 uppercase">Canvas Aspect Ratio</div>
                 <div className="space-y-1 mt-1">
@@ -263,18 +302,19 @@ export default function EditorHeader({
                     return (
                       <button
                         key={preset.id}
+                        type="button"
                         onClick={() => {
                           onSelectResolution?.(preset);
                           setShowAspectMenu(false);
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
                           isSelected
-                            ? 'bg-purple-600/30 text-purple-300 font-semibold border border-purple-500/40'
-                            : 'text-gray-200 dark:text-gray-200 light:text-gray-800 hover:bg-white/10 dark:hover:bg-white/10 light:hover:bg-gray-100'
+                            ? 'bg-purple-600/30 text-purple-400 font-semibold border border-purple-500/40'
+                            : menuItemHover
                         }`}
                       >
                         <span className="flex items-center gap-2">
-                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-white/10 font-mono font-bold">
+                          <span className={`text-[11px] px-1.5 py-0.5 rounded font-mono font-bold ${isDark ? 'bg-white/10' : 'bg-gray-200 text-gray-800'}`}>
                             {preset.aspect}
                           </span>
                           <span>{preset.name}</span>
@@ -292,6 +332,7 @@ export default function EditorHeader({
         {/* Primary Export Button */}
         <button
           id="editor-export-btn"
+          type="button"
           onClick={onExportClick}
           className="relative group flex items-center gap-1.5 px-4 sm:px-5 py-1.5 rounded-full bg-arvdoul-gradient hover:opacity-95 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-purple-600/30 hover:shadow-purple-600/50 transition-all duration-200 active:scale-95 border border-white/20"
         >

@@ -7,10 +7,8 @@ import {
   resolvePostAuthDestination,
   safeReturnPath,
 } from "../utils/profileCompletion.js";
-import { RouteProgressBar } from "../components/Navigation/RouteProgressBar.jsx";
-
 import { useTheme } from "../context/ThemeContext.jsx";
-import { tokens } from "../design-system/tokens.js";
+import BrandBootCanvas from "./BrandBootCanvas.jsx";
 
 export default function AppStateGuard({ children }) {
   const location = useLocation();
@@ -83,27 +81,21 @@ export default function AppStateGuard({ children }) {
       return children;
     }
     return (
-      <div
-        className="min-h-[100dvh] w-full"
-        style={{ backgroundColor: isDark ? tokens.color.bg.dark : tokens.color.bg.light }}
-        aria-busy="true"
-        aria-label="Preparing screen"
-      >
-        <RouteProgressBar isAnimating={true} />
-      </div>
+      <BrandBootCanvas
+        isDark={isDark}
+        showProgress={true}
+        label="Preparing screen"
+      />
     );
   }
 
   if (decision.destination && !decision.wait) {
     return (
-      <div
-        className="min-h-[100dvh] w-full"
-        style={{ backgroundColor: isDark ? tokens.color.bg.dark : tokens.color.bg.light }}
-        aria-busy="true"
-        aria-label="Navigating"
-      >
-        <RouteProgressBar isAnimating={true} />
-      </div>
+      <BrandBootCanvas
+        isDark={isDark}
+        showProgress={true}
+        label="Navigating"
+      />
     );
   }
 

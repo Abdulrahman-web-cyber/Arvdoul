@@ -624,7 +624,7 @@ export default function StoriesScreen() {
   const currentItem = currentStory?.items?.[activeItemIndex] || currentStory?.items?.[0];
   const isOwnStory = Boolean(user?.uid && currentStory?.user?.id === user.uid);
   const canReactToCurrent = !archivedPreviewGroup && currentItem?.allowReactions !== false && currentItem?.whoCanReact !== 'nobody' && currentItem?.whoCanReact !== 'off';
-  const canReplyToCurrent = !archivedPreviewGroup && currentItem?.allowComments !== false && currentItem?.whoCanReply !== 'nobody' && currentItem?.whoCanReply !== 'off';
+  const canReplyToCurrent = !isOwnStory && !archivedPreviewGroup && currentItem?.allowComments !== false && currentItem?.whoCanReply !== 'nobody' && currentItem?.whoCanReply !== 'off';
   const canShareCurrent = !archivedPreviewGroup && currentItem?.whoCanShare !== 'nobody' && currentItem?.whoCanShare !== 'off' && currentItem?.visibility !== 'private';
   const canGiftCurrent = !isOwnStory && !archivedPreviewGroup && currentItem?.allowGifts !== false && currentItem?.whoCanSendGifts !== 'nobody' && currentItem?.whoCanSendGifts !== 'off';
   const effectivePaused = isPaused || viewersOpen || highlightSheetOpen || giftSheetOpen || shareSheetOpen || confirmDeleteStory;
@@ -1292,8 +1292,16 @@ export default function StoriesScreen() {
     if (!currentItem?.id) { toast.error('Vibe not found'); return; }
     setReplying(true);
     try {
-      await getStoryService().replyToStory(currentItem.id, text);
-      toast.success(`Reply sent to ${currentStory?.user?.name}`);
+      const res = await getStoryService().replyToStory(currentItem.id, text);
+      toast.success(`Reply sent to ${currentStory?.user?.name}`, res?.conversationId ? {
+        action: {
+          label: 'Open chat',
+          onClick: () => {
+            handleCloseStory();
+            navigate(`/chat/${res.conversationId}`);
+          },
+        },
+      } : undefined);
       setReplyText('');
     } catch (err) {
       toast.error(err?.message || 'Reply could not be sent');
@@ -2043,33 +2051,43 @@ export default function StoriesScreen() {
                       onClick={(e) => e.stopPropagation()}
                       className="absolute bottom-40 left-4 right-4 z-20"
                     >
-                      <form
-                        onSubmit={handleSubmitQuestionAnswer}
-                        className="bg-black/75 backdrop-blur-md rounded-2xl border border-white/20 p-3.5 text-white shadow-xl space-y-2.5"
-                      >
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-white/80">
-                          <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                          <span>{questionSticker.data.prompt}</span>
+                      {isOwnStory ? (
+                        <div className="bg-black/75 backdrop-blur-md rounded-2xl border border-white/20 p-3.5 text-white shadow-xl">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-white/90">
+                            <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>{questionSticker.data.prompt}</span>
+                          </div>
+                          <p className="text-[11px] text-white/65 mt-1">Answers from viewers arrive directly in your chats.</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            aria-label="Answer Q&A prompt"
-                            value={questionAnswer}
-                            onChange={(e) => setQuestionAnswer(e.target.value)}
-                            placeholder="Type your answer..."
-                            className="flex-1 bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/60 focus:outline-none focus:border-white/50"
-                          />
-                          <button
-                            type="submit"
-                            disabled={!questionAnswer.trim() || submittingQuestion}
-                            className="min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold text-white disabled:opacity-50 cursor-pointer"
-                            style={{ background: BRAND_GRADIENT }}
-                          >
-                            {submittingQuestion ? '…' : 'Send'}
-                          </button>
-                        </div>
-                      </form>
+                      ) : (
+                        <form
+                          onSubmit={handleSubmitQuestionAnswer}
+                          className="bg-black/75 backdrop-blur-md rounded-2xl border border-white/20 p-3.5 text-white shadow-xl space-y-2.5"
+                        >
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-white/80">
+                            <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>{questionSticker.data.prompt}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              aria-label="Answer Q&A prompt"
+                              value={questionAnswer}
+                              onChange={(e) => setQuestionAnswer(e.target.value)}
+                              placeholder="Type your answer..."
+                              className="flex-1 bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/60 focus:outline-none focus:border-white/50"
+                            />
+                            <button
+                              type="submit"
+                              disabled={!questionAnswer.trim() || submittingQuestion}
+                              className="min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold text-white disabled:opacity-50 cursor-pointer"
+                              style={{ background: BRAND_GRADIENT }}
+                            >
+                              {submittingQuestion ? '…' : 'Send'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
                     </div>
                   )}
 
@@ -2233,11 +2251,11 @@ export default function StoriesScreen() {
                           <Send className="w-4 h-4" />
                         </button>
                       </form>
-                    ) : (
+                    ) : !isOwnStory ? (
                       <p className="text-[11px] text-white/55 text-center py-1">
                         Replies are restricted on this Vibe
                       </p>
-                    )}
+                    ) : null}
                   </>
                 )}
               </div>

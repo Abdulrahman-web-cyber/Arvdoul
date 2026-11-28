@@ -21,8 +21,17 @@ import { audioStudioEngine } from './audioEngine';
 import { getPresetBands, DEFAULT_EQ_PRESET } from './audioPresets';
 import audioEditorService from '../../services/audioEditorService.js';
 
+const createUid = (prefix) => {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return `${prefix}_${crypto.randomUUID()}`;
+    }
+  } catch { /* fall through */ }
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+};
+
 const createEmptyTrack = (index) => ({
-  id: `track_${Date.now()}_${index}`,
+  id: createUid(`track_${index}`),
   name: `Track ${index + 1}`,
   color: '#00C4FF',
   volume: 0,
@@ -32,6 +41,15 @@ const createEmptyTrack = (index) => ({
   locked: false,
   clips: [],
 });
+
+const getPlaybackTopologySignature = (tracks) =>
+  (tracks || [])
+    .map((t) =>
+      `${t.id}:${(t.clips || [])
+        .map((c) => `${c.id}@${c.start}:${c.duration}:${c.trimStart || 0}:${Boolean(c.reversed)}:${c.fadeStart || 0}:${c.fadeEnd || 0}:${Boolean(c.buffer)}`)
+        .join(',')}`
+    )
+    .join('|');
 
 function computeWaveformPeaks(audioBuffer, samples = 240) {
   if (!audioBuffer) return [];
@@ -78,9 +96,12 @@ export default function AudioEditorScreen() {
   const [sampleRate, setSampleRate] = useState(48000);
   const [masterVolume, setMasterVolume] = useState(0.85);
   const mediaRecorderRef = useRef(null);
+  const micStreamRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const audioInputRef = useRef(null);
   const eqSectionRef = useRef(null);
+  const tracksRef = useRef(tracks);
+  tracksRef.current = tracks;
 
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -158,7 +179,7 @@ export default function AudioEditorScreen() {
     audioStudioEngine.setVolume(masterVolume);
   }, [masterVolume]);
 
-  // Cleanup recorder if component unmounts
+  // Cleanup recorder & mic tracks if component unmounts
   useEffect(() => {
     return () => {
       try {
@@ -168,10 +189,23 @@ export default function AudioEditorScreen() {
       } catch {
         // ignore unmount cleanup
       }
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach((tr) => tr.stop());
+        micStreamRef.current = null;
+      }
     };
   }, []);
 
-  // Transport: the engine owns the clock, this just mirrors it into React.
+  const playbackTopology = getPlaybackTopologySignature(tracks);
+
+  // Live gain/pan/mute/solo adjustments flow directly to Web Audio GainNodes without restarting playback
+  useEffect(() => {
+    if (isPlaying) {
+      audioStudioEngine.updateLiveMix(tracks);
+    }
+  }, [tracks, isPlaying]);
+
+  // Transport: restarts scheduled BufferSources only when play state, clock, or clip timing/reverse topology changes.
   useEffect(() => {
     if (!isPlaying) {
       cancelAnimationFrame(rafRef.current);
@@ -180,7 +214,7 @@ export default function AudioEditorScreen() {
 
     audioStudioEngine.start({
       position: positionRef.current,
-      tracks,
+      tracks: tracksRef.current,
       duration: totalDuration,
       loop: isLooping,
       tempo,
@@ -196,7 +230,7 @@ export default function AudioEditorScreen() {
           setCurrentTime(0);
           audioStudioEngine.stop();
           audioStudioEngine.start({
-            position: 0, tracks, duration: totalDuration, loop: true, tempo, metronome: isMetronome,
+            position: 0, tracks: tracksRef.current, duration: totalDuration, loop: true, tempo, metronome: isMetronome,
           });
           rafRef.current = requestAnimationFrame(tick);
           return;
@@ -216,7 +250,7 @@ export default function AudioEditorScreen() {
       cancelAnimationFrame(rafRef.current);
       audioStudioEngine.stop();
     };
-  }, [isPlaying, tracks, totalDuration, isLooping, tempo, isMetronome]);
+  }, [isPlaying, playbackTopology, totalDuration, isLooping, tempo, isMetronome]);
 
   const handleTracksChange = useCallback((updater) => {
     setTracks((prev) => {
@@ -225,7 +259,7 @@ export default function AudioEditorScreen() {
         const trackEnd = (tr.clips || []).reduce((m, c) => Math.max(m, (c.start || 0) + (c.duration || 0)), 0);
         return Math.max(acc, trackEnd);
       }, 0);
-      setTotalDuration((prevDur) => Math.max(prevDur, maxDur));
+      setTotalDuration(maxDur);
       setHistory((h) => {
         const appended = [...h.slice(0, historyIndex + 1), next];
         setHistoryIndex(appended.length - 1);
@@ -237,7 +271,7 @@ export default function AudioEditorScreen() {
 
   const addDecodedBufferTrack = useCallback((decodedBuffer, label) => {
     const peaks = computeWaveformPeaks(decodedBuffer);
-    const clipId = `clip_${Date.now()}`;
+    const clipId = createUid('clip');
     const newClip = {
       id: clipId,
       start: 0,
@@ -245,6 +279,9 @@ export default function AudioEditorScreen() {
       name: label,
       fadeStart: 0,
       fadeEnd: 0,
+      volume: 0,
+      pan: 0,
+      reversed: false,
       buffer: decodedBuffer,
       peaks,
     };
@@ -261,7 +298,7 @@ export default function AudioEditorScreen() {
       return [
         ...prev,
         {
-          id: `track_${Date.now()}`,
+          id: createUid('track'),
           name: label.slice(0, 22),
           color: tokens.color.brand.blue,
           volume: 0,
@@ -310,20 +347,30 @@ export default function AudioEditorScreen() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = stream;
       recordedChunksRef.current = [];
       const recorder = new MediaRecorder(stream);
       recorder.ondataavailable = (ev) => {
         if (ev.data && ev.data.size > 0) recordedChunksRef.current.push(ev.data);
       };
+      recorder.onerror = () => {
+        if (micStreamRef.current) {
+          micStreamRef.current.getTracks().forEach((tr) => tr.stop());
+          micStreamRef.current = null;
+        }
+        setIsRecording(false);
+        toast.error('Microphone recording failed.');
+      };
       recorder.onstop = async () => {
         stream.getTracks().forEach((tr) => tr.stop());
+        if (micStreamRef.current === stream) micStreamRef.current = null;
         const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         if (blob.size === 0) return;
         try {
           await audioStudioEngine.resume();
           const ctx = audioStudioEngine.ctx || new (window.AudioContext || window.webkitAudioContext)();
           const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
-          addDecodedBufferTrack(decoded, `Mic Take ${tracks.length + 1}`);
+          addDecodedBufferTrack(decoded, `Mic Take ${tracksRef.current.length + 1}`);
         } catch {
           toast.error('Failed to decode microphone recording.');
         }

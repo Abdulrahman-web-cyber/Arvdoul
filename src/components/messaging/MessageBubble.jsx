@@ -364,8 +364,56 @@ const MessageBubble = React.memo(
                 <Lock className="w-3.5 h-3.5 text-emerald-300 shrink-0 inline mr-1" aria-hidden="true" />
               )}
 
-              {(type === 'text' || type === 'link') && (
-                <div className="space-y-1.5">
+              {(type === 'text' || type === 'link' || type === 'reply') && (
+                <div className="space-y-2">
+                  {message.attachment?.type === 'vibe' && (() => {
+                    const va = message.attachment || {};
+                    const vibeId = va.vibeId || va.storyId || message.metadata?.vibeId || message.metadata?.storyId;
+                    const isVibeReply = message.metadata?.type === 'vibe_reply';
+                    const targetRoute = vibeId ? `/stories?vibeId=${encodeURIComponent(vibeId)}` : '/stories';
+                    return (
+                      <button
+                        type="button"
+                        disabled={!onNavigate}
+                        onClick={() => onNavigate?.(targetRoute)}
+                        className={cn(
+                          'w-full text-left rounded-xl border p-2 flex items-center gap-2.5 min-w-[200px] transition-colors',
+                          isOwn
+                            ? 'bg-white/12 border-white/25 hover:bg-white/20'
+                            : isDark
+                              ? 'bg-white/[0.06] border-white/12 hover:bg-white/10'
+                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                        )}
+                      >
+                        {va.previewUrl ? (
+                          <LazyImage
+                            src={va.previewUrl}
+                            alt={va.caption || 'Vibe preview'}
+                            className="w-11 h-14 rounded-lg object-cover shrink-0 border border-white/15"
+                          />
+                        ) : (
+                          <div
+                            className="w-11 h-14 rounded-lg flex items-center justify-center shrink-0 text-white border border-white/15"
+                            style={{ background: va.backgroundColor || BRAND_GRADIENT }}
+                          >
+                            <Sparkles className="w-4 h-4" aria-hidden="true" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className={cn(
+                            'text-[10px] font-bold uppercase tracking-wide',
+                            isOwn ? 'text-white/80' : 'text-purple-500 dark:text-purple-300'
+                          )}>
+                            {isVibeReply ? 'Replied to Vibe' : 'Shared Vibe'}
+                          </p>
+                          <p className="text-xs font-medium truncate opacity-90">
+                            {va.caption || 'Tap to view Vibe'}
+                          </p>
+                        </div>
+                        <ExternalLink className="w-3.5 h-3.5 opacity-60 shrink-0" aria-hidden="true" />
+                      </button>
+                    );
+                  })()}
                   {content && (
                     <p dir="auto" className="text-[14px] leading-relaxed whitespace-pre-wrap select-text">
                       {content}

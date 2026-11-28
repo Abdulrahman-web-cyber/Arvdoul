@@ -1130,7 +1130,6 @@ export default function LoginScreen() {
         }
         if (rememberMe) localStorage.setItem('rememberMe', 'true');
         else localStorage.removeItem('rememberMe');
-        toast.success("Welcome back!");
         const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
         navigate(from, { replace: true, state: { welcomeMessage: true, isLogin: true } });
       } else {

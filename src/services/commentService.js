@@ -41,6 +41,7 @@ class UltimateCommentService {
     this.firestore = null;
     this.initialized = false;
     this.cache = cacheManager.namespace('comments', COMMENTS_CONFIG.CACHE_EXPIRY);
+    this.viewerStateCache = new Map();
     this.realtimeSubscriptions = new Map();
     this.activeUsers = new Map();
     this.batchOperations = [];
@@ -357,10 +358,17 @@ class UltimateCommentService {
 
   async getCommentsByPost(postId, options = {}) {
     const startTime = Date.now();
-    const cacheKey = `post_comments_${postId}_${JSON.stringify(options)}`;
 
     try {
       await this._ensureInitialized();
+
+      // Block/mute enforcement: a blocked, blocked-by or muted author's
+      // comments must not surface to the viewer. Every other read surface
+      // (feed, notifications, search, ranking, stories, live, videos) resolves
+      // this through the graph spine; the comment thread previously did not, so
+      // blocking someone still showed their comments under a post.
+      const viewerId = await this._resolveViewerId(options.viewerId);
+      const cacheKey = `post_comments_${postId}_${viewerId || 'anon'}_${JSON.stringify(options)}`;
 
       if (options.cacheFirst !== false) {
         const cached = this.cache.get(cacheKey);
@@ -382,13 +390,6 @@ class UltimateCommentService {
       }
 
       const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
-
-      // Block/mute enforcement: a blocked, blocked-by or muted author's
-      // comments must not surface to the viewer. Every other read surface
-      // (feed, notifications, search, ranking, stories, live, videos) resolves
-      // this through the graph spine; the comment thread previously did not, so
-      // blocking someone still showed their comments under a post.
-      const viewerId = await this._resolveViewerId(options.viewerId);
       const hiddenAuthors = await this._getHiddenAuthors(viewerId);
 
       // Callers pass the cursor as `startAfter` (the drawer's name); accept
@@ -490,6 +491,7 @@ class UltimateCommentService {
       }
 
       await this._overlayReactionCounts(comments);
+      await this._hydrateViewerState(comments, viewerId);
 
       let processedComments = comments;
       if (options.nested === true && (options.parentId === null || options.parentId === undefined || options.parentId === 'all')) {
@@ -538,8 +540,9 @@ class UltimateCommentService {
   async getComment(commentId, options = {}) {
     try {
       await this._ensureInitialized();
+      const viewerId = await this._resolveViewerId(options.viewerId);
 
-      const cacheKey = `comment_${commentId}`;
+      const cacheKey = `comment_${commentId}_${viewerId || 'anon'}`;
       if (options.cacheFirst !== false) {
         const cached = this.cache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < COMMENTS_CONFIG.CACHE_EXPIRY) {
@@ -562,6 +565,7 @@ class UltimateCommentService {
         updatedAt: commentData.updatedAt?.toDate?.() || new Date()
       };
       await this._overlayReactionCounts([comment]);
+      await this._hydrateViewerState([comment], viewerId);
 
       this.cache.set(cacheKey, { comment, timestamp: Date.now() });
 
@@ -732,6 +736,7 @@ class UltimateCommentService {
       await this.firestoreMethods.updateDoc(commentRef, updates);
       await this._trimReactionArray(commentId, 'likesBy', COMMENT_REACTION_ARRAY_CAP);
 
+      this.viewerStateCache.delete(`${commentId}:${userId}`);
       this._invalidateCommentCache(commentId);
       countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'likes' });
 
@@ -780,6 +785,7 @@ class UltimateCommentService {
       await this.firestoreMethods.updateDoc(commentRef, updates);
       await this._trimReactionArray(commentId, 'dislikesBy', COMMENT_REACTION_ARRAY_CAP);
 
+      this.viewerStateCache.delete(`${commentId}:${userId}`);
       this._invalidateCommentCache(commentId);
       countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'dislikes' });
 
@@ -830,6 +836,7 @@ class UltimateCommentService {
 
       await this.firestoreMethods.updateDoc(commentRef, updates);
 
+      this.viewerStateCache.delete(`${commentId}:${userId}`);
       this._invalidateCommentCache(commentId);
       countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'likes' });
       countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'dislikes' });
@@ -890,6 +897,7 @@ class UltimateCommentService {
         });
       });
 
+      this.viewerStateCache.delete(`${commentId}:${userId}`);
       this._invalidateCommentCache(commentId);
       return { success: true, commentId, action, emoji, previousReaction: previous };
     } catch (error) {
@@ -1066,6 +1074,7 @@ class UltimateCommentService {
         });
       });
       await this._overlayReactionCounts(replies);
+      await this._hydrateViewerState(replies, viewerId);
 
       const hasMore = snapshot.size === pageSize;
       const nextCursor = hasMore && snapshot.docs.length ? snapshot.docs[snapshot.docs.length - 1].id : null;
@@ -1140,6 +1149,7 @@ class UltimateCommentService {
           // live in shards), so overlay the real sums before emitting — otherwise
           // the live update replaces an optimistic like count with the seeded 0.
           await this._overlayReactionCounts(comments);
+          await this._hydrateViewerState(comments, viewerId);
 
           let processedComments = comments;
           if (options.nested === true) {
@@ -1312,6 +1322,51 @@ class UltimateCommentService {
     } catch (error) {
       logger.warn('Comment reaction-count overlay failed', { error: error?.message });
     }
+    return comments;
+  }
+
+  async _hydrateViewerState(comments, viewerId) {
+    if (!viewerId || !Array.isArray(comments) || comments.length === 0) return comments;
+    const now = Date.now();
+    const { doc, getDoc } = this.firestoreMethods;
+    const targetComments = comments.slice(0, 50);
+
+    await Promise.all(
+      targetComments.map(async (c) => {
+        if (!c?.id || String(c.id).startsWith('temp_')) return;
+        const cacheKey = `${c.id}:${viewerId}`;
+        const cached = this.viewerStateCache.get(cacheKey);
+        if (cached && cached.expires > now) {
+          c.userLiked = cached.userLiked;
+          c.userReaction = cached.userReaction;
+          return;
+        }
+        try {
+          const likeRef = doc(this.firestore, 'comments', c.id, 'likes', viewerId);
+          const reactionRef = doc(this.firestore, 'comments', c.id, 'reactions', viewerId);
+          const [likeSnap, reactionSnap] = await Promise.all([
+            getDoc(likeRef).catch(() => null),
+            getDoc(reactionRef).catch(() => null),
+          ]);
+          const userLiked = likeSnap
+            ? Boolean(likeSnap.exists())
+            : Boolean(Array.isArray(c.likesBy) && c.likesBy.includes(viewerId));
+          const userReaction = reactionSnap?.exists?.() ? (reactionSnap.data()?.emoji || null) : null;
+          c.userLiked = userLiked;
+          c.userReaction = userReaction;
+          if (this.viewerStateCache.size > 500) {
+            this.viewerStateCache.clear();
+          }
+          this.viewerStateCache.set(cacheKey, {
+            userLiked,
+            userReaction,
+            expires: now + 60_000,
+          });
+        } catch (err) {
+          logger.debug('Comment viewer state hydration skipped', { commentId: c.id, error: err?.message });
+        }
+      })
+    );
     return comments;
   }
 
@@ -1530,7 +1585,7 @@ class UltimateCommentService {
     this.cache.delete(`comment_${commentId}`);
 
     for (const [key] of this.cache.entries()) {
-      if (key.includes('post_comments_')) {
+      if (key.startsWith(`comment_${commentId}_`) || key.includes('post_comments_')) {
         this.cache.delete(key);
       }
     }

@@ -16,6 +16,8 @@ const COLOR_PRESETS = [
 export default function DrawingTool({
   color = '#FFFFFF',
   brushSize = 8,
+  mode: controlledMode,
+  onModeChange,
   onColorChange,
   onBrushSizeChange,
   onClear,
@@ -24,7 +26,12 @@ export default function DrawingTool({
   isDark,
 }) {
   const dark = isDark ?? theme === 'dark';
-  const [mode, setMode] = useState('draw'); // 'draw' | 'erase'
+  const [internalMode, setInternalMode] = useState('draw'); // 'draw' | 'erase'
+  const mode = controlledMode ?? internalMode;
+  const setMode = (next) => {
+    setInternalMode(next);
+    onModeChange?.(next);
+  };
   const [size, setSize] = useState(brushSize);
 
   const applySize = (v) => {
@@ -40,6 +47,7 @@ export default function DrawingTool({
       {/* Mode toggle */}
       <div className="flex items-center gap-2">
         <button
+          type="button"
           onClick={() => { setMode('draw'); onBrushSizeChange?.(size); }}
           className={cn(
             'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition',
@@ -49,7 +57,8 @@ export default function DrawingTool({
           <Brush className="w-3.5 h-3.5" /> Draw
         </button>
         <button
-          onClick={() => { setMode('erase'); onBrushSizeChange?.(size * 2); }}
+          type="button"
+          onClick={() => { setMode('erase'); }}
           className={cn(
             'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition',
             mode === 'erase' ? 'bg-gray-500 text-white' : dark ? 'bg-white/10 text-gray-300' : 'bg-gray-100 text-gray-600'
@@ -63,6 +72,7 @@ export default function DrawingTool({
       <div className="grid grid-cols-5 gap-2">
         {COLOR_PRESETS.map((c) => (
           <button
+            type="button"
             key={c}
             onClick={() => onColorChange?.(c)}
             aria-label={`Brush color ${c}`}

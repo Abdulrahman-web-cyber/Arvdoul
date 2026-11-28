@@ -47,7 +47,7 @@ import { settingsService, DEFAULT_SETTINGS } from '../../services/settingsServic
 import { isPlaceholderHandle, resolveCreatorFlag, resolveRoyalFlag } from '../../services/profileReadModel.js';
 import { Dialog } from '../../components/UI/Dialog.jsx';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import { BRAND_GRADIENT, brandRgba } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
 import { useAppStore } from '../../store/appStore';
 
@@ -209,8 +209,16 @@ const valuesEqual = (a, b) => {
 };
 
 /** Single-line text: NFC, control characters removed, whitespace collapsed. */
+const stripControlChars = (str) => {
+  let out = '';
+  for (let i = 0; i < str.length; i += 1) {
+    const code = str.charCodeAt(i);
+    out += (code <= 31 || code === 127) ? ' ' : str[i];
+  }
+  return out;
+};
 const singleLine = (v) => (typeof v === 'string'
-  ? v.normalize('NFC').replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/\s+/g, ' ').trim()
+  ? stripControlChars(v.normalize('NFC')).replace(/\s+/g, ' ').trim()
   : '');
 /** Multi-line text: NFC, CRLF normalised, trailing spaces and runs of blank lines removed. */
 const multiLine = (v) => (typeof v === 'string'
@@ -812,13 +820,13 @@ const STYLES = `
   --epf-card-shadow:0 22px 44px -30px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.10),inset 0 -1px 0 rgba(120,140,255,0.05),inset 0 0 30px rgba(140,130,255,0.035);
   --epf-sheen:radial-gradient(62% 90% at 6% 0%,rgba(200,43,255,0.14),transparent 62%),radial-gradient(56% 84% at 100% 100%,rgba(0,136,255,0.12),transparent 64%),radial-gradient(36% 44% at 72% 0%,rgba(255,255,255,0.055),transparent 72%),linear-gradient(115deg,transparent 38%,rgba(255,255,255,0.04) 46%,transparent 54%),linear-gradient(180deg,rgba(255,255,255,0.065),transparent 26%);
   --epf-spec:linear-gradient(90deg,transparent,rgba(235,240,255,0.32) 28%,rgba(235,240,255,0.32) 72%,transparent) center top/84% 1px no-repeat;
-  --epf-rim:conic-gradient(from 200deg at 50% 50%,rgba(255,255,255,0.20),rgba(139,30,243,0.16) 24%,rgba(5,91,251,0.22) 48%,rgba(255,255,255,0.05) 68%,rgba(200,43,255,0.15) 86%,rgba(255,255,255,0.20));
+  --epf-rim:conic-gradient(from 200deg at 50% 50%,rgba(255,255,255,0.20),${brandRgba(0.16)} 24%,rgba(5,91,251,0.22) 48%,rgba(255,255,255,0.05) 68%,rgba(200,43,255,0.15) 86%,rgba(255,255,255,0.20));
   --epf-field:rgba(255,255,255,0.04);--epf-field-border:rgba(255,255,255,0.09);--epf-field-hover:rgba(255,255,255,0.065);
   --epf-accent:#8B7CFF;--epf-accent-text:#BBAEFF;--epf-accent-soft:rgba(139,124,255,0.13);--epf-accent-edge:rgba(160,150,255,0.30);
   --epf-ok:#6EE7B7;--epf-warn:#FCD34D;--epf-err:#FDA4AF;--epf-err-bg:rgba(244,63,94,0.10);--epf-warn-bg:rgba(245,158,11,0.10);--epf-ok-bg:rgba(16,185,129,0.10);
   --epf-amber:#FCD34D;--epf-amber-soft:rgba(245,158,11,0.11);--epf-amber-edge:rgba(245,158,11,0.24);
   --epf-bar-bg:linear-gradient(180deg,rgba(150,160,255,0.07),rgba(8,12,44,0.50));--epf-bar-edge:rgba(255,255,255,0.06);
-  --epf-page-glow:radial-gradient(70% 38% at 85% -6%,rgba(139,30,243,0.15),transparent 70%),radial-gradient(60% 30% at 0% 40%,rgba(5,91,251,0.09),transparent 70%),radial-gradient(50% 26% at 60% 100%,rgba(200,43,255,0.06),transparent 70%);
+  --epf-page-glow:radial-gradient(70% 38% at 85% -6%,${brandRgba(0.15)},transparent 70%),radial-gradient(60% 30% at 0% 40%,rgba(5,91,251,0.09),transparent 70%),radial-gradient(50% 26% at 60% 100%,rgba(200,43,255,0.06),transparent 70%);
 }
 .epf-root[data-theme='light'],.epf-theme[data-theme='light']{
   --epf-bg:#F6F8FC;--epf-text:#111827;--epf-text2:#4B5563;--epf-text3:#6B7280;
@@ -827,13 +835,13 @@ const STYLES = `
   --epf-card-shadow:0 20px 40px -28px rgba(30,41,90,0.38),0 1px 2px rgba(15,23,42,0.05),inset 0 1px 0 #FFFFFF,inset 0 -1px 0 rgba(110,130,240,0.10),inset 0 0 26px rgba(255,255,255,0.5);
   --epf-sheen:radial-gradient(62% 90% at 6% 0%,rgba(200,43,255,0.07),transparent 62%),radial-gradient(56% 84% at 100% 100%,rgba(0,136,255,0.09),transparent 64%),radial-gradient(36% 44% at 72% 0%,rgba(255,255,255,0.8),transparent 72%),linear-gradient(115deg,transparent 38%,rgba(255,255,255,0.55) 46%,transparent 54%),linear-gradient(180deg,rgba(255,255,255,0.75),transparent 28%);
   --epf-spec:linear-gradient(90deg,transparent,#FFFFFF 28%,#FFFFFF 72%,transparent) center top/86% 1px no-repeat;
-  --epf-rim:conic-gradient(from 200deg at 50% 50%,#FFFFFF,rgba(139,30,243,0.22) 24%,rgba(5,91,251,0.30) 48%,rgba(255,255,255,0.75) 68%,rgba(200,43,255,0.20) 86%,#FFFFFF);
+  --epf-rim:conic-gradient(from 200deg at 50% 50%,#FFFFFF,${brandRgba(0.22)} 24%,rgba(5,91,251,0.30) 48%,rgba(255,255,255,0.75) 68%,rgba(200,43,255,0.20) 86%,#FFFFFF);
   --epf-field:rgba(255,255,255,0.92);--epf-field-border:rgba(15,23,42,0.16);--epf-field-hover:#F1F4FA;
-  --epf-accent:#4431F7;--epf-accent-text:#4431F7;--epf-accent-soft:rgba(68,49,247,0.09);--epf-accent-edge:rgba(68,49,247,0.35);
+  --epf-accent:${tokens.color.brand.indigo};--epf-accent-text:${tokens.color.brand.indigo};--epf-accent-soft:rgba(68,49,247,0.09);--epf-accent-edge:rgba(68,49,247,0.35);
   --epf-ok:#047857;--epf-warn:#92400E;--epf-err:#BE123C;--epf-err-bg:rgba(225,29,72,0.07);--epf-warn-bg:rgba(217,119,6,0.09);--epf-ok-bg:rgba(5,150,105,0.09);
   --epf-amber:#92400E;--epf-amber-soft:rgba(217,119,6,0.10);--epf-amber-edge:rgba(217,119,6,0.35);
   --epf-bar-bg:linear-gradient(180deg,rgba(255,255,255,0.78),rgba(246,248,252,0.90));--epf-bar-edge:rgba(15,23,42,0.09);
-  --epf-page-glow:radial-gradient(70% 34% at 85% -6%,rgba(139,30,243,0.08),transparent 70%),radial-gradient(60% 28% at 0% 40%,rgba(5,91,251,0.06),transparent 70%);
+  --epf-page-glow:radial-gradient(70% 34% at 85% -6%,${brandRgba(0.08)},transparent 70%),radial-gradient(60% 28% at 0% 40%,rgba(5,91,251,0.06),transparent 70%);
 }
 .epf-root::before{content:'';position:absolute;inset:0;pointer-events:none;background:var(--epf-page-glow);z-index:0}
 .epf-main{position:relative;z-index:1;max-width:760px;margin:0 auto;padding:12px 16px 24px;display:flex;flex-direction:column;gap:16px}
@@ -908,7 +916,7 @@ const STYLES = `
 .epf-btn:hover{background:var(--epf-field-hover)}
 .epf-btn:active{transform:scale(0.98)}
 .epf-btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
-.epf-btn[data-variant='primary']{color:#FFFFFF;border-color:transparent;background-color:#4431F7;background-image:var(--epf-grad);box-shadow:0 8px 18px -10px rgba(68,49,247,0.7),inset 0 1px 0 rgba(255,255,255,0.28)}
+.epf-btn[data-variant='primary']{color:#FFFFFF;border-color:transparent;background-color:${tokens.color.brand.indigo};background-image:var(--epf-grad);box-shadow:0 8px 18px -10px rgba(68,49,247,0.7),inset 0 1px 0 rgba(255,255,255,0.28)}
 .epf-btn[data-variant='primary']:hover{filter:brightness(1.07);background-image:var(--epf-grad)}
 .epf-btn[data-variant='ghost']{background:transparent;border-color:transparent;color:var(--epf-text2)}
 .epf-btn[data-variant='danger']{color:#FFFFFF;border-color:transparent;background:#BE123C}
@@ -963,10 +971,10 @@ const STYLES = `
 @keyframes epf-spin{to{transform:rotate(360deg)}}
 
 /* Avatar */
-.epf-avatar-wrap{position:relative;flex:none;width:96px;height:96px;border-radius:50%;padding:3px;background-color:#4431F7;background-image:var(--epf-grad);box-shadow:0 10px 24px -12px var(--epf-glow)}
+.epf-avatar-wrap{position:relative;flex:none;width:96px;height:96px;border-radius:50%;padding:3px;background-color:${tokens.color.brand.indigo};background-image:var(--epf-grad);box-shadow:0 10px 24px -12px var(--epf-glow)}
 .epf-avatar{width:100%;height:100%;border-radius:50%;overflow:hidden;background:#0B1234;border:3px solid var(--epf-bg);position:relative}
 .epf-avatar img{width:100%;height:100%;object-fit:cover;display:block}
-.epf-avatar-btn{position:absolute;right:-2px;bottom:-2px;width:44px;height:44px;border-radius:50%;border:2px solid var(--epf-bg);background-color:#4431F7;background-image:var(--epf-grad);color:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.epf-avatar-btn{position:absolute;right:-2px;bottom:-2px;width:44px;height:44px;border-radius:50%;border:2px solid var(--epf-bg);background-color:${tokens.color.brand.indigo};background-image:var(--epf-grad);color:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
 .epf-avatar-btn svg{width:18px;height:18px}
 .epf-avatar-block{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 
@@ -1093,8 +1101,8 @@ const TextField = memo(function TextField({
       <div className="epf-input-wrap">
         {prefix ? <span className="epf-input-prefix" aria-hidden="true">{prefix}</span> : null}
         {multiline
-          ? <textarea className="epf-textarea" rows={rows} {...common} />
-          : <input className="epf-input" type={type} inputMode={inputMode} data-mono={mono ? 'true' : undefined} data-prefix={prefix ? 'true' : undefined} {...common} />}
+          ? <textarea className="epf-textarea" rows={rows} aria-label={label} {...common} />
+          : <input className="epf-input" type={type} inputMode={inputMode} aria-label={label} data-mono={mono ? 'true' : undefined} data-prefix={prefix ? 'true' : undefined} {...common} />}
       </div>
       {hint ? <p id={hintId} className="epf-hint">{hint}</p> : null}
       <ErrorText id={errId}>{error}</ErrorText>
@@ -1252,6 +1260,7 @@ const IdentitySection = memo(function IdentitySection({
           <input
             id={unameId}
             name="username"
+            aria-label="Username"
             className="epf-input"
             data-mono="true"
             data-prefix="true"
@@ -1391,7 +1400,7 @@ const ClassificationSection = memo(function ClassificationSection({ profileType,
 
 const locationPreview = (location, privacy) => {
   const text = singleLine(location);
-  if (privacy === 'hidden') return 'Hidden from your profile. Your saved location is kept.';
+  if (privacy === 'hidden') return 'Location is hidden from your profile while Keep Hidden is selected. Your saved location is kept.';
   if (!text) return 'No location set.';
   if (privacy === 'country_only') {
     const country = countryOf(text);
@@ -1416,13 +1425,13 @@ const LocationLinksSection = memo(function LocationLinksSection({
             <span>Choose on map</span>
           </button>
         </div>
-        <TextField id={locId} name="location" label="Place" optional value={location} onChange={onChange} error={errors.location}
+        <TextField id={locId} name="location" label="Location" optional value={location} onChange={onChange} error={errors.location}
           maxLength={LOCATION_MAX} disabled={hidden} autoComplete="off"
           placeholder={hidden ? 'Hidden on your profile' : 'City, Country'}
           hint="Only this place text is saved from this screen. Use City, Country for best results." />
         <div className="epf-field">
-          <label className="epf-label" htmlFor={`${locId}-vis`}>Who sees it</label>
-          <select id={`${locId}-vis`} className="epf-select" value={locationPrivacy} aria-describedby={`${locId}-preview`}
+          <label className="epf-label" htmlFor={`${locId}-vis`}>Location Privacy</label>
+          <select id={`${locId}-vis`} aria-label="Location Privacy" className="epf-select" value={locationPrivacy} aria-describedby={`${locId}-preview`}
             onChange={(e) => onChange('locationPrivacy', e.target.value)}>
             {LOCATION_PRIVACY_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>
@@ -1465,20 +1474,20 @@ const LocationLinksSection = memo(function LocationLinksSection({
               <div className="epf-link-grid">
                 <div className="epf-field">
                   <label className="epf-label" htmlFor={`${lid}-platform`}>Platform</label>
-                  <select id={`${lid}-platform`} className="epf-select" value={link.platform}
+                  <select id={`${lid}-platform`} aria-label={`Link ${index + 1} platform`} className="epf-select" value={link.platform}
                     onChange={(e) => onUpdateLink(link.id, { platform: e.target.value })}>
                     {PLATFORM_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                   </select>
                 </div>
                 <div className="epf-field">
                   <label className="epf-label" htmlFor={`${lid}-title`}>Label</label>
-                  <input id={`${lid}-title`} className="epf-input" type="text" value={link.title} maxLength={LINK_TITLE_MAX}
+                  <input id={`${lid}-title`} aria-label={`Link ${index + 1} label`} className="epf-input" type="text" value={link.title} maxLength={LINK_TITLE_MAX}
                     placeholder={platformLabel(link.platform)} onChange={(e) => onUpdateLink(link.id, { title: e.target.value })} />
                 </div>
               </div>
               <div className="epf-field">
                 <label className="epf-label" htmlFor={`${lid}-url`}>URL</label>
-                <input id={`${lid}-url`} className="epf-input" data-mono="true" type="url" inputMode="url" autoComplete="off"
+                <input id={`${lid}-url`} aria-label={`Link ${index + 1} URL`} className="epf-input" data-mono="true" type="url" inputMode="url" autoComplete="off"
                   autoCapitalize="none" spellCheck={false} value={link.url} placeholder="https://…"
                   aria-invalid={err.url ? 'true' : undefined} aria-describedby={err.url ? `${lid}-err` : undefined}
                   onChange={(e) => onUpdateLink(link.id, { url: e.target.value })} />
@@ -1511,7 +1520,7 @@ const LocationLinksSection = memo(function LocationLinksSection({
   );
 });
 
-const CreatorSection = memo(function CreatorSection({ baseId, category, email, tip, creatorScope, onChange, onPrivacy, scopeOptions, errors }) {
+const CreatorSection = memo(function CreatorSection({ baseId, category, email, tip, creatorScope, onChange, handlePrivacyChange, scopeOptions, errors }) {
   const knownCategory = !category || CREATOR_CATEGORIES.includes(category);
   const options = (knownCategory ? CREATOR_CATEGORIES : [category, ...CREATOR_CATEGORIES]).map((c) => ({ value: c, label: c }));
   return (
@@ -1525,7 +1534,7 @@ const CreatorSection = memo(function CreatorSection({ baseId, category, email, t
     >
       <div className="epf-field">
         <label className="epf-label" htmlFor={`${baseId}-category`}><Palette aria-hidden="true" focusable="false" style={{ width: 14, height: 14, marginRight: 6, verticalAlign: '-2px' }} />Primary discipline<span className="epf-optional">Optional</span></label>
-        <select id={`${baseId}-category`} className="epf-select" value={category} onChange={(e) => onChange('creatorCategory', e.target.value)}>
+        <select id={`${baseId}-category`} aria-label="Primary discipline" className="epf-select" value={category} onChange={(e) => onChange('creatorCategory', e.target.value)}>
           <option value="">Select a category</option>
           {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -1543,7 +1552,7 @@ const CreatorSection = memo(function CreatorSection({ baseId, category, email, t
         hint="Discipline, business contact and patronage note"
         value={creatorScope}
         options={scopeOptions}
-        onChange={onPrivacy}
+        onChange={(_, val) => handlePrivacyChange('creatorInfo', val)}
       />
     </Card>
   );
@@ -1599,7 +1608,7 @@ const CivicRoyalSection = memo(function CivicRoyalSection({
           <label className="epf-setting-title" htmlFor={`${baseId}-tab`}><LayoutGrid aria-hidden="true" focusable="false" /><span>Starting tab</span></label>
           <p className="epf-hint">The tab people see first. It is a preference, not a permission.</p>
         </div>
-        <select id={`${baseId}-tab`} className="epf-select" value={DEFAULT_TAB_IDS.has(defaultTab) ? defaultTab : 'posts'}
+        <select id={`${baseId}-tab`} aria-label="Starting tab" className="epf-select" value={DEFAULT_TAB_IDS.has(defaultTab) ? defaultTab : 'posts'}
           aria-invalid={errors.defaultTab ? 'true' : undefined} onChange={(e) => onChange('defaultTab', e.target.value)}>
           {DEFAULT_TAB_OPTIONS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
@@ -1857,7 +1866,7 @@ function EditProfileEditor({ authUid, profile, user, theme, navigate, updateUser
   }, [clearError]);
   const setUsername = useCallback((key, value) => setField(key, normalizeUsername(value)), [setField]);
   const setFlag = useCallback((key, value) => setField(key, Boolean(value)), [setField]);
-  const setPrivacy = useCallback((key, value) => {
+  const handlePrivacyChange = useCallback((key, value) => {
     dispatch({ type: 'privacy', patch: { [key]: value } });
     clearError('privacy');
   }, [clearError]);
@@ -2264,7 +2273,7 @@ function EditProfileEditor({ authUid, profile, user, theme, navigate, updateUser
               tip={form.tipMessage}
               creatorScope={form.privacy.creatorInfo ?? ''}
               onChange={setField}
-              onPrivacy={setPrivacy}
+              handlePrivacyChange={handlePrivacyChange}
               scopeOptions={scopeOptionsAll}
               errors={fieldErrors}
             />
@@ -2287,7 +2296,7 @@ function EditProfileEditor({ authUid, profile, user, theme, navigate, updateUser
             isPrivate={form.isPrivate}
             privacy={form.privacy}
             onChange={setField}
-            onPrivacy={setPrivacy}
+            onPrivacy={handlePrivacyChange}
             onFlag={setFlag}
             errors={fieldErrors}
           />
@@ -2304,7 +2313,7 @@ function EditProfileEditor({ authUid, profile, user, theme, navigate, updateUser
         <div className="epf-bar-inner">
           <div className="epf-bar-status" role="status" aria-live="polite">{barStatus}</div>
           <button type="button" className="epf-btn" onClick={handleCancel} disabled={saving || removing}>Cancel</button>
-          <button type="submit" className="epf-btn" data-variant="primary" disabled={saveDisabled}>
+          <button type="submit" className="epf-btn" data-variant="primary" disabled={saveDisabled} aria-label={saving ? 'Saving profile changes' : 'Save Profile Changes'}>
             {saving ? <RefreshCw className="epf-spin" aria-hidden="true" focusable="false" /> : <Save aria-hidden="true" focusable="false" />}
             <span>{saving ? 'Saving…' : 'Save changes'}</span>
           </button>
@@ -2391,8 +2400,7 @@ const SAFE_GRADIENT = typeof BRAND_GRADIENT === 'string' && /gradient\(/i.test(B
 
 function Shell({ theme, children }) {
   const themeName = theme === 'dark' ? 'dark' : 'light';
-  let glow = 'rgba(139,30,243,0.35)';
-  try { glow = brandRgba(0.35) || glow; } catch { /* keep fallback */ }
+  let glow = brandRgba(0.35);
   return (
     <div className="epf-root" data-theme={themeName} style={{ '--epf-grad': SAFE_GRADIENT, '--epf-glow': glow }}>
       <style href="arvdoul-edit-profile-styles" precedence="medium">{STYLES}</style>
